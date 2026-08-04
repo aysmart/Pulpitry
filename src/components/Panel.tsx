@@ -31,7 +31,9 @@ export function Panel({
     <section
       className={`flex min-h-0 flex-col overflow-hidden rounded-md border border-pulpitry-line bg-pulpitry-surface ${className}`}
     >
-      <header className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-pulpitry-line px-3">
+      {/* min-h rather than h: the library's tab strip has outgrown one row
+          twice now, and wrapping is better than silently clipping a tab. */}
+      <header className="flex min-h-9 shrink-0 flex-wrap items-center justify-between gap-x-2 border-b border-pulpitry-line px-3 py-1">
         {/* A panel whose tabs already name its contents passes an empty title
             rather than spending header width saying so twice. */}
         {title ? (

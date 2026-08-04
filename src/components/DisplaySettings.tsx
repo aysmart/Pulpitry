@@ -1,7 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 
 import { allowBackground, FONT_FAMILIES, TEXTURES, type ProjectorTheme } from "../lib/theme";
-import { ThemeTemplates } from "./ThemeTemplates";
 
 const FIELD =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-2 text-[13px] text-pulpitry-text outline-none focus-visible:focus-ring";
@@ -291,7 +290,9 @@ export function DisplaySettings({
         ) : null}
       </div>
 
-      <ThemeTemplates theme={theme} onApply={onChange} onError={onError} />
+      <p className="border-t border-pulpitry-line pt-3 text-[11px] text-pulpitry-muted">
+        Whole looks live in the Themes tab, where you can see them.
+      </p>
     </div>
   );
 }

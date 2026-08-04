@@ -14,7 +14,12 @@
       "Bash(sed -i '' 's|/pictures/welcome.mov|/pictures/welcome.mp4|' media-preview.mjs)",
       "Bash(node media-preview.mjs slides)",
       "Bash(node media-preview.mjs editor)",
-      "Bash(THEME=theme-gradient.json node media-preview.mjs settings)"
+      "Bash(THEME=theme-gradient.json node media-preview.mjs settings)",
+      "Bash(node media-preview.mjs themes)",
+      "Bash(sips -Z 920 tabs.png --out tabs-big.png)",
+      "Bash(sips -c 44 470 --cropOffset 56 970 media-themes.png --out tabs.png)",
+      "Bash(sips -Z 940 tabs.png --out tabs-big.png)",
+      "Bash(sed -i '' 's/rounded px-\\\\[3px\\\\] py-0.5 text-\\\\[10.5px\\\\]/rounded px-[2px] py-0.5 text-[10.5px]/' src/components/ScripturePanel.tsx)"
     ]
   }
 }

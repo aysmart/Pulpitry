@@ -14,6 +14,7 @@ import { MediaLibrary } from "./MediaLibrary";
 import { ParaphraseMatches } from "./ParaphraseMatches";
 import { SchedulePanel } from "./SchedulePanel";
 import { SlideLibrary } from "./SlideLibrary";
+import { TemplateLibrary } from "./TemplateLibrary";
 import { SongLibrary } from "./SongLibrary";
 import { EmptyState, Panel } from "./Panel";
 
@@ -26,6 +27,7 @@ const TABS = [
   "Paraphrase",
   "Schedule",
   "History",
+  "Themes",
 ] as const;
 type Tab = (typeof TABS)[number];
 
@@ -49,6 +51,7 @@ export function ScripturePanel({
   previewKey,
   liveKey,
   theme,
+  onApplyTheme,
   onError,
   detections,
   references,
@@ -75,6 +78,7 @@ export function ScripturePanel({
   previewKey: string | null;
   liveKey: string | null;
   theme: ProjectorTheme;
+  onApplyTheme: (theme: ProjectorTheme) => void;
   onError: (message: string) => void;
   detections: Detection[];
   references: SpokenReference[];
@@ -98,13 +102,13 @@ export function ScripturePanel({
         tab === "Detected" || tab === "Paraphrase" || tab === "History" ? "" : "overflow-hidden"
       }
       actions={
-        <div className="flex gap-0">
+        <div className="flex flex-wrap justify-end gap-0">
           {TABS.map((name) => (
             <button
               key={name}
               type="button"
               onClick={() => setTab(name)}
-              className={`rounded px-[3px] py-0.5 text-[11px] transition-colors focus-visible:focus-ring ${
+              className={`rounded px-[2px] py-0.5 text-[10.5px] transition-colors focus-visible:focus-ring ${
                 tab === name
                   ? "bg-pulpitry-teal-dim text-pulpitry-text"
                   : "text-pulpitry-muted hover:text-pulpitry-text"
@@ -160,6 +164,10 @@ export function ScripturePanel({
           keyOf={keyOf}
           onError={onError}
         />
+      ) : null}
+
+      {tab === "Themes" ? (
+        <TemplateLibrary theme={theme} onApply={onApplyTheme} onError={onError} />
       ) : null}
 
       {tab === "Slides" ? (

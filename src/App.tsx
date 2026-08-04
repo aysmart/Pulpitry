@@ -210,6 +210,23 @@ export default function App() {
     [settings],
   );
 
+  /**
+   * Applies a whole look at once.
+   *
+   * Saved rather than held locally: the projector window reads the theme from
+   * settings, so a template that only changed this window would leave the two
+   * disagreeing about what the congregation is looking at.
+   */
+  const applyTheme = useCallback(
+    (projector: typeof DEFAULT_THEME) => {
+      if (!settings) return;
+      void saveSettings({ ...settings, projector })
+        .then(setSettings)
+        .catch((err) => setError(describeError(err)));
+    },
+    [settings],
+  );
+
   const selectDevice = useCallback(
     async (id: string | null) => {
       if (!settings) return;
@@ -324,6 +341,7 @@ export default function App() {
           previewKey={preview ? keyOf(preview) : null}
           liveKey={liveKey}
           theme={settings?.projector ?? DEFAULT_THEME}
+          onApplyTheme={applyTheme}
           onError={setError}
           detections={detections}
           references={references}
