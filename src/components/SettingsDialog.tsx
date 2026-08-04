@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 
-import { DisplaySettings } from "./DisplaySettings";
-import type { ProjectorTheme } from "../lib/theme";
 import {
   clearAssistKey,
   clearAzureKey,
@@ -70,7 +68,6 @@ export function SettingsDialog({
 
   const [semanticEnabled, setSemanticEnabled] = useState(settings.semanticEnabled);
   const [semanticThreshold, setSemanticThreshold] = useState(settings.semanticThreshold);
-  const [projectorTheme, setProjectorTheme] = useState<ProjectorTheme>(settings.projector);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +99,9 @@ export function SettingsDialog({
         assistApiVersion: assistApiVersion.trim(),
         semanticEnabled,
         semanticThreshold,
-        projector: projectorTheme,
+        // Carried through untouched: the look is edited in the Themes tab, and
+        // a stale copy held open in this dialog would undo it on save.
+        projector: settings.projector,
       });
 
       setKey("");
@@ -214,14 +213,6 @@ export function SettingsDialog({
             ) : null}
           </Section>
 
-          <div className="border-t border-pulpitry-line" />
-
-          <Section
-            title="Projector display"
-            note="How scripture looks on the congregation screen. An outline or a dim behind the text is what keeps words readable over a photograph or video."
-          >
-            <DisplaySettings theme={projectorTheme} onChange={setProjectorTheme} onError={setError} />
-          </Section>
 
           <div className="border-t border-pulpitry-line" />
 

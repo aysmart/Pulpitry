@@ -84,6 +84,11 @@ function Tile({
  *
  * Samples ship read-only; anything the operator saves sits beside them and can
  * be deleted.
+ *
+ * The editor has two exits because there are two things people want. Use puts
+ * a change on the projector now and forgets it, which is the mid-service tweak
+ * that used to live in the settings dialog. Save also keeps it, which is what
+ * building a look for next week means.
  */
 export function TemplateLibrary({
   theme,
@@ -177,10 +182,21 @@ export function TemplateLibrary({
             type="button"
             onClick={() => void save()}
             disabled={!editing.name.trim()}
-            title={editing.name.trim() ? "Save it and put it on the projector" : "Name it first"}
+            title={editing.name.trim() ? "Keep it, and put it on the projector" : "Name it first"}
             className="rounded bg-pulpitry-gold px-2.5 py-1.5 text-[12.5px] text-pulpitry-ink disabled:opacity-40 focus-visible:focus-ring"
           >
             Save
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onApply(editing.theme);
+              setEditing(null);
+            }}
+            title="Put it on the projector without keeping it"
+            className="rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1.5 text-[12.5px] text-pulpitry-text focus-visible:focus-ring"
+          >
+            Use
           </button>
           <button
             type="button"
@@ -212,16 +228,16 @@ export function TemplateLibrary({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-1.5 border-b border-pulpitry-line px-2.5 py-2">
-        <span className="text-[11px] text-pulpitry-muted">
+        <span className="min-w-0 flex-1 truncate text-[11px] text-pulpitry-muted">
           Click a theme to use it. Copy one to make it yours.
         </span>
         <button
           type="button"
           onClick={() => setEditing({ id: null, name: "", theme })}
-          title="Build a theme, starting from the one in use"
+          title="Change the look in use, keeping it or not"
           className="shrink-0 rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1.5 text-[12.5px] text-pulpitry-text hover:border-pulpitry-gold-dim hover:text-pulpitry-gold focus-visible:focus-ring"
         >
-          New
+          Adjust
         </button>
       </div>
 

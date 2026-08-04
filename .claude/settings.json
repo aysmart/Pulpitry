@@ -22,7 +22,11 @@
       "Bash(sed -i '' 's/rounded px-\\\\[3px\\\\] py-0.5 text-\\\\[10.5px\\\\]/rounded px-[2px] py-0.5 text-[10.5px]/' src/components/ScripturePanel.tsx)",
       "Bash(node media-preview.mjs themes2)",
       "Bash(node media-preview.mjs themeedit)",
-      "Bash(sed -i '' \"s/byText\\('Gradient'\\).click\\(\\)/byText\\('gradient'\\).click\\(\\)/\" media-preview.mjs)"
+      "Bash(sed -i '' \"s/byText\\('Gradient'\\).click\\(\\)/byText\\('gradient'\\).click\\(\\)/\" media-preview.mjs)",
+      "Bash(sed -i '' \"s/byText\\('New'\\).click\\(\\)/byText\\('Adjust'\\).click\\(\\)/\" media-preview.mjs)",
+      "Bash(node media-preview.mjs settings)",
+      "Bash(sips -c 60 470 --cropOffset 96 970 media-themeedit.png --out edithdr.png)",
+      "Bash(sips -Z 940 edithdr.png --out edithdr-big.png)"
     ]
   }
 }
