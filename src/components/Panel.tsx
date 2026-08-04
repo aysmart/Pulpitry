@@ -32,9 +32,13 @@ export function Panel({
       className={`flex min-h-0 flex-col overflow-hidden rounded-md border border-pulpitry-line bg-pulpitry-surface ${className}`}
     >
       <header className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-pulpitry-line px-3">
-        <h2 className={`text-[11px] tracking-[0.14em] uppercase ${ACCENT_TEXT[accent]}`}>
-          {title}
-        </h2>
+        {/* A panel whose tabs already name its contents passes an empty title
+            rather than spending header width saying so twice. */}
+        {title ? (
+          <h2 className={`text-[11px] tracking-[0.14em] uppercase ${ACCENT_TEXT[accent]}`}>
+            {title}
+          </h2>
+        ) : null}
         {actions}
       </header>
       <div className={`min-h-0 flex-1 overflow-auto ${bodyClassName}`}>{children}</div>

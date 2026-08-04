@@ -13,6 +13,9 @@ export function entryFor(item: Presentable): PlanEntry {
   if (item.kind === "lyric") {
     return { label: item.title, body: { kind: "item", itemId: item.songId } };
   }
+  if (item.kind === "image" || item.kind === "media") {
+    return { label: item.title, body: { kind: "item", itemId: item.itemId } };
+  }
   const first = item.verses[0]!;
   const last = item.verses[item.verses.length - 1]!;
   return {
@@ -58,18 +61,37 @@ export async function resolveEntry(entry: PlanEntry): Promise<Presentable | null
 
 /** What a library item looks like on the stage, if it can go there yet. */
 export function presentableFor(item: Item): Presentable | null {
-  if (item.body.kind === "song" && item.id !== null) {
-    return {
-      kind: "lyric",
-      songId: item.id,
-      title: item.title,
-      index: 0,
-      sections: item.body.sections,
-    };
+  if (item.id === null) return null;
+
+  switch (item.body.kind) {
+    case "song":
+      return {
+        kind: "lyric",
+        songId: item.id,
+        title: item.title,
+        index: 0,
+        sections: item.body.sections,
+      };
+    case "image":
+      // The file is the item. Without a path there is nothing to show, which
+      // is a broken row rather than a blank slide.
+      return item.path
+        ? { kind: "image", itemId: item.id, title: item.title, path: item.path }
+        : null;
+    case "media":
+      return item.path
+        ? {
+            kind: "media",
+            itemId: item.id,
+            title: item.title,
+            path: item.path,
+            looping: item.body.looping,
+          }
+        : null;
+    default:
+      // Templates are not content, and custom slides have no editor yet.
+      return null;
   }
-  // Images, media and slides have bodies the projector understands but no
-  // library UI yet; they resolve here as soon as that lands.
-  return null;
 }
 
 /** The current title of whatever an entry points at, for correcting a stale label. */

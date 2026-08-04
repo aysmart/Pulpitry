@@ -266,6 +266,25 @@ impl Catalog {
         collect(rows)
     }
 
+    /// Every external file the library points at.
+    ///
+    /// The webview can read no arbitrary path, so each of these has to be
+    /// granted individually at startup or an image imported last week would
+    /// come back as a broken frame.
+    pub fn media_paths(&self) -> Result<Vec<String>> {
+        let connection = self.connection.lock();
+        let mut statement = connection.prepare(
+            "SELECT path FROM catalog_items
+             WHERE path IS NOT NULL AND kind IN ('image', 'media')",
+        )?;
+        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+        let mut paths = Vec::new();
+        for row in rows {
+            paths.push(row?);
+        }
+        Ok(paths)
+    }
+
     /// Full-text search, optionally within one kind.
     pub fn search(&self, query: &str, kind: Option<&str>, limit: i64) -> Result<Vec<Item>> {
         let Some(expression) = fts_query(query) else { return self.list(kind.unwrap_or("song"), limit) };
@@ -563,6 +582,33 @@ mod tests {
                 end_verse: 16,
             }
         );
+    }
+
+    #[test]
+    fn media_paths_lists_only_what_lives_outside_the_database() {
+        // These become asset-protocol grants, so a song leaking in here would
+        // widen the webview's reach for no reason.
+        let catalog = Catalog::in_memory().expect("catalog");
+        catalog.save(&song("Amazing Grace", &["a"])).expect("save");
+        for (kind, path) in [
+            (ItemBody::Image, "/pictures/dove.jpg"),
+            (ItemBody::Media { looping: false }, "/clips/welcome.mp4"),
+        ] {
+            catalog
+                .save(&Item {
+                    id: None,
+                    title: "asset".into(),
+                    subtitle: String::new(),
+                    body: kind,
+                    path: Some(path.into()),
+                    updated_at: 0,
+                })
+                .expect("save");
+        }
+
+        let mut paths = catalog.media_paths().expect("paths");
+        paths.sort();
+        assert_eq!(paths, vec!["/clips/welcome.mp4", "/pictures/dove.jpg"]);
     }
 
     #[test]

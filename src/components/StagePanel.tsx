@@ -1,22 +1,47 @@
-import { bodyText, type LiveContent } from "../lib/projector";
+import { convertFileSrc } from "@tauri-apps/api/core";
+
+import { bodyText, type LiveBody, type LiveContent } from "../lib/projector";
 import { backgroundUrl, fontStack, type ProjectorTheme } from "../lib/theme";
 import { presentableLabel, presentableText, type Presentable } from "../lib/usePresentation";
 import { EmptyState, Panel } from "./Panel";
 
 function Stage({
   body,
+  asset,
   reference,
   tone,
   empty,
   theme,
 }: {
   body: string | null;
+  /** A picture or clip, which fills the pane instead of the text layout. */
+  asset?: { kind: "image" | "media"; path: string; looping: boolean } | null;
   reference: string | null;
   tone: "preview" | "live";
   empty: string;
   /** Set on the Live pane, so it previews what the congregation actually sees. */
   theme?: ProjectorTheme;
 }) {
+  if (asset) {
+    return (
+      <div className="flex h-full items-center justify-center bg-pulpitry-ink" data-selectable>
+        {asset.kind === "image" ? (
+          <img src={convertFileSrc(asset.path)} alt="" className="max-h-full max-w-full object-contain" />
+        ) : (
+          <video
+            src={convertFileSrc(asset.path)}
+            // Muted here on purpose: the operator's pane should not double the
+            // sound the congregation is already hearing from the projector.
+            muted
+            autoPlay={tone === "live"}
+            loop={asset.looping}
+            className="max-h-full max-w-full object-contain"
+          />
+        )}
+      </div>
+    );
+  }
+
   if (!body) {
     return <EmptyState>{empty}</EmptyState>;
   }
@@ -85,6 +110,22 @@ function Stage({
   );
 }
 
+/** The picture or clip behind an item, if that is what it is. */
+function assetOf(item: Presentable | null) {
+  if (item?.kind === "image") return { kind: "image" as const, path: item.path, looping: false };
+  if (item?.kind === "media")
+    return { kind: "media" as const, path: item.path, looping: item.looping };
+  return null;
+}
+
+/** The same, for whatever the projector is currently showing. */
+function liveAsset(body: LiveBody | undefined) {
+  if (body?.kind === "image") return { kind: "image" as const, path: body.path, looping: false };
+  if (body?.kind === "media")
+    return { kind: "media" as const, path: body.path, looping: body.looping };
+  return null;
+}
+
 const CONTROL =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-2 text-[13px] text-pulpitry-text transition-opacity hover:border-pulpitry-muted disabled:opacity-35 focus-visible:focus-ring";
 
@@ -120,6 +161,7 @@ export function StagePanel({
       <Panel title="Preview" className="flex-1">
         <Stage
           body={preview ? presentableText(preview) : null}
+          asset={assetOf(preview)}
           reference={preview ? presentableLabel(preview) : null}
           tone="preview"
           empty="Pick a verse from the Chapter panel to stage it."
@@ -158,6 +200,7 @@ export function StagePanel({
       <Panel title="Live" accent="gold" className="flex-1">
         <Stage
           body={live ? bodyText(live.body) : null}
+          asset={liveAsset(live?.body)}
           reference={live?.caption ?? null}
           tone="live"
           empty="Nothing is on the projector."

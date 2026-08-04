@@ -64,21 +64,22 @@ fn save_settings(
     // Switching translation invalidates the index; configure() rebuilds it.
     semantic.configure(&settings);
 
-    allow_background(&app, settings.projector.background_path.as_deref());
+    allow_asset(&app, settings.projector.background_path.as_deref());
     // The projector window applies this without being reopened.
     let _ = app.emit(projector::EVENT_THEME, &settings.projector);
 
     Ok(view(settings))
 }
 
-/// Widens the asset-protocol scope to exactly the background in use.
+/// Widens the asset-protocol scope to exactly one file the operator chose.
 ///
-/// The scope ships empty, so the webview can read no arbitrary file; a picked
-/// background is allowed individually rather than opening up a directory.
-fn allow_background(app: &tauri::AppHandle, path: Option<&str>) {
+/// The scope ships empty, so the webview can read no arbitrary file. Each
+/// picked background or imported image is allowed individually rather than
+/// opening up the directory it happened to be sitting in.
+fn allow_asset(app: &tauri::AppHandle, path: Option<&str>) {
     let Some(path) = path.filter(|path| !path.is_empty()) else { return };
     if let Err(err) = app.asset_protocol_scope().allow_file(path) {
-        eprintln!("[projector] could not grant access to {path}: {err}");
+        eprintln!("[assets] could not grant access to {path}: {err}");
     }
 }
 
@@ -87,7 +88,7 @@ fn set_background(
     app: tauri::AppHandle,
     path: Option<String>,
 ) -> CommandResult<()> {
-    allow_background(&app, path.as_deref());
+    allow_asset(&app, path.as_deref());
     Ok(())
 }
 
@@ -262,7 +263,14 @@ fn projector_state(projector: State<'_, Arc<Projector>>) -> ProjectorState {
 }
 
 #[tauri::command]
-fn catalog_save(catalog: State<'_, Arc<Catalog>>, item: Item) -> CommandResult<Item> {
+fn catalog_save(
+    app: tauri::AppHandle,
+    catalog: State<'_, Arc<Catalog>>,
+    item: Item,
+) -> CommandResult<Item> {
+    // Importing a picture is the moment the operator says this file may be
+    // shown, so it is also the moment to let the webview read it.
+    allow_asset(&app, item.path.as_deref());
     catalog.save(&item).map_err(to_message)
 }
 
@@ -341,12 +349,18 @@ pub fn run() {
             // Shares the database file with the verse library but holds its own
             // connection, so neither module reaches into the other.
             let data_dir = app.path().app_data_dir()?;
-            app.manage(Arc::new(Catalog::open(&data_dir)?));
+            let catalog = Arc::new(Catalog::open(&data_dir)?);
+            // Images imported in an earlier session would otherwise come back
+            // as broken frames: the scope is granted per file and per launch.
+            for path in catalog.media_paths().unwrap_or_default() {
+                allow_asset(app.handle(), Some(&path));
+            }
+            app.manage(catalog);
 
             // Detection searches whichever translation the operator last chose.
             let saved = settings::load(app.handle()).unwrap_or_default();
             // A background chosen in a previous session has to be readable again.
-            allow_background(app.handle(), saved.projector.background_path.as_deref());
+            allow_asset(app.handle(), saved.projector.background_path.as_deref());
 
             // Optional, off unless the operator configures it. Everything it
             // proposes is verified against the library before being shown.

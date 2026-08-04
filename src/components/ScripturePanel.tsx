@@ -10,12 +10,21 @@ import type { IndexStatus } from "../lib/useSemanticIndex";
 import type { Suggestion } from "../lib/useSuggestions";
 import type { ScheduleController } from "../lib/useSchedule";
 import { DetectedVerses } from "./DetectedVerses";
+import { MediaLibrary } from "./MediaLibrary";
 import { ParaphraseMatches } from "./ParaphraseMatches";
 import { SchedulePanel } from "./SchedulePanel";
 import { SongLibrary } from "./SongLibrary";
 import { EmptyState, Panel } from "./Panel";
 
-const TABS = ["Scripture", "Songs", "Detected", "Paraphrase", "Schedule", "History"] as const;
+const TABS = [
+  "Scripture",
+  "Songs",
+  "Media",
+  "Detected",
+  "Paraphrase",
+  "Schedule",
+  "History",
+] as const;
 type Tab = (typeof TABS)[number];
 
 /**
@@ -79,10 +88,14 @@ export function ScripturePanel({
 
   return (
     <Panel
-      title="Library"
+      // The tabs say what this panel holds; a "LIBRARY" heading beside them
+      // would only take width the seventh tab needs.
+      title=""
       accent="teal"
       bodyClassName={
-        tab === "Scripture" || tab === "Songs" || tab === "Schedule" ? "overflow-hidden" : ""
+        tab === "Scripture" || tab === "Songs" || tab === "Media" || tab === "Schedule"
+          ? "overflow-hidden"
+          : ""
       }
       actions={
         <div className="flex gap-0.5">
@@ -141,6 +154,16 @@ export function ScripturePanel({
       {tab === "Songs" ? (
         <SongLibrary
           theme={theme}
+          onPreview={onPreviewItem}
+          previewKey={previewKey}
+          liveKey={liveKey}
+          keyOf={keyOf}
+          onError={onError}
+        />
+      ) : null}
+
+      {tab === "Media" ? (
+        <MediaLibrary
           onPreview={onPreviewItem}
           previewKey={previewKey}
           liveKey={liveKey}

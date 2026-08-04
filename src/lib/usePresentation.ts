@@ -12,7 +12,9 @@ import { getLive, onLive, setLive, type LiveContent } from "./projector";
  */
 export type Presentable =
   | { kind: "scripture"; verses: Verse[] }
-  | { kind: "lyric"; songId: number; title: string; index: number; sections: SongSection[] };
+  | { kind: "lyric"; songId: number; title: string; index: number; sections: SongSection[] }
+  | { kind: "image"; itemId: number; title: string; path: string }
+  | { kind: "media"; itemId: number; title: string; path: string; looping: boolean };
 
 /** The section a lyric item currently points at. */
 export function currentSection(item: Presentable): SongSection | null {
@@ -21,6 +23,9 @@ export function currentSection(item: Presentable): SongSection | null {
 
 export function presentableText(item: Presentable): string {
   if (item.kind === "scripture") return item.verses.map((verse) => verse.text).join(" ");
+  // A picture has no text, and captioning it with its filename would put the
+  // filename on the projector.
+  if (item.kind === "image" || item.kind === "media") return "";
   return currentSection(item)?.lines.join(" ") ?? "";
 }
 
@@ -30,6 +35,7 @@ export function presentableLabel(item: Presentable): string {
     const label = currentSection(item)?.label;
     return label ? `${item.title} — ${label}` : item.title;
   }
+  if (item.kind === "image" || item.kind === "media") return item.title;
   const first = item.verses[0];
   if (!first) return "";
   const last = item.verses[item.verses.length - 1]!;
@@ -43,6 +49,16 @@ export function presentableIds(item: Presentable): number[] {
 }
 
 export function toLiveContent(item: Presentable): LiveContent {
+  if (item.kind === "image") {
+    return { body: { kind: "image", path: item.path }, caption: "", ids: [] };
+  }
+  if (item.kind === "media") {
+    return {
+      body: { kind: "media", path: item.path, looping: item.looping },
+      caption: "",
+      ids: [],
+    };
+  }
   if (item.kind === "lyric") {
     return {
       // Lines stay separate: a lyric breaks where the writer broke it, and
@@ -64,9 +80,14 @@ export function toLiveContent(item: Presentable): LiveContent {
 
 /** Identity for dedup: same verses, or same section of the same song. */
 function keyOf(item: Presentable): string {
-  return item.kind === "scripture"
-    ? `v:${presentableIds(item).join(",")}`
-    : `s:${item.songId}:${item.index}`;
+  switch (item.kind) {
+    case "scripture":
+      return `v:${presentableIds(item).join(",")}`;
+    case "lyric":
+      return `s:${item.songId}:${item.index}`;
+    default:
+      return `${item.kind[0]}:${item.itemId}`;
+  }
 }
 
 /**
@@ -150,6 +171,9 @@ export function usePresentation() {
 
       let next: Presentable | null = null;
 
+      // A picture or a clip is one thing; there is nowhere to step to.
+      if (preview.kind === "image" || preview.kind === "media") return;
+
       if (preview.kind === "lyric") {
         const index = preview.index + (forward ? 1 : -1);
         // Stop at the ends. Running off a song into whatever came before it in
@@ -185,10 +209,10 @@ export function usePresentation() {
    * cannot be answered without a query, so it stays available.
    */
   const canStepBack =
-    preview !== null && (preview.kind !== "lyric" || preview.index > 0);
+    preview?.kind === "scripture" || (preview?.kind === "lyric" && preview.index > 0);
   const canStepForward =
-    preview !== null &&
-    (preview.kind !== "lyric" || preview.index < preview.sections.length - 1);
+    preview?.kind === "scripture" ||
+    (preview?.kind === "lyric" && preview.index < preview.sections.length - 1);
 
   return {
     preview,
