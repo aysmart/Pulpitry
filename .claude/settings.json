@@ -19,7 +19,10 @@
       "Bash(sips -Z 920 tabs.png --out tabs-big.png)",
       "Bash(sips -c 44 470 --cropOffset 56 970 media-themes.png --out tabs.png)",
       "Bash(sips -Z 940 tabs.png --out tabs-big.png)",
-      "Bash(sed -i '' 's/rounded px-\\\\[3px\\\\] py-0.5 text-\\\\[10.5px\\\\]/rounded px-[2px] py-0.5 text-[10.5px]/' src/components/ScripturePanel.tsx)"
+      "Bash(sed -i '' 's/rounded px-\\\\[3px\\\\] py-0.5 text-\\\\[10.5px\\\\]/rounded px-[2px] py-0.5 text-[10.5px]/' src/components/ScripturePanel.tsx)",
+      "Bash(node media-preview.mjs themes2)",
+      "Bash(node media-preview.mjs themeedit)",
+      "Bash(sed -i '' \"s/byText\\('Gradient'\\).click\\(\\)/byText\\('gradient'\\).click\\(\\)/\" media-preview.mjs)"
     ]
   }
 }

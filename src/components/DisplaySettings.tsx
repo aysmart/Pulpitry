@@ -81,10 +81,13 @@ export function DisplaySettings({
   theme,
   onChange,
   onError,
+  /** Off when these controls are already inside the Themes tab. */
+  showThemesHint = true,
 }: {
   theme: ProjectorTheme;
   onChange: (next: ProjectorTheme) => void;
   onError: (message: string) => void;
+  showThemesHint?: boolean;
 }) {
   const set = <K extends keyof ProjectorTheme>(key: K, value: ProjectorTheme[K]) =>
     onChange({ ...theme, [key]: value });
@@ -290,9 +293,11 @@ export function DisplaySettings({
         ) : null}
       </div>
 
-      <p className="border-t border-pulpitry-line pt-3 text-[11px] text-pulpitry-muted">
-        Whole looks live in the Themes tab, where you can see them.
-      </p>
+      {showThemesHint ? (
+        <p className="border-t border-pulpitry-line pt-3 text-[11px] text-pulpitry-muted">
+          Whole looks live in the Themes tab, where you can build and keep your own.
+        </p>
+      ) : null}
     </div>
   );
 }
