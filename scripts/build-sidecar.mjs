@@ -30,8 +30,16 @@ const workDir = resolve(sidecarDir, "build");
 const bundle = resolve(workDir, "sidecar.cjs");
 const binariesDir = resolve(root, "src-tauri/binaries");
 
+/**
+ * npm and npx are `.cmd` shims on Windows, and execFileSync does not apply
+ * PATHEXT, so the bare name is not found. Naming the shim is safer than
+ * spawning through a shell, which would then have to quote paths correctly.
+ */
+const executable = (cmd) =>
+  process.platform === "win32" && (cmd === "npm" || cmd === "npx") ? `${cmd}.cmd` : cmd;
+
 const run = (cmd, args, options = {}) =>
-  execFileSync(cmd, args, { stdio: "inherit", cwd: root, ...options });
+  execFileSync(executable(cmd), args, { stdio: "inherit", cwd: root, ...options });
 
 /** Tauri looks for `<name>-<rust target triple>`. */
 function hostTargetTriple() {

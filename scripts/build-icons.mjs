@@ -40,7 +40,9 @@ for (const size of [16, 32, 64, 128, 256]) {
 }
 console.log(`rendered previews into ${workDir}`);
 
-execFileSync("npx", ["tauri", "icon", master, "--output", resolve(root, "src-tauri/icons")], {
+// `.cmd` on Windows: execFileSync does not apply PATHEXT, so the bare name
+// is not found there.
+execFileSync(process.platform === "win32" ? "npx.cmd" : "npx", ["tauri", "icon", master, "--output", resolve(root, "src-tauri/icons")], {
   cwd: root,
   stdio: "inherit",
 });

@@ -34,7 +34,13 @@
       "Bash(sed -n '/^rustls-no-provider = \\\\[/,/^\\\\]/p' Cargo.toml)",
       "Bash(python3 -c ' *)",
       "Bash(npx tauri *)",
-      "Bash(command -v gh)"
+      "Bash(command -v gh)",
+      "Bash(gh auth *)",
+      "Bash(gh repo *)",
+      "Bash(git ls-tree *)",
+      "Bash(node -e \"process.exit\\(0\\)\")",
+      "Bash(node --check scripts/build-icons.mjs)",
+      "Bash(node --check scripts/build-sidecar.mjs)"
     ]
   }
 }
