@@ -62,9 +62,6 @@ export function toLiveContent(item: Presentable): LiveContent {
   };
 }
 
-/** Longer than any service; the queue is a running order, not an archive. */
-const MAX_QUEUE = 200;
-
 /** Identity for dedup: same verses, or same section of the same song. */
 function keyOf(item: Presentable): string {
   return item.kind === "scripture"
@@ -73,17 +70,19 @@ function keyOf(item: Presentable): string {
 }
 
 /**
- * Preview, Live and Queue for the operator window.
+ * Preview and Live for the operator window.
  *
  * Preview is local — only this window cares what is staged next. Live is not:
  * it belongs to the Rust side so the projector and this window render from one
  * source and cannot disagree about what the congregation is seeing.
+ *
+ * What comes next belongs to the service plan, in [`useSchedule`], because it
+ * outlives the session.
  */
 export function usePresentation() {
   const [preview, setPreview] = useState<Presentable | null>(null);
   const [live, setLiveState] = useState<LiveContent | null>(null);
   const [history, setHistory] = useState<Presentable[]>([]);
-  const [queue, setQueue] = useState<Presentable[]>([]);
   // Verse ids identify live scripture, but a lyric has none, so remember what
   // this window last put up. Only this window displays, so it stays accurate.
   const [liveKey, setLiveKey] = useState<string | null>(null);
@@ -131,27 +130,11 @@ export function usePresentation() {
       const withoutDuplicate = current.filter((item) => keyOf(item) !== key);
       return [preview, ...withoutDuplicate].slice(0, 50);
     });
-    // Putting a queued item live takes it off the running order.
-    setQueue((current) => current.filter((item) => keyOf(item) !== key));
   }, [preview]);
 
   const clearLive = useCallback(() => {
     void setLive(null);
   }, []);
-
-  const enqueue = useCallback((item: Presentable) => {
-    setQueue((current) =>
-      current.some((existing) => keyOf(existing) === keyOf(item))
-        ? current
-        : [...current, item].slice(0, MAX_QUEUE),
-    );
-  }, []);
-
-  const dequeue = useCallback((key: string) => {
-    setQueue((current) => current.filter((item) => keyOf(item) !== key));
-  }, []);
-
-  const clearQueue = useCallback(() => setQueue([]), []);
 
   /**
    * Moves one step through whatever is staged.
@@ -212,16 +195,12 @@ export function usePresentation() {
     live,
     liveKey,
     history,
-    queue,
     keyOf,
     previewVerse,
     previewVerses,
     previewItem,
     display,
     clearLive,
-    enqueue,
-    dequeue,
-    clearQueue,
     step,
     canStepBack,
     canStepForward,

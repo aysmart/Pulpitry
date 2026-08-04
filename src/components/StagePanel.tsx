@@ -100,8 +100,7 @@ export function StagePanel({
   onDisplay,
   onClear,
   onStep,
-  onQueue,
-  queued,
+  onAdd,
   theme,
   canStepBack,
   canStepForward,
@@ -111,8 +110,7 @@ export function StagePanel({
   onDisplay: () => void;
   onClear: () => void;
   onStep: (forward: boolean) => void;
-  onQueue: () => void;
-  queued: boolean;
+  onAdd: () => void;
   theme: ProjectorTheme;
   canStepBack: boolean;
   canStepForward: boolean;
@@ -145,12 +143,12 @@ export function StagePanel({
         </button>
         <button
           type="button"
-          onClick={onQueue}
-          disabled={!preview || queued}
-          title="Add the staged verse to the running order"
+          onClick={onAdd}
+          disabled={!preview}
+          title="Add what is staged to the service plan"
           className={CONTROL}
         >
-          {queued ? "Queued" : "Queue"}
+          Add
         </button>
         <button type="button" onClick={onClear} disabled={!live} className={CONTROL}>
           Clear

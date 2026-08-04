@@ -56,6 +56,44 @@ pub struct SongSection {
     pub lines: Vec<String>,
 }
 
+/// What one line of a service plan points at.
+///
+/// References, never resolved content. A plan is written days before it is
+/// run and kept for years afterwards, so it has to survive the song being
+/// retitled and the verse library being reimported underneath it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PlanBody {
+    /// A passage held as book/chapter/verse rather than row ids, which are an
+    /// import detail and not stable across one.
+    Scripture {
+        translation: String,
+        book_number: i64,
+        chapter: i64,
+        verse: i64,
+        /// Equal to `verse` for a single verse.
+        end_verse: i64,
+    },
+    /// Anything else in this catalog — a song today, an image or a slide once
+    /// those have libraries. The kind is read from the item itself.
+    Item { item_id: i64 },
+    /// A heading with nothing behind it: "Welcome", "Offering", "Sermon".
+    /// A running order is mostly not projected, and a plan that could only
+    /// hold projectable things would not be the service.
+    Note,
+}
+
+/// One line of a service plan.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanEntry {
+    /// What to show before anything has been looked up, and what makes a
+    /// service findable by what was in it. Refreshed from the item whenever
+    /// one is resolved, so a retitled song corrects itself.
+    pub label: String,
+    pub body: PlanBody,
+}
+
 /// The part of an item that differs by kind.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -66,6 +104,8 @@ pub enum ItemBody {
     Media { looping: bool },
     Template { theme: Box<ProjectorTheme> },
     Slide { blocks: Vec<TextBlock> },
+    /// A service plan: the running order for one gathering.
+    Service { entries: Vec<PlanEntry> },
 }
 
 impl ItemBody {
@@ -77,6 +117,7 @@ impl ItemBody {
             ItemBody::Media { .. } => "media",
             ItemBody::Template { .. } => "template",
             ItemBody::Slide { .. } => "slide",
+            ItemBody::Service { .. } => "service",
         }
     }
 
@@ -94,6 +135,13 @@ impl ItemBody {
             ItemBody::Slide { blocks } => blocks
                 .iter()
                 .map(|block| block.text.clone())
+                .collect::<Vec<_>>()
+                .join(" "),
+            // An operator looking for an old service remembers what was in it
+            // — a song, a passage — far sooner than what it was called.
+            ItemBody::Service { entries } => entries
+                .iter()
+                .map(|entry| entry.label.clone())
                 .collect::<Vec<_>>()
                 .join(" "),
             ItemBody::Image | ItemBody::Media { .. } | ItemBody::Template { .. } => String::new(),
@@ -342,6 +390,22 @@ mod tests {
                     italic: false,
                 }],
             },
+            ItemBody::Service {
+                entries: vec![
+                    PlanEntry { label: "Welcome".into(), body: PlanBody::Note },
+                    PlanEntry { label: "Amazing Grace".into(), body: PlanBody::Item { item_id: 7 } },
+                    PlanEntry {
+                        label: "John 3:16-18".into(),
+                        body: PlanBody::Scripture {
+                            translation: "KJV".into(),
+                            book_number: 43,
+                            chapter: 3,
+                            verse: 16,
+                            end_verse: 18,
+                        },
+                    },
+                ],
+            },
         ];
 
         for body in bodies {
@@ -427,6 +491,78 @@ mod tests {
 
         let listed = catalog.list("song", 10).expect("list");
         assert_eq!(listed[0].title, "First");
+    }
+
+    #[test]
+    fn a_service_is_findable_by_what_was_in_it() {
+        // Nobody remembers that last Easter's plan was called "Service 3".
+        let catalog = Catalog::in_memory().expect("catalog");
+        catalog
+            .save(&Item {
+                id: None,
+                title: "Sunday 4 May".into(),
+                subtitle: String::new(),
+                body: ItemBody::Service {
+                    entries: vec![
+                        PlanEntry { label: "Welcome".into(), body: PlanBody::Note },
+                        PlanEntry {
+                            label: "Be Thou My Vision".into(),
+                            body: PlanBody::Item { item_id: 4 },
+                        },
+                    ],
+                },
+                path: None,
+                updated_at: 0,
+            })
+            .expect("save");
+
+        let found = catalog.search("vision", Some("service"), 10).expect("search");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].title, "Sunday 4 May");
+    }
+
+    #[test]
+    fn a_plan_keeps_references_rather_than_resolved_verses() {
+        // The whole point of storing book/chapter/verse: reimporting the verse
+        // library must not silently repoint a saved plan at other verses.
+        let catalog = Catalog::in_memory().expect("catalog");
+        let saved = catalog
+            .save(&Item {
+                id: None,
+                title: "Easter".into(),
+                subtitle: String::new(),
+                body: ItemBody::Service {
+                    entries: vec![PlanEntry {
+                        label: "John 3:16".into(),
+                        body: PlanBody::Scripture {
+                            translation: "KJV".into(),
+                            book_number: 43,
+                            chapter: 3,
+                            verse: 16,
+                            end_verse: 16,
+                        },
+                    }],
+                },
+                path: None,
+                updated_at: 0,
+            })
+            .expect("save");
+
+        let ItemBody::Service { entries } =
+            catalog.get(saved.id.unwrap()).expect("get").unwrap().body
+        else {
+            panic!("expected a service");
+        };
+        assert_eq!(
+            entries[0].body,
+            PlanBody::Scripture {
+                translation: "KJV".into(),
+                book_number: 43,
+                chapter: 3,
+                verse: 16,
+                end_verse: 16,
+            }
+        );
     }
 
     #[test]

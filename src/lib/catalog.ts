@@ -10,13 +10,46 @@ export interface SongSection {
   lines: string[];
 }
 
+/**
+ * What one line of a service plan points at.
+ *
+ * References, never resolved content: a plan is written days before it runs
+ * and kept long afterwards, so it has to survive a song being retitled and the
+ * verse library being reimported underneath it.
+ */
+export type PlanBody =
+  | {
+      kind: "scripture";
+      translation: string;
+      bookNumber: number;
+      chapter: number;
+      verse: number;
+      /** Equal to `verse` for a single verse. */
+      endVerse: number;
+    }
+  | { kind: "item"; itemId: number }
+  /** A heading with nothing behind it: "Welcome", "Offering", "Sermon". */
+  | { kind: "note" };
+
+/** One line of a service plan. */
+export interface PlanEntry {
+  /**
+   * What to show before anything has been looked up, and what makes a service
+   * findable by what was in it. Refreshed whenever the item behind it resolves.
+   */
+  label: string;
+  body: PlanBody;
+}
+
 /** The part of a library item that differs by kind. */
 export type ItemBody =
   | { kind: "song"; sections: SongSection[] }
   | { kind: "image" }
   | { kind: "media"; looping: boolean }
   | { kind: "template"; theme: ProjectorTheme }
-  | { kind: "slide"; blocks: TextBlock[] };
+  | { kind: "slide"; blocks: TextBlock[] }
+  /** A service plan: the running order for one gathering. */
+  | { kind: "service"; entries: PlanEntry[] };
 
 export type ItemKind = ItemBody["kind"];
 

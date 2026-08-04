@@ -8,12 +8,14 @@ import { ChapterNavigator } from "./ChapterNavigator";
 import type { ProjectorTheme } from "../lib/theme";
 import type { IndexStatus } from "../lib/useSemanticIndex";
 import type { Suggestion } from "../lib/useSuggestions";
+import type { ScheduleController } from "../lib/useSchedule";
 import { DetectedVerses } from "./DetectedVerses";
 import { ParaphraseMatches } from "./ParaphraseMatches";
+import { SchedulePanel } from "./SchedulePanel";
 import { SongLibrary } from "./SongLibrary";
 import { EmptyState, Panel } from "./Panel";
 
-const TABS = ["Scripture", "Songs", "Detected", "Paraphrase", "Queue", "History"] as const;
+const TABS = ["Scripture", "Songs", "Detected", "Paraphrase", "Schedule", "History"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
@@ -29,8 +31,8 @@ export function ScripturePanel({
   previewVerseIds,
   liveVerseIds,
   history,
-  queue,
-  onDequeue,
+  schedule,
+  onStageEntry,
   onPreviewItem,
   keyOf,
   previewKey,
@@ -55,8 +57,8 @@ export function ScripturePanel({
   previewVerseIds: number[];
   liveVerseIds: number[];
   history: Presentable[];
-  queue: Presentable[];
-  onDequeue: (key: string) => void;
+  schedule: ScheduleController;
+  onStageEntry: (index: number) => Promise<Presentable | null>;
   onPreviewItem: (item: Presentable) => void;
   keyOf: (item: Presentable) => string;
   previewKey: string | null;
@@ -79,7 +81,9 @@ export function ScripturePanel({
     <Panel
       title="Library"
       accent="teal"
-      bodyClassName={tab === "Scripture" || tab === "Songs" ? "overflow-hidden" : ""}
+      bodyClassName={
+        tab === "Scripture" || tab === "Songs" || tab === "Schedule" ? "overflow-hidden" : ""
+      }
       actions={
         <div className="flex gap-0.5">
           {TABS.map((name) => (
@@ -87,7 +91,7 @@ export function ScripturePanel({
               key={name}
               type="button"
               onClick={() => setTab(name)}
-              className={`rounded px-1.5 py-0.5 text-[11px] transition-colors focus-visible:focus-ring ${
+              className={`rounded px-1 py-0.5 text-[11px] transition-colors focus-visible:focus-ring ${
                 tab === name
                   ? "bg-pulpitry-teal-dim text-pulpitry-text"
                   : "text-pulpitry-muted hover:text-pulpitry-text"
@@ -102,8 +106,10 @@ export function ScripturePanel({
               {name === "Paraphrase" && suggestions.length > 0 ? (
                 <span className="ml-1 text-pulpitry-teal tabular-nums">{suggestions.length}</span>
               ) : null}
-              {name === "Queue" && queue.length > 0 ? (
-                <span className="ml-1 text-pulpitry-teal tabular-nums">{queue.length}</span>
+              {name === "Schedule" && schedule.entries.length > 0 ? (
+                <span className="ml-1 text-pulpitry-teal tabular-nums">
+                  {schedule.entries.length}
+                </span>
               ) : null}
             </button>
           ))}
@@ -143,41 +149,23 @@ export function ScripturePanel({
         />
       ) : null}
 
-      {tab === "Queue" ? (
-        queue.length === 0 ? (
-          <EmptyState>
-            Stage a verse and press Queue to line it up. The running order empties as you
-            display each one.
-          </EmptyState>
-        ) : (
-          <ol className="flex flex-col p-1">
-            {queue.map((item, position) => (
-              <li key={keyOf(item)} className="flex items-start gap-1">
-                <button
-                  type="button"
-                  onClick={() => onPreviewItem(item)}
-                  className="min-w-0 flex-1 rounded px-2 py-1.5 text-left transition-colors hover:bg-pulpitry-raised focus-visible:focus-ring"
-                >
-                  <span className="block text-[11px] text-pulpitry-muted">
-                    <span className="mr-1.5 tabular-nums">{position + 1}.</span>
-                    {presentableLabel(item)}
-                  </span>
-                  <span className="line-clamp-2 text-[12.5px] text-pulpitry-text">
-                    {presentableText(item)}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onDequeue(keyOf(item))}
-                  aria-label={`Remove ${presentableLabel(item)} from the queue`}
-                  className="mt-1.5 shrink-0 rounded px-1.5 py-0.5 text-[13px] leading-none text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ol>
-        )
+      {tab === "Schedule" ? (
+        <SchedulePanel
+          services={schedule.services}
+          openId={schedule.openId}
+          name={schedule.name}
+          entries={schedule.entries}
+          saving={schedule.saving}
+          onCreate={() => void schedule.create()}
+          onOpen={(id) => void schedule.open(id)}
+          onRename={schedule.rename}
+          onDelete={(id) => void schedule.remove(id)}
+          onAddNote={schedule.addNote}
+          onRemoveAt={schedule.removeAt}
+          onMove={schedule.move}
+          onRelabel={schedule.relabel}
+          onStage={onStageEntry}
+        />
       ) : null}
 
       {tab === "History" ? (

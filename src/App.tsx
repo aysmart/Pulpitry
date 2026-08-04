@@ -28,6 +28,7 @@ import { exportTranscript } from "./lib/exportTranscript";
 import { DEFAULT_THEME } from "./lib/theme";
 import { useDetections } from "./lib/useDetections";
 import { usePresentation } from "./lib/usePresentation";
+import { useSchedule } from "./lib/useSchedule";
 import { useSemanticIndex } from "./lib/useSemanticIndex";
 import { useSpokenReferences } from "./lib/useSpokenReferences";
 import { useSuggestions } from "./lib/useSuggestions";
@@ -40,15 +41,12 @@ export default function App() {
     live,
     liveKey,
     history,
-    queue,
     previewVerse,
     previewVerses,
     previewItem,
     keyOf,
     display,
     clearLive,
-    enqueue,
-    dequeue,
     step,
     canStepBack,
     canStepForward,
@@ -74,6 +72,19 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [displays, setDisplays] = useState<Display[]>([]);
   const [projector, setProjector] = useState<ProjectorState>({ open: false, display: null });
+
+  // The running order. Kept in the library rather than in state, so closing
+  // the app mid-service does not cost the plan.
+  const schedule = useSchedule(setError);
+
+  const stageEntry = useCallback(
+    async (index: number) => {
+      const staged = await schedule.stage(index);
+      if (staged) previewItem(staged);
+      return staged;
+    },
+    [schedule, previewItem],
+  );
 
   useEffect(() => {
     let active = true;
@@ -284,8 +295,7 @@ export default function App() {
           onDisplay={display}
           onClear={clearLive}
           onStep={(forward) => void step(forward)}
-          onQueue={() => preview && enqueue(preview)}
-          queued={Boolean(preview && queue.some((item) => keyOf(item) === keyOf(preview)))}
+          onAdd={() => preview && schedule.add(preview)}
           theme={settings?.projector ?? DEFAULT_THEME}
           canStepBack={canStepBack}
           canStepForward={canStepForward}
@@ -299,8 +309,8 @@ export default function App() {
           previewVerseIds={preview?.kind === "scripture" ? preview.verses.map((verse) => verse.id) : []}
           liveVerseIds={live?.ids ?? []}
           history={history}
-          queue={queue}
-          onDequeue={dequeue}
+          schedule={schedule}
+          onStageEntry={stageEntry}
           onPreviewItem={previewItem}
           keyOf={keyOf}
           previewKey={preview ? keyOf(preview) : null}
