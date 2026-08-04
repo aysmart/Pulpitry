@@ -6,10 +6,13 @@ import {
   closeProjector,
   getAudio,
   getLive,
+  getMedia,
   onAudio,
   onLive,
+  onMedia,
   type AudioState,
   type LiveContent,
+  type MediaCommand,
 } from "./lib/projector";
 import { DEFAULT_THEME, backgroundUrl, getTheme, onTheme, type ProjectorTheme } from "./lib/theme";
 import "./styles.css";
@@ -25,6 +28,12 @@ function Projector() {
   const [content, setContent] = useState<LiveContent | null>(null);
   const [theme, setTheme] = useState<ProjectorTheme>(DEFAULT_THEME);
   const [audio, setAudio] = useState<AudioState>({ muted: false, volume: 1 });
+  const [command, setCommand] = useState<MediaCommand>({
+    playing: true,
+    looping: false,
+    seekNonce: 0,
+    seekTo: 0,
+  });
 
   useEffect(() => {
     let active = true;
@@ -35,11 +44,13 @@ function Projector() {
     void getLive().then((current) => active && setContent(current)).catch(() => undefined);
     void getTheme().then((current) => active && setTheme(current)).catch(() => undefined);
     void getAudio().then((current) => active && setAudio(current)).catch(() => undefined);
+    void getMedia().then((current) => active && setCommand(current)).catch(() => undefined);
 
     void Promise.all([
       onLive((next) => active && setContent(next)),
       onTheme((next) => active && setTheme(next)),
       onAudio((next) => active && setAudio(next)),
+      onMedia((next) => active && setCommand(next)),
     ]).then((unlisteners) => {
       stops.push(...unlisteners);
       if (!active) stops.forEach((stop) => stop());
@@ -98,7 +109,7 @@ function Projector() {
       <div className="relative flex h-full w-full flex-col items-center justify-center px-[6vw] py-[5vh]">
         {content ? (
           <>
-            <LiveBodyView body={content.body} theme={theme} audio={audio} />
+            <LiveBodyView body={content.body} theme={theme} audio={audio} command={command} />
             {theme.showReference && content.caption ? (
               <p
                 className="mt-[4vh] text-center text-[clamp(0.9rem,1.6vw,1.8rem)] tracking-wide opacity-60"

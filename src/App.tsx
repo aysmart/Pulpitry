@@ -29,6 +29,7 @@ import { DEFAULT_THEME } from "./lib/theme";
 import { useDetections } from "./lib/useDetections";
 import { usePresentation } from "./lib/usePresentation";
 import { useAudio } from "./lib/useAudio";
+import { useMedia } from "./lib/useMedia";
 import { useSchedule } from "./lib/useSchedule";
 import { useSemanticIndex } from "./lib/useSemanticIndex";
 import { useSpokenReferences } from "./lib/useSpokenReferences";
@@ -78,6 +79,7 @@ export default function App() {
   // the app mid-service does not cost the plan.
   const schedule = useSchedule(setError);
   const { audio, change: changeAudio } = useAudio();
+  const media = useMedia();
 
   const stageEntry = useCallback(
     async (index: number) => {
@@ -304,6 +306,7 @@ export default function App() {
           projectorOpen={projector.open}
           audio={audio}
           onAudioChange={changeAudio}
+          media={media}
         />
         <ScripturePanel
           translation={translation}

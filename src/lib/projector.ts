@@ -110,3 +110,43 @@ export const setAudio = (audio: AudioState) => invoke<AudioState>("set_audio", {
 
 export const onAudio = (handler: (audio: AudioState) => void): Promise<UnlistenFn> =>
   listen<AudioState>(EVENT_AUDIO, (event) => handler(event.payload));
+
+/** What the operator has asked the clip to do. Both surfaces obey it. */
+export interface MediaCommand {
+  playing: boolean;
+  looping: boolean;
+  /**
+   * Bumped whenever a jump is asked for. A bare position could not express it:
+   * "back to the start" twice running is two instructions, not one.
+   */
+  seekNonce: number;
+  seekTo: number;
+}
+
+/** Where the clip has reached, reported by whichever surface is the output. */
+export interface MediaProgress {
+  position: number;
+  duration: number;
+  ended: boolean;
+}
+
+export const EVENT_MEDIA = "media:command";
+export const EVENT_MEDIA_PROGRESS = "media:progress";
+
+export const getMedia = () => invoke<MediaCommand>("get_media");
+
+export const setMedia = (command: MediaCommand) =>
+  invoke<MediaCommand>("set_media", { command });
+
+export const getMediaProgress = () => invoke<MediaProgress>("get_media_progress");
+
+export const reportMediaProgress = (progress: MediaProgress) =>
+  invoke<void>("report_media_progress", { progress });
+
+export const onMedia = (handler: (command: MediaCommand) => void): Promise<UnlistenFn> =>
+  listen<MediaCommand>(EVENT_MEDIA, (event) => handler(event.payload));
+
+export const onMediaProgress = (
+  handler: (progress: MediaProgress) => void,
+): Promise<UnlistenFn> =>
+  listen<MediaProgress>(EVENT_MEDIA_PROGRESS, (event) => handler(event.payload));

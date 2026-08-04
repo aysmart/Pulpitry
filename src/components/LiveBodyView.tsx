@@ -1,6 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 
-import type { AudioState, LiveBody } from "../lib/projector";
+import type { AudioState, LiveBody, MediaCommand } from "../lib/projector";
 import { fontStack, textStyle, type ProjectorTheme } from "../lib/theme";
 import { VideoSurface } from "./VideoSurface";
 
@@ -16,12 +16,15 @@ export function LiveBodyView({
   theme,
   scale = 1,
   audio = { muted: false, volume: 1 },
+  command,
 }: {
   body: LiveBody;
   theme: ProjectorTheme;
   scale?: number;
   /** Volume for a clip. Ignored by every other kind of body. */
   audio?: AudioState;
+  /** Transport for a clip. Ignored by every other kind of body. */
+  command?: MediaCommand;
 }) {
   const text = body.kind === "scripture" ? body.lines.map((l) => l.text).join(" ") : "";
   const base = textStyle(theme, text);
@@ -109,8 +112,10 @@ export function LiveBodyView({
           // be heard, and this surface is the one the congregation is watching.
           muted={audio.muted}
           volume={audio.volume}
-          looping={body.looping}
-          autoPlay
+          looping={command?.looping ?? body.looping}
+          command={command}
+          // The wall is the output whenever it exists, so it keeps the clock.
+          reportProgress
           className="max-h-full max-w-full object-contain"
         />
       );

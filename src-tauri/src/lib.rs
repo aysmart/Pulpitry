@@ -18,7 +18,9 @@ use assist::Assistant;
 use bible::{Book, Library, LibraryStatus, Reference, Translation, Verse};
 use catalog::{Catalog, Item};
 use detect::Detector;
-use projector::{AudioState, Display, LiveContent, Projector, ProjectorState};
+use projector::{
+    AudioState, Display, LiveContent, MediaCommand, MediaProgress, Projector, ProjectorState,
+};
 use semantic::{IndexStatus, Semantic};
 use settings::{ProjectorTheme, Settings, SettingsView};
 use speech::{SpeechManager, SpeechStatus};
@@ -250,6 +252,27 @@ fn set_audio(projector: State<'_, Arc<Projector>>, audio: AudioState) -> AudioSt
 }
 
 #[tauri::command]
+fn get_media(projector: State<'_, Arc<Projector>>) -> MediaCommand {
+    projector.media()
+}
+
+#[tauri::command]
+fn set_media(projector: State<'_, Arc<Projector>>, command: MediaCommand) -> MediaCommand {
+    projector.set_media(command)
+}
+
+#[tauri::command]
+fn get_media_progress(projector: State<'_, Arc<Projector>>) -> MediaProgress {
+    projector.progress()
+}
+
+/// Reported by whichever surface is actually playing the clip.
+#[tauri::command]
+fn report_media_progress(projector: State<'_, Arc<Projector>>, progress: MediaProgress) {
+    projector.report_progress(progress);
+}
+
+#[tauri::command]
 fn list_displays(projector: State<'_, Arc<Projector>>) -> CommandResult<Vec<Display>> {
     projector.displays().map_err(to_message)
 }
@@ -469,6 +492,10 @@ pub fn run() {
             set_live,
             get_audio,
             set_audio,
+            get_media,
+            set_media,
+            get_media_progress,
+            report_media_progress,
             list_displays,
             open_projector,
             close_projector,

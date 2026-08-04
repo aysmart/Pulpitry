@@ -6,7 +6,12 @@
       "Bash(cd ~/.cargo/registry/src/*/; sed -n '745,760p' wry-0.55.1/src/lib.rs; echo \"=== macos impl ===\"; grep -rn \"autoplay\" wry-0.55.1/src/wkwebview/*.rs | head -10; echo \"=== does tauri set it? ===\"; grep -rn \"autoplay\\\\|with_autoplay\" tauri-2.11.5/src/ tauri-runtime-wry-*/src/ 2>/dev/null | head -10)",
       "Bash(cd ~/.cargo/registry/src/*/; sed -n '355,370p' wry-0.55.1/src/wkwebview/mod.rs; echo \"=== tauri-runtime-wry ===\"; ls -d tauri-runtime-wry-* 2>/dev/null; grep -rn \"autoplay\" tauri-runtime-wry-*/src/lib.rs 2>/dev/null | head)",
       "Bash(ffmpeg -f lavfi -i testsrc=size=640x360:rate=15 -f lavfi -i \"sine=frequency=440\" -t 4 -pix_fmt yuv420p -shortest welcome.mp4 -y)",
-      "Bash(node media-preview.mjs volume)"
+      "Bash(node media-preview.mjs volume)",
+      "Bash(cp \"/System/Library/CoreServices/BluetoothUIService.app/Contents/Resources/Banner-PID-8203-Case-mov/Banner-PID-8203-Case-Loop.mov\" welcome.mov)",
+      "Bash(rm -f welcome.mp4)",
+      "Read(//System/Library/PrivateFrameworks/SetupAssistantSupportUI.framework/Versions/A/Resources/**)",
+      "Bash(cp \"/System/Library/PrivateFrameworks/SetupAssistantSupportUI.framework/Versions/A/Resources/newFeaturesVideo-en~mac.mp4\" welcome.mp4)",
+      "Bash(sed -i '' 's|/pictures/welcome.mov|/pictures/welcome.mp4|' media-preview.mjs)"
     ]
   }
 }

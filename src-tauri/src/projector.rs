@@ -16,6 +16,8 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const EVENT_LIVE: &str = "live:changed";
 pub const EVENT_AUDIO: &str = "audio:changed";
+pub const EVENT_MEDIA: &str = "media:command";
+pub const EVENT_MEDIA_PROGRESS: &str = "media:progress";
 pub const EVENT_THEME: &str = "theme:changed";
 pub const WINDOW_LABEL: &str = "projector";
 
@@ -115,11 +117,50 @@ impl Default for AudioState {
     }
 }
 
+/// What the operator has asked the clip to do.
+///
+/// Held here rather than in a window because two surfaces render the same
+/// clip. Both obey this, so pausing in the operator's pane pauses the wall.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaCommand {
+    pub playing: bool,
+    pub looping: bool,
+    /// Bumped whenever a jump is asked for. A bare position could not express
+    /// it: "go back to the start" twice running is two instructions, not one,
+    /// and an unchanged number would look like no instruction at all.
+    pub seek_nonce: u64,
+    pub seek_to: f32,
+}
+
+impl Default for MediaCommand {
+    fn default() -> Self {
+        Self { playing: true, looping: false, seek_nonce: 0, seek_to: 0.0 }
+    }
+}
+
+/// Where the clip has actually reached.
+///
+/// Reported by whichever surface is the output — the projector when it is
+/// open, the operator's pane otherwise — so the number on the transport is a
+/// real position rather than an estimate.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaProgress {
+    pub position: f32,
+    pub duration: f32,
+    /// A clip that has run out holds its last frame. Blanking the screen
+    /// unasked mid-service would be worse than a still picture.
+    pub ended: bool,
+}
+
 pub struct Projector {
     app: AppHandle,
     live: Mutex<Option<LiveContent>>,
     display: Mutex<Option<usize>>,
     audio: Mutex<AudioState>,
+    media: Mutex<MediaCommand>,
+    progress: Mutex<MediaProgress>,
 }
 
 impl Projector {
@@ -129,7 +170,41 @@ impl Projector {
             live: Mutex::new(None),
             display: Mutex::new(None),
             audio: Mutex::new(AudioState::default()),
+            media: Mutex::new(MediaCommand::default()),
+            progress: Mutex::new(MediaProgress::default()),
         })
+    }
+
+    pub fn media(&self) -> MediaCommand {
+        *self.media.lock()
+    }
+
+    pub fn set_media(&self, command: MediaCommand) -> MediaCommand {
+        {
+            let mut current = self.media.lock();
+            if *current == command {
+                return command;
+            }
+            *current = command;
+        }
+        let _ = self.app.emit(EVENT_MEDIA, command);
+        command
+    }
+
+    pub fn progress(&self) -> MediaProgress {
+        *self.progress.lock()
+    }
+
+    /// Called by the surface that is actually playing.
+    pub fn report_progress(&self, progress: MediaProgress) {
+        {
+            let mut current = self.progress.lock();
+            if *current == progress {
+                return;
+            }
+            *current = progress;
+        }
+        let _ = self.app.emit(EVENT_MEDIA_PROGRESS, progress);
     }
 
     pub fn audio(&self) -> AudioState {
@@ -169,6 +244,20 @@ impl Projector {
                 return;
             }
             *current = content.clone();
+        }
+
+        // A clip going up starts from the beginning, playing, at whatever loop
+        // setting it was imported with. Inheriting the last clip's paused,
+        // half-finished transport would be baffling.
+        if let Some(LiveBody::Media { looping, .. }) = content.as_ref().map(|live| &live.body) {
+            let nonce = self.media.lock().seek_nonce.wrapping_add(1);
+            self.report_progress(MediaProgress::default());
+            self.set_media(MediaCommand {
+                playing: true,
+                looping: *looping,
+                seek_nonce: nonce,
+                seek_to: 0.0,
+            });
         }
         // Emitted to all windows: the operator's Live pane and the projector
         // render from the same message, so they cannot drift apart.
@@ -363,5 +452,44 @@ mod tests {
         // "showing something", which the projector renders differently.
         let cleared: Option<LiveContent> = None;
         assert_eq!(serde_json::to_string(&cleared).expect("encode"), "null");
+    }
+
+    #[test]
+    fn the_transport_parses_what_the_operator_window_sends() {
+        // Same lesson as the service plan: agreeing with ourselves proves
+        // nothing. These are the exact payloads the TypeScript builds.
+        let command = r#"{"playing":false,"looping":true,"seekNonce":3,"seekTo":12.5}"#;
+        assert_eq!(
+            serde_json::from_str::<MediaCommand>(command).expect("command"),
+            MediaCommand { playing: false, looping: true, seek_nonce: 3, seek_to: 12.5 }
+        );
+
+        let progress = r#"{"position":4.25,"duration":90.0,"ended":false}"#;
+        assert_eq!(
+            serde_json::from_str::<MediaProgress>(progress).expect("progress"),
+            MediaProgress { position: 4.25, duration: 90.0, ended: false }
+        );
+
+        // And back out again, since both windows read what we emit.
+        let encoded = serde_json::to_string(&MediaCommand::default()).expect("encode");
+        assert!(encoded.contains("\"seekNonce\""), "wire format drifted: {encoded}");
+    }
+
+    #[test]
+    fn a_new_clip_starts_from_the_beginning() {
+        // Inheriting the previous clip's paused, half-finished transport would
+        // leave the operator pressing play on a frame nobody expected.
+        let previous = MediaCommand { playing: false, looping: false, seek_nonce: 7, seek_to: 40.0 };
+        let next = MediaCommand {
+            playing: true,
+            looping: true,
+            seek_nonce: previous.seek_nonce.wrapping_add(1),
+            seek_to: 0.0,
+        };
+
+        assert!(next.playing);
+        assert_eq!(next.seek_to, 0.0);
+        // The nonce must move, or the surface would ignore the rewind.
+        assert_ne!(next.seek_nonce, previous.seek_nonce);
     }
 }
