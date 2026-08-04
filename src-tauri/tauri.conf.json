@@ -49,12 +49,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": [
-      "binaries/pulpitry-speech"
-    ],
     "resources": [
       "resources/*",
-      "resources/embedder/*"
+      "resources/embedder/*",
+      "resources/sidecar/*"
     ],
     "macOS": {
       "minimumSystemVersion": "11.0",

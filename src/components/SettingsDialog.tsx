@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { NodeRuntimeNotice } from "./NodeRuntimeNotice";
+
 import {
   clearAssistKey,
   clearAzureKey,
@@ -148,8 +150,10 @@ export function SettingsDialog({
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto px-5 py-4">
           <Section
             title="Transcription"
-            note="Live transcription uses Azure Speech. Verse detection runs locally and needs no network."
+            note="Live transcription uses Azure Speech and runs on the Node runtime already on this machine. Verse detection runs locally and needs no network."
           >
+            <NodeRuntimeNotice />
+
             <label className="flex flex-col gap-1.5">
               <span className="text-[12px] text-pulpitry-muted">
                 Azure Speech key

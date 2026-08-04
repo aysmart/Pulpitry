@@ -74,6 +74,18 @@ export const startTranscription = () => invoke<void>("start_transcription");
 
 export const stopTranscription = () => invoke<void>("stop_transcription");
 
+/** Whether the machine has a Node runtime the speech sidecar can use. */
+export interface NodeStatus {
+  found: boolean;
+  path: string | null;
+  version: string | null;
+  /** Node is installed but predates what the sidecar needs. */
+  tooOld: boolean;
+  minimum: number;
+}
+
+export const nodeStatus = () => invoke<NodeStatus>("node_status");
+
 export const speechStatus = () => invoke<SpeechStatus>("speech_status");
 
 export const onInterim = (handler: (payload: TranscriptPayload) => void): Promise<UnlistenFn> =>

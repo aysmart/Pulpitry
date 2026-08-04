@@ -7,9 +7,8 @@ dist/
 src-tauri/target/
 src-tauri/gen/schemas/
 
-# The sidecar executable is ~115 MB and is produced by `npm run sidecar:build`.
-src-tauri/binaries/*
-!src-tauri/binaries/.gitkeep
+# Built by `npm run sidecar:build` from src-sidecar/.
+src-tauri/resources/sidecar/
 src-sidecar/build/
 
 # Rasterised from assets/pulpitry-mark.svg by `npm run icons:build`.

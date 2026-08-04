@@ -3,6 +3,7 @@ mod audio;
 mod bible;
 mod catalog;
 mod detect;
+mod node;
 mod embed;
 mod projector;
 mod semantic;
@@ -158,6 +159,12 @@ fn start_transcription(manager: State<'_, Arc<SpeechManager>>) -> CommandResult<
 fn stop_transcription(manager: State<'_, Arc<SpeechManager>>) -> CommandResult<()> {
     manager.stop();
     Ok(())
+}
+
+/// Whether the machine has a Node runtime the sidecar can use.
+#[tauri::command]
+fn node_status() -> node::NodeStatus {
+    node::status()
 }
 
 #[tauri::command]
@@ -490,6 +497,7 @@ pub fn run() {
             start_transcription,
             stop_transcription,
             speech_status,
+            node_status,
             library_status,
             list_translations,
             list_books,

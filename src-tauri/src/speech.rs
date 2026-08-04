@@ -15,7 +15,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use parking_lot::Mutex;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
@@ -27,7 +27,9 @@ pub const EVENT_INTERIM: &str = "transcript:interim";
 pub const EVENT_FINAL: &str = "transcript:final";
 pub const EVENT_STATUS: &str = "speech:status";
 
-const SIDECAR: &str = "pulpitry-speech";
+/// Shipped as a script, not an executable: the runtime that interprets it is
+/// the machine's own. See [`crate::node`].
+const SIDECAR_SCRIPT: &str = "resources/sidecar/pulpitry-speech.cjs";
 const BACKOFF_START: Duration = Duration::from_millis(800);
 const BACKOFF_MAX: Duration = Duration::from_secs(15);
 
@@ -202,14 +204,27 @@ impl SpeechManager {
             ("PULPITRY_SAMPLE_RATE".to_string(), audio::TARGET_SAMPLE_RATE.to_string()),
         ]);
 
+        // Checked before anything else is set up, so a machine without Node
+        // says so plainly rather than failing somewhere further in.
+        let node = crate::node::find()
+            .ok_or_else(|| anyhow!("{}", crate::node::missing_message(&crate::node::status())))?;
+
+        let script = self
+            .app
+            .path()
+            .resolve(SIDECAR_SCRIPT, tauri::path::BaseDirectory::Resource)
+            .map_err(|e| anyhow!("could not locate the speech sidecar: {e}"))?;
+
         let (events, child) = self
             .app
             .shell()
-            .sidecar(SIDECAR)
-            .map_err(|e| anyhow!("could not locate the speech sidecar: {e}"))?
+            .command(&node.path)
+            .args([script.as_os_str()])
             .envs(env)
             .spawn()
-            .map_err(|e| anyhow!("could not start the speech sidecar: {e}"))?;
+            .map_err(|e| {
+                anyhow!("could not start the speech sidecar with {}: {e}", node.path.display())
+            })?;
 
         let child = Arc::new(Mutex::new(Some(child)));
         let audio_stop = Arc::new(AtomicBool::new(false));

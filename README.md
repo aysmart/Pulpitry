@@ -30,7 +30,7 @@ Rust core (Tauri)
   └─ re-emits transcript events on the Tauri event bus
           │  PCM on stdin        NDJSON on stdout
           ▼
-Node sidecar (single fused executable, invisible to the user)
+Node sidecar (a bundled script, run on the machine's own Node)
   └─ streams PCM to Azure Speech, emits interim and final results
 ```
 
@@ -449,14 +449,25 @@ Two layers, because there are two different failures:
 ## Prerequisites
 
 - Rust (stable) — `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-- Node.js 22+
+- Node.js 20+
 - macOS: Xcode command line tools. Windows: MSVC build tools and WebView2.
+
+### What people running the app need
+
+**Node.js 20 or newer.** Pulpitry does not ship a runtime; it runs the speech
+sidecar on the one already installed. Everything else — the verse library,
+songs, slides, themes and the projector — works without it, and Settings says
+so plainly if it is missing, with a link to install it.
+
+The app finds Node itself, including installs a launched application cannot
+normally see: an app opened from Finder or the Start menu does not inherit a
+shell's `PATH`, so Homebrew, nvm, fnm and Volta locations are searched too.
 
 ## Running
 
 ```sh
 npm install
-npm run sidecar:build     # fuses the Node sidecar into a standalone executable
+npm run sidecar:build     # bundles the speech sidecar into one script
 npm run tauri:dev
 ```
 
@@ -512,10 +523,11 @@ assets/              logo source
 
 ## Notes and known constraints
 
-- The fused sidecar is ~115 MB because Node's Single Executable Application support
-  embeds the whole runtime. It compresses well in the installer but does inflate the
-  bundle.
+- Live transcription needs Node on the machine. The sidecar used to be fused into a
+  copy of the runtime, which cost 115 MB of every download to deliver one WebSocket
+  client; it is now a 0.4 MB script. The trade is a prerequisite the operator may have
+  to install, which Settings states before a service rather than during one.
 - The macOS deployment target is 11.0. Vite's bundler cannot emit for WebKit older than
   Safari 15, which Big Sur can run.
-- The sidecar is built for the host architecture only. Cross-building for Intel Macs or
-  for Windows requires running `npm run sidecar:build` on that platform.
+- The sidecar bundle is plain JavaScript and is now architecture-independent; the
+  packaging workflow still builds per platform because the Rust core is native.

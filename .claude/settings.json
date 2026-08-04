@@ -40,7 +40,9 @@
       "Bash(git ls-tree *)",
       "Bash(node -e \"process.exit\\(0\\)\")",
       "Bash(node --check scripts/build-icons.mjs)",
-      "Bash(node --check scripts/build-sidecar.mjs)"
+      "Bash(node --check scripts/build-sidecar.mjs)",
+      "Bash(node scripts/build-sidecar.mjs)",
+      "Bash(PULPITRY_AZURE_KEY=\"\" PULPITRY_AZURE_REGION=\"uksouth\" PULPITRY_LANGUAGE=\"en-US\" PULPITRY_SAMPLE_RATE=\"16000\" node \"src-tauri/target/release/bundle/macos/Pulpitry.app/Contents/Resources/resources/sidecar/pulpitry-speech.cjs\")"
     ]
   }
 }
