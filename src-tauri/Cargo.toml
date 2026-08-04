@@ -39,7 +39,11 @@ candle-transformers = "0.11"
 tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
 # rustls rather than native-tls: no OpenSSL to find at build time on either
 # platform, and the sidecar already proves we can ship without system deps.
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "http2", "blocking"] }
+# `rustls-no-provider` rather than `rustls`: the latter picks aws-lc-rs, whose
+# C sources need CMake and NASM on the build machine. Ring builds everywhere
+# with the toolchain we already have, which matters most for Windows.
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider", "http2", "blocking"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 anyhow = "1"
 parking_lot = "0.12"
 tokio = { version = "1", features = ["time"] }

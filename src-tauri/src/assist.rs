@@ -129,6 +129,7 @@ pub struct Assistant {
 
 impl Assistant {
     pub fn new(app: AppHandle, library: Arc<Library>) -> Arc<Self> {
+        install_crypto_provider();
         let (queue, incoming) = sync_channel::<String>(4);
         let client = reqwest::blocking::Client::builder()
             .timeout(REQUEST_TIMEOUT)
@@ -333,6 +334,18 @@ fn request_body(config: &Config, context: &str) -> serde_json::Value {
     })
 }
 
+/// Chooses the TLS backend once, before anything can make a request.
+///
+/// Naming the provider is the price of not compiling aws-lc-rs, which drags a
+/// C build chain onto every machine that builds this. Failure here means one
+/// was already installed, which is equally fine.
+fn install_crypto_provider() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
 fn ask(
     client: &reqwest::blocking::Client,
     config: &Config,
@@ -486,6 +499,20 @@ fn extract_json_object(text: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn a_tls_backend_is_installed_before_any_request() {
+        // Without a provider, rustls refuses at the first HTTPS call — which
+        // would be mid-service, not at build time. Naming it is the trade for
+        // not compiling aws-lc-rs, so it has to actually happen.
+        install_crypto_provider();
+        assert!(
+            rustls::crypto::CryptoProvider::get_default().is_some(),
+            "no TLS backend installed; the model assist would fail on first use",
+        );
+    }
+
     use super::*;
 
     /// Most tests care only about the references half of a reply.
