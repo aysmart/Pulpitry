@@ -13,7 +13,8 @@
       "Bash(cp \"/System/Library/PrivateFrameworks/SetupAssistantSupportUI.framework/Versions/A/Resources/newFeaturesVideo-en~mac.mp4\" welcome.mp4)",
       "Bash(sed -i '' 's|/pictures/welcome.mov|/pictures/welcome.mp4|' media-preview.mjs)",
       "Bash(node media-preview.mjs slides)",
-      "Bash(node media-preview.mjs editor)"
+      "Bash(node media-preview.mjs editor)",
+      "Bash(THEME=theme-gradient.json node media-preview.mjs settings)"
     ]
   }
 }

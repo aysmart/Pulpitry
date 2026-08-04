@@ -67,14 +67,25 @@ pub struct ProjectorTheme {
     /// A soft drop shadow, which lifts text off busy backgrounds where a hard
     /// outline would look heavy.
     pub shadow: bool,
-    /// "color" | "image" | "video"
+    /// "color" | "gradient" | "image" | "video"
     pub background_kind: String,
     pub background_color: String,
+    /// Ends of the gradient, and the angle it runs at in degrees. A wash of
+    /// colour reads better behind text than a photograph and costs nothing to
+    /// carry, which makes it the useful middle ground between the two.
+    pub gradient_from: String,
+    pub gradient_to: String,
+    pub gradient_angle: f32,
     /// Absolute path to the chosen image or video.
     pub background_path: Option<String>,
     /// Darkens the background behind the text, 0 to 1. The single most
     /// effective way to keep words readable over a bright photograph.
     pub background_dim: f32,
+    /// "none" | "grain" | "linen" | "dots" | "vignette". Laid over whatever
+    /// the background is, so a flat colour stops looking like a flat colour.
+    pub texture: String,
+    /// How strongly the texture reads, 0 to 1.
+    pub texture_strength: f32,
     pub show_reference: bool,
 }
 
@@ -89,8 +100,13 @@ impl Default for ProjectorTheme {
             shadow: false,
             background_kind: "color".into(),
             background_color: "#F4F1EA".into(),
+            gradient_from: "#F4F1EA".into(),
+            gradient_to: "#D9D2C2".into(),
+            gradient_angle: 160.0,
             background_path: None,
             background_dim: 0.0,
+            texture: "none".into(),
+            texture_strength: 0.35,
             show_reference: true,
         }
     }
@@ -242,6 +258,48 @@ mod tests {
         let mut settings = Settings { semantic_threshold: 0.60, ..Settings::default() };
         correct_miscalibrated_threshold(&mut settings);
         assert_eq!(settings.semantic_threshold, 0.70);
+    }
+
+    #[test]
+    fn a_theme_saved_before_gradients_existed_still_loads() {
+        // Settings written by an earlier build have none of these keys. The
+        // struct-level serde default is what keeps that from wiping a theme an
+        // operator spent time on, so it is worth pinning.
+        let old = r##"{
+            "fontFamily":"sourceSerif","fontScale":1.2,"textColor":"#FFFFFF",
+            "outlineWidth":2.0,"outlineColor":"#000000","shadow":true,
+            "backgroundKind":"image","backgroundColor":"#101010",
+            "backgroundPath":"/pictures/dove.jpg","backgroundDim":0.4,
+            "showReference":true
+        }"##;
+        let theme: ProjectorTheme = serde_json::from_str(old).expect("an older theme");
+
+        assert_eq!(theme.font_scale, 1.2);
+        assert_eq!(theme.background_path.as_deref(), Some("/pictures/dove.jpg"));
+        assert_eq!(theme.texture, "none");
+        assert_eq!(theme.gradient_angle, 160.0);
+    }
+
+    #[test]
+    fn a_theme_round_trips_as_the_operator_window_writes_it() {
+        let json = r##"{
+            "fontFamily":"inter","fontScale":1.0,"textColor":"#FFFFFF",
+            "outlineWidth":0.0,"outlineColor":"#000000","shadow":false,
+            "backgroundKind":"gradient","backgroundColor":"#101010",
+            "gradientFrom":"#123456","gradientTo":"#654321","gradientAngle":45.0,
+            "backgroundPath":null,"backgroundDim":0.0,
+            "texture":"linen","textureStrength":0.5,"showReference":true
+        }"##;
+        let theme: ProjectorTheme = serde_json::from_str(json).expect("a gradient theme");
+
+        assert_eq!(theme.background_kind, "gradient");
+        assert_eq!(theme.gradient_from, "#123456");
+        assert_eq!(theme.texture, "linen");
+        assert_eq!(theme.texture_strength, 0.5);
+
+        let encoded = serde_json::to_string(&theme).expect("encode");
+        assert!(encoded.contains("\"gradientFrom\""), "wire format drifted: {encoded}");
+        assert!(encoded.contains("\"textureStrength\""), "wire format drifted: {encoded}");
     }
 
     #[test]

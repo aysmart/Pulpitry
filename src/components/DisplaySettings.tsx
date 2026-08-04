@@ -1,6 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 
-import { allowBackground, FONT_FAMILIES, type ProjectorTheme } from "../lib/theme";
+import { allowBackground, FONT_FAMILIES, TEXTURES, type ProjectorTheme } from "../lib/theme";
 import { ThemeTemplates } from "./ThemeTemplates";
 
 const FIELD =
@@ -113,7 +113,8 @@ export function DisplaySettings({
     }
   };
 
-  const usingMedia = theme.backgroundKind !== "color";
+  // A gradient has no file behind it, so it must not offer to name one.
+  const usingMedia = theme.backgroundKind === "image" || theme.backgroundKind === "video";
 
   return (
     <div className="flex flex-col gap-3">
@@ -187,12 +188,12 @@ export function DisplaySettings({
       <div className="border-t border-pulpitry-line pt-3">
         <span className="text-[12px] text-pulpitry-muted">Background</span>
         <div className="mt-1.5 flex gap-1.5">
-          {(["color", "image", "video"] as const).map((kind) => (
+          {(["color", "gradient", "image", "video"] as const).map((kind) => (
             <button
               key={kind}
               type="button"
               onClick={() => {
-                if (kind === "color") set("backgroundKind", "color");
+                if (kind === "color" || kind === "gradient") set("backgroundKind", kind);
                 else void pickBackground(kind);
               }}
               className={`flex-1 rounded border px-2 py-1.5 text-[12px] capitalize transition-colors focus-visible:focus-ring ${
@@ -219,6 +220,28 @@ export function DisplaySettings({
               value={theme.backgroundColor}
               onChange={(value) => set("backgroundColor", value)}
             />
+          ) : theme.backgroundKind === "gradient" ? (
+            <>
+              <Swatch
+                label="From"
+                value={theme.gradientFrom}
+                onChange={(value) => set("gradientFrom", value)}
+              />
+              <Swatch
+                label="To"
+                value={theme.gradientTo}
+                onChange={(value) => set("gradientTo", value)}
+              />
+              <Slider
+                label="Angle"
+                value={theme.gradientAngle}
+                min={0}
+                max={360}
+                step={5}
+                format={(value) => `${Math.round(value)}°`}
+                onChange={(value) => set("gradientAngle", value)}
+              />
+            </>
           ) : (
             <Slider
               label="Dim behind text"
@@ -231,6 +254,41 @@ export function DisplaySettings({
             />
           )}
         </div>
+      </div>
+
+      <div className="border-t border-pulpitry-line pt-3">
+        <span className="text-[12px] text-pulpitry-muted">Texture</span>
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {TEXTURES.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => set("texture", option.id)}
+              title={option.hint}
+              className={`rounded border px-2 py-1.5 text-[12px] transition-colors focus-visible:focus-ring ${
+                theme.texture === option.id
+                  ? "border-pulpitry-gold-dim bg-pulpitry-gold/10 text-pulpitry-gold"
+                  : "border-pulpitry-line bg-pulpitry-raised text-pulpitry-text hover:border-pulpitry-muted"
+              }`}
+            >
+              {option.name}
+            </button>
+          ))}
+        </div>
+
+        {theme.texture !== "none" ? (
+          <div className="mt-3">
+            <Slider
+              label="Strength"
+              value={theme.textureStrength}
+              min={0.05}
+              max={1}
+              step={0.05}
+              format={(value) => `${Math.round(value * 100)}%`}
+              onChange={(value) => set("textureStrength", value)}
+            />
+          </div>
+        ) : null}
       </div>
 
       <ThemeTemplates theme={theme} onApply={onChange} onError={onError} />

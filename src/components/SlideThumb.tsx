@@ -1,4 +1,5 @@
-import { backgroundUrl, fontStack, type ProjectorTheme } from "../lib/theme";
+import { fontStack, type ProjectorTheme } from "../lib/theme";
+import { Backdrop } from "./Backdrop";
 import {
   currentSection,
   presentableLabel,
@@ -30,7 +31,6 @@ export function SlideThumb({
   /** Overrides the item's own label, e.g. a section name. */
   label?: string;
 }) {
-  const media = backgroundUrl(theme);
   const text = presentableText(item);
   // A lyric breaks where the writer broke it, and the slide will show it that
   // way. A thumbnail that reflows into a paragraph is not a preview.
@@ -51,22 +51,8 @@ export function SlideThumb({
     >
       <span
         className="relative block aspect-video w-full overflow-hidden rounded-sm border border-pulpitry-line [container-type:inline-size]"
-        style={{ backgroundColor: theme.backgroundColor }}
       >
-        {media && theme.backgroundKind === "image" ? (
-          <img src={media} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        ) : null}
-        {media && theme.backgroundKind === "video" ? (
-          // Not autoplayed in a thumbnail: a wall of playing videos is both
-          // distracting and expensive. The first frame is enough to recognise.
-          <video src={media} muted playsInline preload="metadata" className="absolute inset-0 h-full w-full object-cover" />
-        ) : null}
-        {media && theme.backgroundDim > 0 ? (
-          <span
-            className="absolute inset-0 block"
-            style={{ backgroundColor: `rgba(0,0,0,${theme.backgroundDim})` }}
-          />
-        ) : null}
+        <Backdrop theme={theme} playVideo={false} />
 
         <span
           className="absolute inset-0 flex items-center justify-center px-[6%] text-center leading-[1.25]"

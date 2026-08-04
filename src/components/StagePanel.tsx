@@ -9,7 +9,8 @@ import {
   type MediaProgress,
   type TextBlock,
 } from "../lib/projector";
-import { backgroundUrl, fontStack, type ProjectorTheme } from "../lib/theme";
+import { fontStack, type ProjectorTheme } from "../lib/theme";
+import { Backdrop } from "./Backdrop";
 import { presentableLabel, presentableText, type Presentable } from "../lib/usePresentation";
 import { EmptyState, Panel } from "./Panel";
 import { MediaTransport } from "./MediaTransport";
@@ -81,30 +82,13 @@ function Stage({
     return <EmptyState>{empty}</EmptyState>;
   }
 
-  const media = theme ? backgroundUrl(theme) : null;
-
   // Outline width is authored for a projector; at panel scale the same value
   // would swallow the letterforms.
   const outline = theme && theme.outlineWidth > 0 ? theme.outlineWidth / 4 : 0;
 
   return (
-    <div
-      className="relative h-full overflow-hidden"
-      style={theme ? { backgroundColor: theme.backgroundColor } : undefined}
-      data-selectable
-    >
-      {media && theme?.backgroundKind === "image" ? (
-        <img src={media} alt="" className="absolute inset-0 h-full w-full object-cover" />
-      ) : null}
-      {media && theme?.backgroundKind === "video" ? (
-        <video src={media} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" />
-      ) : null}
-      {media && theme && theme.backgroundDim > 0 ? (
-        <div
-          className="absolute inset-0"
-          style={{ backgroundColor: `rgba(0,0,0,${theme.backgroundDim})` }}
-        />
-      ) : null}
+    <div className="relative h-full overflow-hidden" data-selectable>
+      {theme ? <Backdrop theme={theme} /> : null}
 
       <div className="relative flex h-full flex-col justify-center gap-3 px-6 py-5">
         <p

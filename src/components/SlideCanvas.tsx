@@ -1,5 +1,6 @@
 import type { TextBlock } from "../lib/projector";
-import { backgroundUrl, type ProjectorTheme } from "../lib/theme";
+import type { ProjectorTheme } from "../lib/theme";
+import { Backdrop } from "./Backdrop";
 import { LiveBodyView } from "./LiveBodyView";
 
 /**
@@ -11,30 +12,9 @@ import { LiveBodyView } from "./LiveBodyView";
  * at all.
  */
 export function SlideCanvas({ blocks, theme }: { blocks: TextBlock[]; theme: ProjectorTheme }) {
-  const media = backgroundUrl(theme);
   return (
-    <div
-      className="relative aspect-video w-full overflow-hidden rounded border border-pulpitry-line [container-type:inline-size]"
-      style={{ backgroundColor: theme.backgroundColor }}
-    >
-      {media && theme.backgroundKind === "image" ? (
-        <img src={media} alt="" className="absolute inset-0 h-full w-full object-cover" />
-      ) : null}
-      {media && theme.backgroundKind === "video" ? (
-        <video
-          src={media}
-          muted
-          playsInline
-          preload="metadata"
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      ) : null}
-      {media && theme.backgroundDim > 0 ? (
-        <div
-          className="absolute inset-0"
-          style={{ backgroundColor: `rgba(0,0,0,${theme.backgroundDim})` }}
-        />
-      ) : null}
+    <div className="relative aspect-video w-full overflow-hidden rounded border border-pulpitry-line [container-type:inline-size]">
+      <Backdrop theme={theme} playVideo={false} />
 
       <div className="absolute inset-0 flex flex-col items-center justify-center px-[6cqw] py-[5cqh]">
         <LiveBodyView

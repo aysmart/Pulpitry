@@ -14,7 +14,8 @@ import {
   type LiveContent,
   type MediaCommand,
 } from "./lib/projector";
-import { DEFAULT_THEME, backgroundUrl, getTheme, onTheme, type ProjectorTheme } from "./lib/theme";
+import { DEFAULT_THEME, getTheme, onTheme, type ProjectorTheme } from "./lib/theme";
+import { Backdrop } from "./components/Backdrop";
 import "./styles.css";
 
 /**
@@ -73,38 +74,12 @@ function Projector() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const media = backgroundUrl(theme);
-
   return (
     <div
       className="relative h-full w-full overflow-hidden"
       style={{ backgroundColor: theme.backgroundColor }}
     >
-      {media && theme.backgroundKind === "image" ? (
-        <img src={media} alt="" className="absolute inset-0 h-full w-full object-cover" />
-      ) : null}
-
-      {media && theme.backgroundKind === "video" ? (
-        // Muted is not a preference: browsers refuse to autoplay with sound,
-        // and the hall already has its own.
-        <video
-          src={media}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      ) : null}
-
-      {/* Scrim. The most effective way to keep words readable over a bright
-          photograph, and cheaper than fighting it with heavier outlines. */}
-      {media && theme.backgroundDim > 0 ? (
-        <div
-          className="absolute inset-0"
-          style={{ backgroundColor: `rgba(0,0,0,${theme.backgroundDim})` }}
-        />
-      ) : null}
+      <Backdrop theme={theme} />
 
       <div className="relative flex h-full w-full flex-col items-center justify-center px-[6vw] py-[5vh]">
         {content ? (
