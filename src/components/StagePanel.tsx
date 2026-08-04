@@ -7,16 +7,19 @@ import {
   type LiveContent,
   type MediaCommand,
   type MediaProgress,
+  type TextBlock,
 } from "../lib/projector";
 import { backgroundUrl, fontStack, type ProjectorTheme } from "../lib/theme";
 import { presentableLabel, presentableText, type Presentable } from "../lib/usePresentation";
 import { EmptyState, Panel } from "./Panel";
 import { MediaTransport } from "./MediaTransport";
+import { SlideCanvas } from "./SlideCanvas";
 import { VideoSurface } from "./VideoSurface";
 
 function Stage({
   body,
   asset,
+  slide,
   reference,
   tone,
   empty,
@@ -28,6 +31,8 @@ function Stage({
   body: string | null;
   /** A picture or clip, which fills the pane instead of the text layout. */
   asset?: { kind: "image" | "media"; path: string; looping: boolean } | null;
+  /** A written slide, which is its own layout and must not be flattened. */
+  slide?: { blocks: TextBlock[]; theme: ProjectorTheme } | null;
   reference: string | null;
   tone: "preview" | "live";
   empty: string;
@@ -38,6 +43,14 @@ function Stage({
   audio?: AudioState;
   command?: MediaCommand;
 }) {
+  if (slide) {
+    return (
+      <div className="flex h-full items-center justify-center p-3" data-selectable>
+        <SlideCanvas blocks={slide.blocks} theme={slide.theme} />
+      </div>
+    );
+  }
+
   if (asset) {
     return (
       <div className="flex h-full items-center justify-center bg-pulpitry-ink" data-selectable>
@@ -132,6 +145,16 @@ function Stage({
   );
 }
 
+/** The written slide behind an item, if that is what it is. */
+function slideOf(item: Presentable | null, theme: ProjectorTheme) {
+  return item?.kind === "slide" ? { blocks: item.blocks, theme } : null;
+}
+
+/** The same, for whatever the projector is currently showing. */
+function liveSlide(body: LiveBody | undefined, theme: ProjectorTheme) {
+  return body?.kind === "richText" ? { blocks: body.blocks, theme } : null;
+}
+
 /** The picture or clip behind an item, if that is what it is. */
 function assetOf(item: Presentable | null) {
   if (item?.kind === "image") return { kind: "image" as const, path: item.path, looping: false };
@@ -200,6 +223,7 @@ export function StagePanel({
         <Stage
           body={preview ? presentableText(preview) : null}
           asset={assetOf(preview)}
+          slide={slideOf(preview, theme)}
           reference={preview ? presentableLabel(preview) : null}
           tone="preview"
           empty="Pick a verse from the Chapter panel to stage it."
@@ -239,6 +263,7 @@ export function StagePanel({
         <Stage
           body={live ? bodyText(live.body) : null}
           asset={liveAsset(live?.body)}
+          slide={liveSlide(live?.body, theme)}
           reference={live?.caption ?? null}
           tone="live"
           empty="Nothing is on the projector."

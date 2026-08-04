@@ -7,40 +7,31 @@ import { VideoSurface } from "./VideoSurface";
 /**
  * Renders whatever is live, in whatever shape it takes.
  *
- * Shared by the projector and the operator's Live pane so the two cannot drift
- * apart: `scale` shrinks projector-sized values for the small pane rather than
- * duplicating the layout.
+ * Shared by the projector and the slide editor so the two cannot drift apart.
+ * `unit` is how: in `cqw` the same theme renders into a 16:9 box in exactly
+ * the proportions it will take on the wall, so what an operator lays out is
+ * what the congregation gets.
  */
 export function LiveBodyView({
   body,
   theme,
-  scale = 1,
   audio = { muted: false, volume: 1 },
   command,
+  unit = "vw",
+  outlineScale = 1,
 }: {
   body: LiveBody;
   theme: ProjectorTheme;
-  scale?: number;
+  /** `cqw` renders into a 16:9 box instead of the screen; see textStyle. */
+  unit?: "vw" | "cqw";
+  outlineScale?: number;
   /** Volume for a clip. Ignored by every other kind of body. */
   audio?: AudioState;
   /** Transport for a clip. Ignored by every other kind of body. */
   command?: MediaCommand;
 }) {
   const text = body.kind === "scripture" ? body.lines.map((l) => l.text).join(" ") : "";
-  const base = textStyle(theme, text);
-
-  // Outline is authored for a projector; at panel scale the same value would
-  // swallow the letterforms.
-  const style =
-    scale === 1
-      ? base
-      : {
-          ...base,
-          fontSize: undefined,
-          WebkitTextStrokeWidth: theme.outlineWidth
-            ? `${theme.outlineWidth * scale}px`
-            : undefined,
-        };
+  const style = textStyle(theme, text, unit, outlineScale);
 
   switch (body.kind) {
     case "scripture":

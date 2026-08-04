@@ -69,10 +69,20 @@ export function baseSize(body: string): number {
 }
 
 /** CSS for the scripture itself, given the theme. */
-export function textStyle(theme: ProjectorTheme, body: string): React.CSSProperties {
+export function textStyle(
+  theme: ProjectorTheme,
+  body: string,
+  /**
+   * `vw` for a real screen; `cqw` inside a 16:9 box, where it means the same
+   * proportion of the width and so previews the projector faithfully.
+   */
+  unit: "vw" | "cqw" = "vw",
+  /** Shrinks the outline, which is authored in px for a projector. */
+  outlineScale = 1,
+): React.CSSProperties {
   const style: React.CSSProperties = {
     fontFamily: fontStack(theme.fontFamily),
-    fontSize: `${(baseSize(body) * theme.fontScale).toFixed(2)}vw`,
+    fontSize: `${(baseSize(body) * theme.fontScale).toFixed(2)}${unit}`,
     color: theme.textColor,
   };
 
@@ -80,7 +90,7 @@ export function textStyle(theme: ProjectorTheme, body: string): React.CSSPropert
     // paint-order matters: without it the stroke is centred on the glyph edge
     // and eats into the letterforms, which at projector size looks like a
     // bolder, muddier typeface rather than an outline.
-    style.WebkitTextStrokeWidth = `${theme.outlineWidth}px`;
+    style.WebkitTextStrokeWidth = `${theme.outlineWidth * outlineScale}px`;
     style.WebkitTextStrokeColor = theme.outlineColor;
     style.paintOrder = "stroke fill";
   }

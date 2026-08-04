@@ -13,6 +13,7 @@ import { DetectedVerses } from "./DetectedVerses";
 import { MediaLibrary } from "./MediaLibrary";
 import { ParaphraseMatches } from "./ParaphraseMatches";
 import { SchedulePanel } from "./SchedulePanel";
+import { SlideLibrary } from "./SlideLibrary";
 import { SongLibrary } from "./SongLibrary";
 import { EmptyState, Panel } from "./Panel";
 
@@ -20,6 +21,7 @@ const TABS = [
   "Scripture",
   "Songs",
   "Media",
+  "Slides",
   "Detected",
   "Paraphrase",
   "Schedule",
@@ -93,18 +95,16 @@ export function ScripturePanel({
       title=""
       accent="teal"
       bodyClassName={
-        tab === "Scripture" || tab === "Songs" || tab === "Media" || tab === "Schedule"
-          ? "overflow-hidden"
-          : ""
+        tab === "Detected" || tab === "Paraphrase" || tab === "History" ? "" : "overflow-hidden"
       }
       actions={
-        <div className="flex gap-0.5">
+        <div className="flex gap-0">
           {TABS.map((name) => (
             <button
               key={name}
               type="button"
               onClick={() => setTab(name)}
-              className={`rounded px-1 py-0.5 text-[11px] transition-colors focus-visible:focus-ring ${
+              className={`rounded px-[3px] py-0.5 text-[11px] transition-colors focus-visible:focus-ring ${
                 tab === name
                   ? "bg-pulpitry-teal-dim text-pulpitry-text"
                   : "text-pulpitry-muted hover:text-pulpitry-text"
@@ -153,6 +153,17 @@ export function ScripturePanel({
 
       {tab === "Songs" ? (
         <SongLibrary
+          theme={theme}
+          onPreview={onPreviewItem}
+          previewKey={previewKey}
+          liveKey={liveKey}
+          keyOf={keyOf}
+          onError={onError}
+        />
+      ) : null}
+
+      {tab === "Slides" ? (
+        <SlideLibrary
           theme={theme}
           onPreview={onPreviewItem}
           previewKey={previewKey}

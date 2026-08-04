@@ -2,19 +2,21 @@ import { useCallback, useEffect, useState } from "react";
 
 import { adjacentVerse, type Verse } from "./bible";
 import type { SongSection } from "./catalog";
-import { getLive, onLive, setLive, type LiveContent } from "./projector";
+import { getLive, onLive, setLive, type LiveContent, type TextBlock } from "./projector";
 
 /**
  * Something the operator can stage and put on the projector.
  *
- * Scripture is the only kind today; songs, images and slides join it as their
- * libraries land, which is why this is a union rather than a bare verse list.
+ * A union rather than a bare verse list, because the things a service puts on
+ * a screen are genuinely different shapes: a passage steps by verse, a song by
+ * section, and a picture, clip or written slide not at all.
  */
 export type Presentable =
   | { kind: "scripture"; verses: Verse[] }
   | { kind: "lyric"; songId: number; title: string; index: number; sections: SongSection[] }
   | { kind: "image"; itemId: number; title: string; path: string }
-  | { kind: "media"; itemId: number; title: string; path: string; looping: boolean };
+  | { kind: "media"; itemId: number; title: string; path: string; looping: boolean }
+  | { kind: "slide"; itemId: number; title: string; blocks: TextBlock[] };
 
 /** The section a lyric item currently points at. */
 export function currentSection(item: Presentable): SongSection | null {
@@ -23,6 +25,8 @@ export function currentSection(item: Presentable): SongSection | null {
 
 export function presentableText(item: Presentable): string {
   if (item.kind === "scripture") return item.verses.map((verse) => verse.text).join(" ");
+  // A slide is already written out; joining it is how a list summarises it.
+  if (item.kind === "slide") return item.blocks.map((block) => block.text).join(" ");
   // A picture has no text, and captioning it with its filename would put the
   // filename on the projector.
   if (item.kind === "image" || item.kind === "media") return "";
@@ -35,7 +39,7 @@ export function presentableLabel(item: Presentable): string {
     const label = currentSection(item)?.label;
     return label ? `${item.title} — ${label}` : item.title;
   }
-  if (item.kind === "image" || item.kind === "media") return item.title;
+  if (item.kind === "image" || item.kind === "media" || item.kind === "slide") return item.title;
   const first = item.verses[0];
   if (!first) return "";
   const last = item.verses[item.verses.length - 1]!;
@@ -49,6 +53,9 @@ export function presentableIds(item: Presentable): number[] {
 }
 
 export function toLiveContent(item: Presentable): LiveContent {
+  if (item.kind === "slide") {
+    return { body: { kind: "richText", blocks: item.blocks }, caption: "", ids: [] };
+  }
   if (item.kind === "image") {
     return { body: { kind: "image", path: item.path }, caption: "", ids: [] };
   }
@@ -171,8 +178,8 @@ export function usePresentation() {
 
       let next: Presentable | null = null;
 
-      // A picture or a clip is one thing; there is nowhere to step to.
-      if (preview.kind === "image" || preview.kind === "media") return;
+      // A picture, clip or slide is one thing; there is nowhere to step to.
+      if (preview.kind !== "scripture" && preview.kind !== "lyric") return;
 
       if (preview.kind === "lyric") {
         const index = preview.index + (forward ? 1 : -1);

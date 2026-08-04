@@ -13,7 +13,7 @@ export function entryFor(item: Presentable): PlanEntry {
   if (item.kind === "lyric") {
     return { label: item.title, body: { kind: "item", itemId: item.songId } };
   }
-  if (item.kind === "image" || item.kind === "media") {
+  if (item.kind === "image" || item.kind === "media" || item.kind === "slide") {
     return { label: item.title, body: { kind: "item", itemId: item.itemId } };
   }
   const first = item.verses[0]!;
@@ -88,8 +88,15 @@ export function presentableFor(item: Item): Presentable | null {
             looping: item.body.looping,
           }
         : null;
+    case "slide":
+      return {
+        kind: "slide",
+        itemId: item.id,
+        title: item.title,
+        blocks: item.body.blocks,
+      };
     default:
-      // Templates are not content, and custom slides have no editor yet.
+      // A template is styling, not something to put on the screen.
       return null;
   }
 }

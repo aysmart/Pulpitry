@@ -11,7 +11,9 @@
       "Bash(rm -f welcome.mp4)",
       "Read(//System/Library/PrivateFrameworks/SetupAssistantSupportUI.framework/Versions/A/Resources/**)",
       "Bash(cp \"/System/Library/PrivateFrameworks/SetupAssistantSupportUI.framework/Versions/A/Resources/newFeaturesVideo-en~mac.mp4\" welcome.mp4)",
-      "Bash(sed -i '' 's|/pictures/welcome.mov|/pictures/welcome.mp4|' media-preview.mjs)"
+      "Bash(sed -i '' 's|/pictures/welcome.mov|/pictures/welcome.mp4|' media-preview.mjs)",
+      "Bash(node media-preview.mjs slides)",
+      "Bash(node media-preview.mjs editor)"
     ]
   }
 }
