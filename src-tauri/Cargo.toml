@@ -1,0 +1,66 @@
+[package]
+name = "pulpitry"
+version = "0.1.0"
+description = "Live speech transcription, Bible verse detection, and worship presentation."
+authors = ["Pulpitry"]
+edition = "2021"
+rust-version = "1.82"
+
+[lib]
+# The `_lib` suffix keeps the library name from colliding with the binary on
+# Windows, where both would otherwise produce pulpitry.exe/pulpitry.lib.
+name = "pulpitry_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# protocol-asset lets the projector read a chosen background image or video
+# through asset:, scoped at runtime to that one file.
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-shell = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+cpal = "0.18"
+# `bundled` compiles SQLite in, so there is no dependency on whatever version
+# the host happens to ship. FTS5 is enabled in that build.
+rusqlite = { version = "0.40", features = ["bundled"] }
+# Translation files are shipped gzipped: ~1.3 MB each instead of ~4.5 MB.
+flate2 = "1"
+# Pure-Rust inference: statically linked, so there is no ONNX Runtime dylib to
+# bundle, sign and notarise separately on each platform.
+candle-core = "0.11"
+candle-nn = "0.11"
+candle-transformers = "0.11"
+# fancy-regex rather than onig: pure Rust, no C library to build on Windows.
+tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+# rustls rather than native-tls: no OpenSSL to find at build time on either
+# platform, and the sidecar already proves we can ship without system deps.
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "http2", "blocking"] }
+anyhow = "1"
+parking_lot = "0.12"
+tokio = { version = "1", features = ["time"] }
+
+# Pinned to 3.x: it wraps the platform credential stores behind the stable
+# Entry API. 4.x is a rewrite with a different store-registration model.
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6", features = ["windows-native"] }
+
+# Dependencies are optimised even in dev builds. Unoptimised candle makes
+# embedding roughly an order of magnitude slower, which turns the one-off index
+# build from two minutes into twenty during development. Our own crate stays
+# unoptimised and debuggable.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

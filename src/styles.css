@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Projector serif — bundled locally so the app renders correctly offline.
+   Reserved exclusively for scripture and lyric text in the projector window.
+   --------------------------------------------------------------------------- */
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: block;
+  src: url("/fonts/source-serif-4-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: block;
+  src: url("/fonts/source-serif-4-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: italic;
+  font-weight: 200 900;
+  font-display: block;
+  src: url("/fonts/source-serif-4-latin-italic.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ---------------------------------------------------------------------------
+   Pulpitry design tokens — single source of truth for both the operator UI
+   and the projector window. Declared in Tailwind's @theme so they are emitted
+   as CSS custom properties AND generate utilities (bg-pulpitry-gold, etc.).
+   --------------------------------------------------------------------------- */
+@theme {
+  /* Brand palette */
+  --color-pulpitry-ink: #1c1b18; /* charcoal — operator UI chrome base */
+  --color-pulpitry-gold: #e8b04b; /* the one accent: anything LIVE */
+  --color-pulpitry-teal: #3b6e64; /* verse detection / matching system */
+  --color-pulpitry-parchment: #f4f1ea; /* projector background, print/export */
+
+  /* Neutrals derived from ink — same warm charcoal family, not new accents */
+  --color-pulpitry-surface: #24231f;
+  --color-pulpitry-raised: #2e2c27;
+  --color-pulpitry-line: #3a3832;
+  --color-pulpitry-muted: #8f8a7f;
+  --color-pulpitry-text: #e9e5dc;
+
+  /* Tints of the accents, for fills and borders that must stay subtle */
+  --color-pulpitry-gold-dim: #7a5c26;
+  --color-pulpitry-teal-dim: #24413c;
+
+  /* Typography */
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text",
+    "Segoe UI", system-ui, sans-serif;
+  --font-scripture: "Source Serif 4", ui-serif, Georgia, Cambria, serif;
+}
+
+/* Aliases using the names from the brand spec, so either form resolves to the
+   same value. Do not redefine the literals here — @theme above owns them. */
+:root {
+  --pulpitry-ink: var(--color-pulpitry-ink);
+  --pulpitry-gold: var(--color-pulpitry-gold);
+  --pulpitry-teal: var(--color-pulpitry-teal);
+  --pulpitry-parchment: var(--color-pulpitry-parchment);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-pulpitry-ink);
+    color: var(--color-pulpitry-text);
+    font-family: var(--font-ui);
+    font-weight: 400;
+    font-synthesis-weight: none;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden; /* desktop app chrome — panels scroll, the window does not */
+  }
+
+  /* UI chrome uses regular and medium only. Guard against stray bold. */
+  button,
+  input,
+  select,
+  textarea,
+  label,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: inherit;
+    font-weight: 500;
+  }
+
+  /* Native-app feel: text isn't selectable unless it's content. */
+  body {
+    user-select: none;
+    cursor: default;
+  }
+  input,
+  textarea,
+  [data-selectable] {
+    user-select: text;
+    cursor: auto;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-pulpitry-line);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-pulpitry-muted);
+    background-clip: content-box;
+  }
+}
+
+/* Focus ring — gold, matching the live accent, used app-wide. Registered as a
+   utility rather than a component class so the focus-visible: variant applies
+   to it; classes declared in @layer components cannot take variants. */
+@utility focus-ring {
+  outline: 2px solid var(--color-pulpitry-gold);
+  outline-offset: 2px;
+}
+
+@layer components {
+  /* Scripture / lyric type. The only place the serif is allowed. */
+  .scripture-type {
+    font-family: var(--font-scripture);
+    font-weight: 400;
+    line-height: 1.35;
+    text-wrap: balance;
+  }
+}
+
+/* The pulsing dot next to "LIVE". Respects reduced-motion. */
+@keyframes pulpitry-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.live-pulse {
+  animation: pulpitry-pulse 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-pulse {
+    animation: none;
+  }
+}

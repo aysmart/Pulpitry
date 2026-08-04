@@ -1,0 +1,82 @@
+[
+  {
+    "id": "KJV",
+    "name": "King James Version",
+    "year": 1611,
+    "file": "KJV.tsv.gz",
+    "verseCount": 31102,
+    "checksum": "a8f1dafb0f618365"
+  },
+  {
+    "id": "ASV",
+    "name": "American Standard Version",
+    "year": 1901,
+    "file": "ASV.tsv.gz",
+    "verseCount": 31086,
+    "checksum": "5cf4f36cf1fb5dfc"
+  },
+  {
+    "id": "BSB",
+    "name": "Berean Standard Bible",
+    "year": 2023,
+    "file": "BSB.tsv.gz",
+    "verseCount": 31086,
+    "checksum": "1df463efe2e10abe"
+  },
+  {
+    "id": "NHEB",
+    "name": "New Heart English Bible",
+    "year": 2010,
+    "file": "NHEB.tsv.gz",
+    "verseCount": 31097,
+    "checksum": "06778d06103c68d1"
+  },
+  {
+    "id": "BBE",
+    "name": "Bible in Basic English",
+    "year": 1949,
+    "file": "BBE.tsv.gz",
+    "verseCount": 31086,
+    "checksum": "6d4da5c275d1752d"
+  },
+  {
+    "id": "YLT",
+    "name": "Young's Literal Translation",
+    "year": 1898,
+    "file": "YLT.tsv.gz",
+    "verseCount": 31102,
+    "checksum": "43f04bf220dccec7"
+  },
+  {
+    "id": "DARBY",
+    "name": "Darby Translation",
+    "year": 1890,
+    "file": "DARBY.tsv.gz",
+    "verseCount": 31099,
+    "checksum": "42c1b09afc6e7d99"
+  },
+  {
+    "id": "WEBSTER",
+    "name": "Webster's Bible",
+    "year": 1833,
+    "file": "WEBSTER.tsv.gz",
+    "verseCount": 31102,
+    "checksum": "9fbc9e0b992e5cdb"
+  },
+  {
+    "id": "GENEVA",
+    "name": "Geneva Bible",
+    "year": 1599,
+    "file": "GENEVA.tsv.gz",
+    "verseCount": 31064,
+    "checksum": "3a5a549c413bfa9f"
+  },
+  {
+    "id": "DRC",
+    "name": "Douay-Rheims (Challoner)",
+    "year": 1752,
+    "file": "DRC.tsv.gz",
+    "verseCount": 31432,
+    "checksum": "20fd978dccf6f7b9"
+  }
+]

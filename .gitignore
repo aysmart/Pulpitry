@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+
+# Rust / Tauri build output
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# The sidecar executable is ~115 MB and is produced by `npm run sidecar:build`.
+src-tauri/binaries/*
+!src-tauri/binaries/.gitkeep
+src-sidecar/build/
+
+# Rasterised from assets/pulpitry-mark.svg by `npm run icons:build`.
+assets/generated/
+
+# Embedding model, fetched and converted by scripts/build-embedder.mjs.
+# 45 MB of weights does not belong in git.
+src-tauri/resources/embedder/

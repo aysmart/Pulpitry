@@ -1,0 +1,255 @@
+//! Operator settings.
+//!
+//! Non-secret preferences live in a JSON file in the app config directory. The
+//! Azure subscription key never goes there — it is held in the OS credential
+//! store (Keychain on macOS, Credential Manager on Windows) via `keyring`.
+
+use std::fs;
+use std::path::PathBuf;
+
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager};
+
+const KEYCHAIN_SERVICE: &str = "com.pulpitry.desktop";
+const KEYCHAIN_ACCOUNT: &str = "azure-speech-key";
+const KEYCHAIN_ASSIST_ACCOUNT: &str = "azure-assist-key";
+
+/// Azure AI Foundry's inference API is versioned by query string.
+pub const DEFAULT_ASSIST_API_VERSION: &str = "2024-05-01-preview";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Settings {
+    pub azure_region: String,
+    pub language: String,
+    pub input_device_id: Option<String>,
+    /// The translation the operator is working in. Verse detection searches
+    /// this one, so it has to outlive the window that selected it.
+    pub translation: String,
+
+    /// Optional Azure AI Foundry model used to suggest paraphrased scripture.
+    /// Everything it proposes is verified against the local library before the
+    /// operator ever sees it, and exact detection works without any of this.
+    pub assist_enabled: bool,
+    /// e.g. https://my-resource.services.ai.azure.com/models
+    pub assist_endpoint: String,
+    /// Deployment or model name, e.g. gpt-4o-mini or Llama-3.3-70B-Instruct.
+    pub assist_model: String,
+    pub assist_api_version: String,
+
+    /// Local embedding-based paraphrase matching. Offline and free, so it is on
+    /// by default; the index costs a couple of minutes to build once.
+    pub semantic_enabled: bool,
+    /// Cosine similarity a match must reach to be shown, 0 to 1.
+    pub semantic_threshold: f32,
+
+    /// How the congregation-facing window looks.
+    pub projector: ProjectorTheme,
+}
+
+/// Appearance of the projector output.
+///
+/// Kept in settings rather than in the projector window so the operator window
+/// can preview it, and so it survives the projector being closed and reopened.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ProjectorTheme {
+    /// Key into the family list the UI offers, not a raw CSS stack.
+    pub font_family: String,
+    /// Multiplies the length-based automatic sizing.
+    pub font_scale: f32,
+    pub text_color: String,
+    /// Outline width in pixels at 1080p; 0 turns it off. Essential once there
+    /// is a photograph behind the text.
+    pub outline_width: f32,
+    pub outline_color: String,
+    /// A soft drop shadow, which lifts text off busy backgrounds where a hard
+    /// outline would look heavy.
+    pub shadow: bool,
+    /// "color" | "image" | "video"
+    pub background_kind: String,
+    pub background_color: String,
+    /// Absolute path to the chosen image or video.
+    pub background_path: Option<String>,
+    /// Darkens the background behind the text, 0 to 1. The single most
+    /// effective way to keep words readable over a bright photograph.
+    pub background_dim: f32,
+    pub show_reference: bool,
+}
+
+impl Default for ProjectorTheme {
+    fn default() -> Self {
+        Self {
+            font_family: "sourceSerif".into(),
+            font_scale: 1.0,
+            text_color: "#1C1B18".into(),
+            outline_width: 0.0,
+            outline_color: "#000000".into(),
+            shadow: false,
+            background_kind: "color".into(),
+            background_color: "#F4F1EA".into(),
+            background_path: None,
+            background_dim: 0.0,
+            show_reference: true,
+        }
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            azure_region: String::new(),
+            language: "en-US".into(),
+            input_device_id: None,
+            translation: "KJV".into(),
+            assist_enabled: false,
+            assist_endpoint: String::new(),
+            assist_model: String::new(),
+            assist_api_version: DEFAULT_ASSIST_API_VERSION.into(),
+            semantic_enabled: true,
+            // Measured against the full 31,102-verse index, and against the
+            // negative class that actually matters. Announcements are easy to
+            // reject (they top out at 0.59). The hard case is preaching that
+            // is *thematic* without quoting anything — "what it means to walk
+            // in the light", "the church is called to love one another" —
+            // which lands at 0.58-0.68 and is most of a sermon. Genuine
+            // paraphrases sit at 0.71-0.81, so this separates them cleanly.
+            semantic_threshold: 0.70,
+            projector: ProjectorTheme::default(),
+        }
+    }
+}
+
+/// What the frontend is allowed to see: the key itself is never returned, only
+/// whether one has been stored.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsView {
+    #[serde(flatten)]
+    pub settings: Settings,
+    pub has_azure_key: bool,
+    pub has_assist_key: bool,
+}
+
+fn settings_path(app: &AppHandle) -> Result<PathBuf> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .context("could not resolve the app config directory")?;
+    fs::create_dir_all(&dir).context("could not create the app config directory")?;
+    Ok(dir.join("settings.json"))
+}
+
+/// The first default was calibrated against the wrong negative class and let
+/// thematic speech through. Anyone still carrying it never chose it, so lift
+/// it to the measured value rather than leaving them with the bad one.
+const MISCALIBRATED_THRESHOLD: f32 = 0.60;
+
+pub fn load(app: &AppHandle) -> Result<Settings> {
+    let path = settings_path(app)?;
+    if !path.exists() {
+        return Ok(Settings::default());
+    }
+    let raw = fs::read_to_string(&path).with_context(|| format!("could not read {}", path.display()))?;
+    // A corrupt settings file should not stop the app from opening.
+    let mut settings: Settings = serde_json::from_str(&raw).unwrap_or_default();
+    correct_miscalibrated_threshold(&mut settings);
+    Ok(settings)
+}
+
+fn correct_miscalibrated_threshold(settings: &mut Settings) {
+    if (settings.semantic_threshold - MISCALIBRATED_THRESHOLD).abs() < f32::EPSILON {
+        settings.semantic_threshold = Settings::default().semantic_threshold;
+    }
+}
+
+pub fn save(app: &AppHandle, settings: &Settings) -> Result<()> {
+    let path = settings_path(app)?;
+    let raw = serde_json::to_string_pretty(settings)?;
+    fs::write(&path, raw).with_context(|| format!("could not write {}", path.display()))?;
+    Ok(())
+}
+
+fn entry() -> Result<keyring::Entry> {
+    entry_for(KEYCHAIN_ACCOUNT)
+}
+
+fn entry_for(account: &str) -> Result<keyring::Entry> {
+    keyring::Entry::new(KEYCHAIN_SERVICE, account)
+        .context("could not reach the OS credential store")
+}
+
+pub fn save_assist_key(key: &str) -> Result<()> {
+    entry_for(KEYCHAIN_ASSIST_ACCOUNT)?
+        .set_password(key)
+        .context("could not save the model key to the OS credential store")
+}
+
+pub fn load_assist_key() -> Result<Option<String>> {
+    match entry_for(KEYCHAIN_ASSIST_ACCOUNT)?.get_password() {
+        Ok(key) => Ok(Some(key)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(err) => Err(anyhow::Error::new(err).context("could not read the model key")),
+    }
+}
+
+pub fn clear_assist_key() -> Result<()> {
+    match entry_for(KEYCHAIN_ASSIST_ACCOUNT)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(err) => Err(anyhow::Error::new(err).context("could not remove the model key")),
+    }
+}
+
+pub fn has_assist_key() -> bool {
+    matches!(load_assist_key(), Ok(Some(_)))
+}
+
+pub fn save_azure_key(key: &str) -> Result<()> {
+    entry()?
+        .set_password(key)
+        .context("could not save the Azure key to the OS credential store")
+}
+
+pub fn load_azure_key() -> Result<Option<String>> {
+    match entry()?.get_password() {
+        Ok(key) => Ok(Some(key)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(err) => Err(anyhow::Error::new(err).context("could not read the Azure key")),
+    }
+}
+
+pub fn clear_azure_key() -> Result<()> {
+    match entry()?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(err) => Err(anyhow::Error::new(err).context("could not remove the Azure key")),
+    }
+}
+
+pub fn has_azure_key() -> bool {
+    matches!(load_azure_key(), Ok(Some(_)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_old_default_threshold_is_lifted_to_the_measured_one() {
+        // Nobody chose 0.60 — it was a default calibrated against the wrong
+        // negative class, so carrying it forward would leave working installs
+        // surfacing thematic speech as if it were quotation.
+        let mut settings = Settings { semantic_threshold: 0.60, ..Settings::default() };
+        correct_miscalibrated_threshold(&mut settings);
+        assert_eq!(settings.semantic_threshold, 0.70);
+    }
+
+    #[test]
+    fn a_threshold_the_operator_chose_is_left_alone() {
+        for chosen in [0.45, 0.55, 0.65, 0.80] {
+            let mut settings = Settings { semantic_threshold: chosen, ..Settings::default() };
+            correct_miscalibrated_threshold(&mut settings);
+            assert_eq!(settings.semantic_threshold, chosen, "clobbered a chosen value");
+        }
+    }
+}

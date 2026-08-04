@@ -1,0 +1,42 @@
+{
+  "name": "pulpitry",
+  "productName": "Pulpitry",
+  "version": "0.1.0",
+  "description": "Live speech transcription, Bible verse detection, and worship presentation for church services.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && vite build",
+    "preview": "vite preview",
+    "sidecar:build": "node scripts/build-sidecar.mjs",
+    "icons:build": "node scripts/build-icons.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "npm run sidecar:build && npm run embedder:build && tauri dev",
+    "tauri:build": "npm run sidecar:build && npm run embedder:build && tauri build",
+    "embedder:build": "node scripts/build-embedder.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-dialog": "^2.7.2",
+    "@tauri-apps/plugin-opener": "^2.5.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/cli": "^2.11.4",
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "esbuild": "^0.28.1",
+    "sharp": "^0.35.3",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
+  }
+}

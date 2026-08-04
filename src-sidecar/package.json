@@ -1,0 +1,10 @@
+{
+  "name": "pulpitry-speech-sidecar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Streams PCM from the Pulpitry core to Azure Speech and emits transcript events as NDJSON.",
+  "main": "src/index.js",
+  "dependencies": {
+    "microsoft-cognitiveservices-speech-sdk": "^1.51.0"
+  }
+}

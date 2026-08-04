@@ -1,0 +1,29 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="512"
+  height="512"
+  viewBox="0 0 512 512"
+  role="img"
+  aria-label="Pulpitry"
+>
+  <title>Pulpitry</title>
+  <desc>A P monogram with broadcast arcs — the spoken word going out.</desc>
+
+  <!-- Rounded-square plate, charcoal ink -->
+  <rect width="512" height="512" rx="76" ry="76" fill="#1C1B18" />
+
+  <g transform="translate(-36,0)">
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <!-- The P: stem with foot, and a rounded bowl -->
+      <path d="M176 150v210h56" stroke="#E8B04B" stroke-width="40" />
+      <path d="M176 150h70a60 60 0 0 1 0 120h-70" stroke="#E8B04B" stroke-width="40" />
+
+      <!-- Sound radiating from the bowl, on the bowl's own centre -->
+      <path d="M344 134a124 124 0 0 1 0 152" stroke="#E8B04B" stroke-width="26" />
+      <path d="M378 107a168 168 0 0 1 0 206" stroke="#8A7038" stroke-width="26" />
+    </g>
+
+    <!-- Counter dot -->
+    <circle cx="240" cy="210" r="14" fill="#E8B04B" />
+  </g>
+</svg>
