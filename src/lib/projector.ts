@@ -89,3 +89,24 @@ export const projectorState = () => invoke<ProjectorState>("projector_state");
 
 export const onLive = (handler: (content: LiveContent | null) => void): Promise<UnlistenFn> =>
   listen<LiveContent | null>(EVENT_LIVE, (event) => handler(event.payload));
+
+/**
+ * How loud a clip plays, and whether it plays at all.
+ *
+ * Kept in Rust for the same reason as the live content: the projector and the
+ * operator's pane must not disagree about what the congregation is hearing.
+ */
+export interface AudioState {
+  muted: boolean;
+  /** 0 to 1. */
+  volume: number;
+}
+
+export const EVENT_AUDIO = "audio:changed";
+
+export const getAudio = () => invoke<AudioState>("get_audio");
+
+export const setAudio = (audio: AudioState) => invoke<AudioState>("set_audio", { audio });
+
+export const onAudio = (handler: (audio: AudioState) => void): Promise<UnlistenFn> =>
+  listen<AudioState>(EVENT_AUDIO, (event) => handler(event.payload));

@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const EVENT_LIVE: &str = "live:changed";
+pub const EVENT_AUDIO: &str = "audio:changed";
 pub const EVENT_THEME: &str = "theme:changed";
 pub const WINDOW_LABEL: &str = "projector";
 
@@ -95,10 +96,30 @@ pub struct ProjectorState {
     pub display: Option<usize>,
 }
 
+/// How loud a clip plays, and whether it plays at all.
+///
+/// Deliberately not persisted. An operator who left the volume down last week
+/// would otherwise open a service to silent video and no obvious reason why;
+/// starting audible and letting them turn it down is the safer default.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioState {
+    pub muted: bool,
+    /// 0.0 to 1.0.
+    pub volume: f32,
+}
+
+impl Default for AudioState {
+    fn default() -> Self {
+        Self { muted: false, volume: 1.0 }
+    }
+}
+
 pub struct Projector {
     app: AppHandle,
     live: Mutex<Option<LiveContent>>,
     display: Mutex<Option<usize>>,
+    audio: Mutex<AudioState>,
 }
 
 impl Projector {
@@ -107,7 +128,33 @@ impl Projector {
             app,
             live: Mutex::new(None),
             display: Mutex::new(None),
+            audio: Mutex::new(AudioState::default()),
         })
+    }
+
+    pub fn audio(&self) -> AudioState {
+        *self.audio.lock()
+    }
+
+    /// Sets the volume everywhere at once.
+    ///
+    /// Held here rather than in either window for the same reason as `live`:
+    /// the operator's pane and the projector must not disagree about what the
+    /// congregation is hearing.
+    pub fn set_audio(&self, state: AudioState) -> AudioState {
+        let clamped = AudioState {
+            muted: state.muted,
+            volume: state.volume.clamp(0.0, 1.0),
+        };
+        {
+            let mut current = self.audio.lock();
+            if *current == clamped {
+                return clamped;
+            }
+            *current = clamped;
+        }
+        let _ = self.app.emit(EVENT_AUDIO, clamped);
+        clamped
     }
 
     pub fn live(&self) -> Option<LiveContent> {

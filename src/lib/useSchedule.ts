@@ -40,10 +40,16 @@ export function useSchedule(onError?: (message: string) => void) {
   const [name, setName] = useState("");
   const [entries, setEntries] = useState<PlanEntry[]>([]);
   const [saving, setSaving] = useState(false);
+  // Shown on the panel itself. A plan that is failing to save looks exactly
+  // like one that is saving fine until the app is reopened, so the operator
+  // has to be told where they are working, not only in the status bar.
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Only operator edits are worth writing back. Without this, opening a plan
   // would immediately save it again and reshuffle the most-recent ordering.
   const dirty = useRef(false);
+  // An in-flight auto-create, shared by anything else that needs a plan.
+  const starting = useRef<Promise<number | null> | null>(null);
   const fail = useRef(onError);
   fail.current = onError;
 
@@ -87,7 +93,9 @@ export function useSchedule(onError?: (message: string) => void) {
           saved,
           ...current.filter((service) => service.id !== saved.id),
         ]);
+        setSaveError(null);
       } catch (err) {
+        setSaveError(err instanceof Error ? err.message : String(err));
         report(err);
       } finally {
         setSaving(false);
@@ -208,7 +216,14 @@ export function useSchedule(onError?: (message: string) => void) {
    */
   const append = useCallback(
     async (entry: PlanEntry) => {
-      if (openId === null && (await create()) === null) return;
+      if (openId === null) {
+        // Two quick Adds on a fresh install would both see no open plan and
+        // each start one, leaving an empty service behind. Share the first.
+        starting.current ??= create();
+        const id = await starting.current;
+        starting.current = null;
+        if (id === null) return;
+      }
       edit((current) => [...current, entry].slice(0, MAX_ENTRIES));
     },
     [openId, create, edit],
@@ -276,6 +291,7 @@ export function useSchedule(onError?: (message: string) => void) {
     name,
     entries,
     saving,
+    saveError,
     create,
     open,
     rename,

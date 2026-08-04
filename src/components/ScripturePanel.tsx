@@ -179,6 +179,7 @@ export function ScripturePanel({
           name={schedule.name}
           entries={schedule.entries}
           saving={schedule.saving}
+          saveError={schedule.saveError}
           onCreate={() => void schedule.create()}
           onOpen={(id) => void schedule.open(id)}
           onRename={schedule.rename}

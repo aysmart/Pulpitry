@@ -18,7 +18,7 @@ use assist::Assistant;
 use bible::{Book, Library, LibraryStatus, Reference, Translation, Verse};
 use catalog::{Catalog, Item};
 use detect::Detector;
-use projector::{Display, LiveContent, Projector, ProjectorState};
+use projector::{AudioState, Display, LiveContent, Projector, ProjectorState};
 use semantic::{IndexStatus, Semantic};
 use settings::{ProjectorTheme, Settings, SettingsView};
 use speech::{SpeechManager, SpeechStatus};
@@ -240,6 +240,16 @@ fn set_live(projector: State<'_, Arc<Projector>>, content: Option<LiveContent>) 
 }
 
 #[tauri::command]
+fn get_audio(projector: State<'_, Arc<Projector>>) -> AudioState {
+    projector.audio()
+}
+
+#[tauri::command]
+fn set_audio(projector: State<'_, Arc<Projector>>, audio: AudioState) -> AudioState {
+    projector.set_audio(audio)
+}
+
+#[tauri::command]
 fn list_displays(projector: State<'_, Arc<Projector>>) -> CommandResult<Vec<Display>> {
     projector.displays().map_err(to_message)
 }
@@ -457,6 +467,8 @@ pub fn run() {
             semantic_status,
             get_live,
             set_live,
+            get_audio,
+            set_audio,
             list_displays,
             open_projector,
             close_projector,

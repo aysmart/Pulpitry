@@ -61,8 +61,12 @@ pub struct SongSection {
 /// References, never resolved content. A plan is written days before it is
 /// run and kept for years afterwards, so it has to survive the song being
 /// retitled and the verse library being reimported underneath it.
+// `rename_all` on an enum renames the variants, not the fields inside them —
+// `rename_all_fields` is what makes `book_number` arrive as `bookNumber`.
+// Without it a plan holding a passage fails to deserialize and the whole save
+// is rejected, which looks exactly like the schedule quietly not persisting.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum PlanBody {
     /// A passage held as book/chapter/verse rather than row ids, which are an
     /// import detail and not stable across one.
@@ -96,7 +100,7 @@ pub struct PlanEntry {
 
 /// The part of an item that differs by kind.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum ItemBody {
     Song { sections: Vec<SongSection> },
     /// Images carry nothing beyond the file path on the item itself.
@@ -541,6 +545,62 @@ mod tests {
     }
 
     #[test]
+    fn a_plan_parses_the_json_the_operator_window_actually_sends() {
+        // Round-tripping through our own serde proves nothing about this: both
+        // ends would agree on snake_case and the UI would still be rejected.
+        // These are the exact payloads the TypeScript builds.
+        let scripture = r#"{"kind":"scripture","translation":"KJV","bookNumber":43,
+            "chapter":3,"verse":16,"endVerse":18}"#;
+        assert_eq!(
+            serde_json::from_str::<PlanBody>(scripture).expect("scripture entry"),
+            PlanBody::Scripture {
+                translation: "KJV".into(),
+                book_number: 43,
+                chapter: 3,
+                verse: 16,
+                end_verse: 18,
+            }
+        );
+
+        let item = r#"{"kind":"item","itemId":7}"#;
+        assert_eq!(
+            serde_json::from_str::<PlanBody>(item).expect("item entry"),
+            PlanBody::Item { item_id: 7 }
+        );
+
+        assert_eq!(
+            serde_json::from_str::<PlanBody>(r#"{"kind":"note"}"#).expect("note entry"),
+            PlanBody::Note
+        );
+
+        // And the whole item, as catalog_save receives it.
+        let saved = r#"{"id":null,"title":"Sunday Morning","subtitle":"","path":null,
+            "updatedAt":0,"body":{"kind":"service","entries":[
+              {"label":"Welcome","body":{"kind":"note"}},
+              {"label":"John 3:16","body":{"kind":"scripture","translation":"KJV",
+                "bookNumber":43,"chapter":3,"verse":16,"endVerse":16}}]}}"#;
+        let parsed: Item = serde_json::from_str(saved).expect("a whole service");
+        let ItemBody::Service { entries } = parsed.body else { panic!("expected a service") };
+        assert_eq!(entries.len(), 2);
+    }
+
+    #[test]
+    fn what_we_serialise_is_what_we_can_read_back() {
+        // The stored column and the wire format are the same bytes, so a
+        // rename that broke one would break the other.
+        let body = PlanBody::Scripture {
+            translation: "KJV".into(),
+            book_number: 43,
+            chapter: 3,
+            verse: 16,
+            end_verse: 18,
+        };
+        let json = serde_json::to_string(&body).expect("serialise");
+        assert!(json.contains("\"bookNumber\""), "wire format drifted: {json}");
+        assert_eq!(serde_json::from_str::<PlanBody>(&json).expect("read back"), body);
+    }
+
+    #[test]
     fn a_plan_keeps_references_rather_than_resolved_verses() {
         // The whole point of storing book/chapter/verse: reimporting the verse
         // library must not silently repoint a saved plan at other verses.
@@ -618,3 +678,4 @@ mod tests {
         assert_eq!(catalog.search("   ", Some("song"), 10).expect("search").len(), 1);
     }
 }
+

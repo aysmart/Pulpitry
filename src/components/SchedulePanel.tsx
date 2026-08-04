@@ -30,6 +30,7 @@ export function SchedulePanel({
   name,
   entries,
   saving,
+  saveError,
   onCreate,
   onOpen,
   onRename,
@@ -45,6 +46,7 @@ export function SchedulePanel({
   name: string;
   entries: PlanEntry[];
   saving: boolean;
+  saveError: string | null;
   onCreate: () => void;
   onOpen: (id: number) => void;
   onRename: (name: string) => void;
@@ -122,7 +124,13 @@ export function SchedulePanel({
           >
             Delete
           </button>
-          {saving ? (
+          {saveError ? (
+            // A plan that is failing to save looks exactly like one that is
+            // saving fine, right up until the app is reopened.
+            <span className="ml-auto truncate text-[11px] text-pulpitry-gold" title={saveError}>
+              Not saved — {saveError}
+            </span>
+          ) : saving ? (
             <span className="ml-auto text-[11px] text-pulpitry-muted">Saving…</span>
           ) : null}
         </div>

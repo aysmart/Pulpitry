@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd ~/.cargo/registry/src/*/ 2>/dev/null; ls -d tauri-2* wry-* 2>/dev/null | head; echo \"=== tauri autoplay ===\"; grep -rn \"autoplay\" tauri-2*/src/webview/mod.rs 2>/dev/null | head -20; echo \"=== wry autoplay ===\"; grep -rn \"fn with_autoplay\\\\|autoplay\" wry-*/src/lib.rs 2>/dev/null | head -10)",
+      "Read(//Users/ayorindesmart/.cargo/registry/src/**)",
+      "Bash(cd ~/.cargo/registry/src/*/; sed -n '745,760p' wry-0.55.1/src/lib.rs; echo \"=== macos impl ===\"; grep -rn \"autoplay\" wry-0.55.1/src/wkwebview/*.rs | head -10; echo \"=== does tauri set it? ===\"; grep -rn \"autoplay\\\\|with_autoplay\" tauri-2.11.5/src/ tauri-runtime-wry-*/src/ 2>/dev/null | head -10)",
+      "Bash(cd ~/.cargo/registry/src/*/; sed -n '355,370p' wry-0.55.1/src/wkwebview/mod.rs; echo \"=== tauri-runtime-wry ===\"; ls -d tauri-runtime-wry-* 2>/dev/null; grep -rn \"autoplay\" tauri-runtime-wry-*/src/lib.rs 2>/dev/null | head)",
+      "Bash(ffmpeg -f lavfi -i testsrc=size=640x360:rate=15 -f lavfi -i \"sine=frequency=440\" -t 4 -pix_fmt yuv420p -shortest welcome.mp4 -y)",
+      "Bash(node media-preview.mjs volume)"
+    ]
+  }
+}

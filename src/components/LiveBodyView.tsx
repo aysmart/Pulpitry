@@ -1,7 +1,8 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 
-import type { LiveBody } from "../lib/projector";
+import type { AudioState, LiveBody } from "../lib/projector";
 import { fontStack, textStyle, type ProjectorTheme } from "../lib/theme";
+import { VideoSurface } from "./VideoSurface";
 
 /**
  * Renders whatever is live, in whatever shape it takes.
@@ -14,10 +15,13 @@ export function LiveBodyView({
   body,
   theme,
   scale = 1,
+  audio = { muted: false, volume: 1 },
 }: {
   body: LiveBody;
   theme: ProjectorTheme;
   scale?: number;
+  /** Volume for a clip. Ignored by every other kind of body. */
+  audio?: AudioState;
 }) {
   const text = body.kind === "scripture" ? body.lines.map((l) => l.text).join(" ") : "";
   const base = textStyle(theme, text);
@@ -99,13 +103,14 @@ export function LiveBodyView({
 
     case "media":
       return (
-        <video
-          src={convertFileSrc(body.path)}
-          autoPlay
-          loop={body.looping}
+        <VideoSurface
+          path={body.path}
           // Audible, unlike a background: a clip played as content is meant to
-          // be heard.
-          controls={false}
+          // be heard, and this surface is the one the congregation is watching.
+          muted={audio.muted}
+          volume={audio.volume}
+          looping={body.looping}
+          autoPlay
           className="max-h-full max-w-full object-contain"
         />
       );

@@ -28,6 +28,7 @@ import { exportTranscript } from "./lib/exportTranscript";
 import { DEFAULT_THEME } from "./lib/theme";
 import { useDetections } from "./lib/useDetections";
 import { usePresentation } from "./lib/usePresentation";
+import { useAudio } from "./lib/useAudio";
 import { useSchedule } from "./lib/useSchedule";
 import { useSemanticIndex } from "./lib/useSemanticIndex";
 import { useSpokenReferences } from "./lib/useSpokenReferences";
@@ -76,6 +77,7 @@ export default function App() {
   // The running order. Kept in the library rather than in state, so closing
   // the app mid-service does not cost the plan.
   const schedule = useSchedule(setError);
+  const { audio, change: changeAudio } = useAudio();
 
   const stageEntry = useCallback(
     async (index: number) => {
@@ -299,6 +301,9 @@ export default function App() {
           theme={settings?.projector ?? DEFAULT_THEME}
           canStepBack={canStepBack}
           canStepForward={canStepForward}
+          projectorOpen={projector.open}
+          audio={audio}
+          onAudioChange={changeAudio}
         />
         <ScripturePanel
           translation={translation}
