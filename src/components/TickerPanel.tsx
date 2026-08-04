@@ -2,9 +2,7 @@ import type { Ticker } from "../lib/projector";
 import type { ProjectorTheme } from "../lib/theme";
 import { TickerBand } from "./TickerBand";
 import { Backdrop } from "./Backdrop";
-
-const FIELD =
-  "rounded border border-pulpitry-line bg-pulpitry-raised px-2 py-1.5 text-[12.5px] text-pulpitry-text outline-none placeholder:text-pulpitry-muted focus-visible:focus-ring";
+import { FIELD, Slider, Swatch } from "./Controls";
 
 const CHOICE =
   "flex-1 rounded border px-2 py-1.5 text-[12px] transition-colors focus-visible:focus-ring";
@@ -93,6 +91,28 @@ export function TickerPanel({
           aria-label="Announcement speed"
           onChange={(event) => onChange({ speed: 66 - Number(event.target.value) })}
           className="mt-1.5 h-1 w-full accent-pulpitry-gold focus-visible:focus-ring"
+        />
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-pulpitry-line pt-3">
+        <Swatch
+          label="Words"
+          value={ticker.textColor}
+          onChange={(value) => onChange({ textColor: value })}
+        />
+        <Swatch
+          label="Band"
+          value={ticker.bandColor}
+          onChange={(value) => onChange({ bandColor: value })}
+        />
+        <Slider
+          label="Band opacity"
+          value={ticker.bandOpacity}
+          min={0}
+          max={1}
+          step={0.05}
+          format={(value) => (value === 0 ? "none" : `${Math.round(value * 100)}%`)}
+          onChange={(value) => onChange({ bandOpacity: value })}
         />
       </div>
 

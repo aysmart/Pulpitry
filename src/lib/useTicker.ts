@@ -2,7 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getTicker, onTicker, setTicker, type Ticker } from "./projector";
 
-const OFF: Ticker = { text: "", visible: false, position: "bottom", speed: 24 };
+const OFF: Ticker = {
+  text: "",
+  visible: false,
+  textColor: "#F4F1EA",
+  bandColor: "#000000",
+  bandOpacity: 0.45,
+  position: "bottom",
+  speed: 24,
+};
 
 /**
  * The announcement band.

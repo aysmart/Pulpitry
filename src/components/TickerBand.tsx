@@ -1,6 +1,5 @@
 import type { Ticker } from "../lib/projector";
-import type { ProjectorTheme } from "../lib/theme";
-import { fontStack } from "../lib/theme";
+import { fontStack, withAlpha, type ProjectorTheme } from "../lib/theme";
 
 /**
  * A notice crawling across the screen, over whatever is live.
@@ -26,9 +25,7 @@ export function TickerBand({
         ticker.position === "top" ? "top-0" : "bottom-0"
       }`}
       style={{
-        // Dark enough to carry light text over a bright background, and light
-        // enough not to look like a black bar over a dark one.
-        backgroundColor: "rgba(0,0,0,0.45)",
+        backgroundColor: withAlpha(ticker.bandColor, ticker.bandOpacity),
         paddingBlock: "1.1cqh",
       }}
     >
@@ -36,7 +33,7 @@ export function TickerBand({
         className="whitespace-nowrap will-change-transform"
         style={{
           fontFamily: fontStack(theme.fontFamily),
-          color: theme.textColor,
+          color: ticker.textColor,
           fontSize: "2.4cqw",
           animation: `pulpitry-ticker ${ticker.speed}s linear infinite`,
         }}

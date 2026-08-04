@@ -186,6 +186,27 @@ export function textStyle(
   return style;
 }
 
+/**
+ * A hex colour at a given opacity.
+ *
+ * The pickers hand back `#RRGGBB`, and a scrim needs alpha; keeping the two
+ * apart means the operator picks a colour and a strength rather than reasoning
+ * about an eight-digit hex.
+ */
+export function withAlpha(hex: string, alpha: number): string {
+  const clean = hex.replace("#", "");
+  const full =
+    clean.length === 3
+      ? clean.split("").map((part) => part + part).join("")
+      : clean.padEnd(6, "0").slice(0, 6);
+  const value = Number.parseInt(full, 16);
+  if (!Number.isFinite(value)) return `rgba(0,0,0,${alpha})`;
+  return `rgba(${(value >> 16) & 255},${(value >> 8) & 255},${value & 255},${Math.min(
+    1,
+    Math.max(0, alpha),
+  )})`;
+}
+
 /** Resolves a local file path to something the webview may load. */
 export function backgroundUrl(theme: ProjectorTheme): string | null {
   if (theme.backgroundKind === "color" || !theme.backgroundPath) return null;

@@ -162,10 +162,17 @@ pub struct MediaProgress {
 /// back by itself a week later — quite possibly about an event that has
 /// already happened — would be worse than retyping it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct Ticker {
     pub text: String,
     pub visible: bool,
+    /// Its own colour rather than the theme's: the band sits on a scrim, not
+    /// on the background, so what reads there is a different question.
+    pub text_color: String,
+    /// The scrim behind the words, and how much of the screen shows through.
+    pub band_color: String,
+    /// 0 to 1. Zero leaves the words floating on whatever is behind them.
+    pub band_opacity: f32,
     /// "top" or "bottom". Bottom by default: it is the half of the screen
     /// least likely to be carrying the words people are reading.
     pub position: String,
@@ -175,7 +182,15 @@ pub struct Ticker {
 
 impl Default for Ticker {
     fn default() -> Self {
-        Self { text: String::new(), visible: false, position: "bottom".into(), speed: 24.0 }
+        Self {
+            text: String::new(),
+            visible: false,
+            text_color: "#F4F1EA".into(),
+            band_color: "#000000".into(),
+            band_opacity: 0.45,
+            position: "bottom".into(),
+            speed: 24.0,
+        }
     }
 }
 
@@ -505,11 +520,20 @@ mod tests {
 
     #[test]
     fn a_ticker_parses_what_the_operator_window_sends() {
-        let json = r#"{"text":"Church picnic Saturday","visible":true,"position":"top","speed":18.0}"#;
+        let json = r##"{"text":"Church picnic Saturday","visible":true,"position":"top",
+            "speed":18.0,"textColor":"#FFFFFF","bandColor":"#101010","bandOpacity":0.6}"##;
         let ticker: Ticker = serde_json::from_str(json).expect("ticker");
         assert_eq!(ticker.text, "Church picnic Saturday");
         assert_eq!(ticker.position, "top");
+        assert_eq!(ticker.band_color, "#101010");
+        assert_eq!(ticker.band_opacity, 0.6);
         assert!(ticker.visible);
+
+        // The struct-level default means a payload written before the colours
+        // existed still parses rather than rejecting the whole call.
+        let older = r#"{"text":"Notice","visible":true,"position":"bottom","speed":20.0}"#;
+        let ticker: Ticker = serde_json::from_str(older).expect("an older ticker");
+        assert_eq!(ticker.text_color, "#F4F1EA");
     }
 
     #[test]

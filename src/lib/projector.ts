@@ -115,6 +115,11 @@ export const onAudio = (handler: (audio: AudioState) => void): Promise<UnlistenF
 export interface Ticker {
   text: string;
   visible: boolean;
+  /** Its own colour: the band sits on a scrim, not on the background. */
+  textColor: string;
+  bandColor: string;
+  /** 0 to 1. Zero leaves the words floating on whatever is behind them. */
+  bandOpacity: number;
   /** "top" or "bottom". */
   position: "top" | "bottom";
   /** Seconds for one pass across the screen. Larger is slower. */

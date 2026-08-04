@@ -36,6 +36,9 @@ function Projector() {
   const [ticker, setTicker] = useState<Ticker>({
     text: "",
     visible: false,
+    textColor: "#F4F1EA",
+    bandColor: "#000000",
+    bandOpacity: 0.45,
     position: "bottom",
     speed: 24,
   });
