@@ -7,15 +7,19 @@ import {
   getAudio,
   getLive,
   getMedia,
+  getTicker,
   onAudio,
   onLive,
   onMedia,
+  onTicker,
   type AudioState,
   type LiveContent,
   type MediaCommand,
+  type Ticker,
 } from "./lib/projector";
 import { DEFAULT_THEME, getTheme, onTheme, type ProjectorTheme } from "./lib/theme";
 import { Backdrop } from "./components/Backdrop";
+import { TickerBand } from "./components/TickerBand";
 import "./styles.css";
 
 /**
@@ -29,6 +33,12 @@ function Projector() {
   const [content, setContent] = useState<LiveContent | null>(null);
   const [theme, setTheme] = useState<ProjectorTheme>(DEFAULT_THEME);
   const [audio, setAudio] = useState<AudioState>({ muted: false, volume: 1 });
+  const [ticker, setTicker] = useState<Ticker>({
+    text: "",
+    visible: false,
+    position: "bottom",
+    speed: 24,
+  });
   const [command, setCommand] = useState<MediaCommand>({
     playing: true,
     looping: false,
@@ -46,12 +56,14 @@ function Projector() {
     void getTheme().then((current) => active && setTheme(current)).catch(() => undefined);
     void getAudio().then((current) => active && setAudio(current)).catch(() => undefined);
     void getMedia().then((current) => active && setCommand(current)).catch(() => undefined);
+    void getTicker().then((current) => active && setTicker(current)).catch(() => undefined);
 
     void Promise.all([
       onLive((next) => active && setContent(next)),
       onTheme((next) => active && setTheme(next)),
       onAudio((next) => active && setAudio(next)),
       onMedia((next) => active && setCommand(next)),
+      onTicker((next) => active && setTicker(next)),
     ]).then((unlisteners) => {
       stops.push(...unlisteners);
       if (!active) stops.forEach((stop) => stop());
@@ -76,10 +88,13 @@ function Projector() {
 
   return (
     <div
-      className="relative h-full w-full overflow-hidden"
-      style={{ backgroundColor: theme.backgroundColor }}
+      // container-type so the announcement band can size itself against the
+      // screen rather than the viewport, exactly as it does in the preview.
+      className="relative h-full w-full overflow-hidden [container-type:size]"
     >
       <Backdrop theme={theme} />
+
+      <TickerBand ticker={ticker} theme={theme} />
 
       <div className="relative flex h-full w-full flex-col items-center justify-center px-[6vw] py-[5vh]">
         {content ? (

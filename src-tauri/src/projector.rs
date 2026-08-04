@@ -16,6 +16,7 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const EVENT_LIVE: &str = "live:changed";
 pub const EVENT_AUDIO: &str = "audio:changed";
+pub const EVENT_TICKER: &str = "ticker:changed";
 pub const EVENT_MEDIA: &str = "media:command";
 pub const EVENT_MEDIA_PROGRESS: &str = "media:progress";
 pub const EVENT_THEME: &str = "theme:changed";
@@ -154,9 +155,34 @@ pub struct MediaProgress {
     pub ended: bool,
 }
 
+/// A band of text crawling across the screen, over whatever is live.
+///
+/// Not persisted, like everything else that describes what is on the screen
+/// right now. An announcement is for one gathering, and a ticker that came
+/// back by itself a week later — quite possibly about an event that has
+/// already happened — would be worse than retyping it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Ticker {
+    pub text: String,
+    pub visible: bool,
+    /// "top" or "bottom". Bottom by default: it is the half of the screen
+    /// least likely to be carrying the words people are reading.
+    pub position: String,
+    /// Seconds for one pass across the screen. Larger is slower.
+    pub speed: f32,
+}
+
+impl Default for Ticker {
+    fn default() -> Self {
+        Self { text: String::new(), visible: false, position: "bottom".into(), speed: 24.0 }
+    }
+}
+
 pub struct Projector {
     app: AppHandle,
     live: Mutex<Option<LiveContent>>,
+    ticker: Mutex<Ticker>,
     display: Mutex<Option<usize>>,
     audio: Mutex<AudioState>,
     media: Mutex<MediaCommand>,
@@ -168,11 +194,34 @@ impl Projector {
         Arc::new(Self {
             app,
             live: Mutex::new(None),
+            ticker: Mutex::new(Ticker::default()),
             display: Mutex::new(None),
             audio: Mutex::new(AudioState::default()),
             media: Mutex::new(MediaCommand::default()),
             progress: Mutex::new(MediaProgress::default()),
         })
+    }
+
+    pub fn ticker(&self) -> Ticker {
+        self.ticker.lock().clone()
+    }
+
+    pub fn set_ticker(&self, ticker: Ticker) -> Ticker {
+        let clamped = Ticker {
+            // A pass faster than about six seconds cannot be read; slower than
+            // two minutes looks stopped.
+            speed: ticker.speed.clamp(6.0, 120.0),
+            ..ticker
+        };
+        {
+            let mut current = self.ticker.lock();
+            if *current == clamped {
+                return clamped;
+            }
+            *current = clamped.clone();
+        }
+        let _ = self.app.emit(EVENT_TICKER, clamped.clone());
+        clamped
     }
 
     pub fn media(&self) -> MediaCommand {
@@ -452,6 +501,27 @@ mod tests {
         // "showing something", which the projector renders differently.
         let cleared: Option<LiveContent> = None;
         assert_eq!(serde_json::to_string(&cleared).expect("encode"), "null");
+    }
+
+    #[test]
+    fn a_ticker_parses_what_the_operator_window_sends() {
+        let json = r#"{"text":"Church picnic Saturday","visible":true,"position":"top","speed":18.0}"#;
+        let ticker: Ticker = serde_json::from_str(json).expect("ticker");
+        assert_eq!(ticker.text, "Church picnic Saturday");
+        assert_eq!(ticker.position, "top");
+        assert!(ticker.visible);
+    }
+
+    #[test]
+    fn an_unreadable_ticker_speed_is_brought_back_into_range() {
+        // A pass faster than a few seconds cannot be read at all, and one
+        // slower than a couple of minutes looks like it has frozen.
+        let ticker = Ticker { speed: 0.2, ..Ticker::default() };
+        let clamped = Ticker { speed: ticker.speed.clamp(6.0, 120.0), ..ticker };
+        assert_eq!(clamped.speed, 6.0);
+
+        let crawling = Ticker { speed: 900.0, ..Ticker::default() };
+        assert_eq!(crawling.speed.clamp(6.0, 120.0), 120.0);
     }
 
     #[test]

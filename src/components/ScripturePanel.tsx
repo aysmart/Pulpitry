@@ -8,12 +8,14 @@ import { ChapterNavigator } from "./ChapterNavigator";
 import type { ProjectorTheme } from "../lib/theme";
 import type { IndexStatus } from "../lib/useSemanticIndex";
 import type { Suggestion } from "../lib/useSuggestions";
+import type { Ticker } from "../lib/projector";
 import type { ScheduleController } from "../lib/useSchedule";
 import { DetectedVerses } from "./DetectedVerses";
 import { MediaLibrary } from "./MediaLibrary";
 import { ParaphraseMatches } from "./ParaphraseMatches";
 import { SchedulePanel } from "./SchedulePanel";
 import { SlideLibrary } from "./SlideLibrary";
+import { TickerPanel } from "./TickerPanel";
 import { TemplateLibrary } from "./TemplateLibrary";
 import { SongLibrary } from "./SongLibrary";
 import { EmptyState, Panel } from "./Panel";
@@ -52,6 +54,8 @@ export function ScripturePanel({
   liveKey,
   theme,
   onApplyTheme,
+  ticker,
+  onTickerChange,
   onError,
   detections,
   references,
@@ -79,6 +83,8 @@ export function ScripturePanel({
   liveKey: string | null;
   theme: ProjectorTheme;
   onApplyTheme: (theme: ProjectorTheme) => void;
+  ticker: Ticker;
+  onTickerChange: (next: Partial<Ticker>) => void;
   onError: (message: string) => void;
   detections: Detection[];
   references: SpokenReference[];
@@ -91,6 +97,9 @@ export function ScripturePanel({
   libraryError: string | null;
 }) {
   const [tab, setTab] = useState<Tab>("Scripture");
+  // Both are text written for the congregation to read; one replaces the
+  // screen and one runs along the edge of it.
+  const [slidesMode, setSlidesMode] = useState<"slides" | "notice">("slides");
 
   return (
     <Panel
@@ -171,14 +180,47 @@ export function ScripturePanel({
       ) : null}
 
       {tab === "Slides" ? (
-        <SlideLibrary
-          theme={theme}
-          onPreview={onPreviewItem}
-          previewKey={previewKey}
-          liveKey={liveKey}
-          keyOf={keyOf}
-          onError={onError}
-        />
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="flex shrink-0 gap-1.5 border-b border-pulpitry-line px-2.5 py-2">
+            {(
+              [
+                ["slides", "Slides"],
+                ["notice", "Notice"],
+              ] as const
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setSlidesMode(mode)}
+                className={`rounded px-2 py-1.5 text-[12px] transition-colors focus-visible:focus-ring ${
+                  slidesMode === mode
+                    ? "bg-pulpitry-teal-dim text-pulpitry-text"
+                    : "text-pulpitry-muted hover:text-pulpitry-text"
+                }`}
+              >
+                {label}
+                {mode === "notice" && ticker.visible ? (
+                  <span className="ml-1 text-pulpitry-gold">•</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+
+          <div className="min-h-0 flex-1">
+            {slidesMode === "slides" ? (
+              <SlideLibrary
+                theme={theme}
+                onPreview={onPreviewItem}
+                previewKey={previewKey}
+                liveKey={liveKey}
+                keyOf={keyOf}
+                onError={onError}
+              />
+            ) : (
+              <TickerPanel ticker={ticker} theme={theme} onChange={onTickerChange} />
+            )}
+          </div>
+        </div>
       ) : null}
 
       {tab === "Media" ? (

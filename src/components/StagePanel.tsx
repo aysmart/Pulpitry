@@ -8,6 +8,7 @@ import {
   type MediaCommand,
   type MediaProgress,
   type TextBlock,
+  type Ticker,
 } from "../lib/projector";
 import { fontStack, type ProjectorTheme } from "../lib/theme";
 import { Backdrop } from "./Backdrop";
@@ -15,6 +16,7 @@ import { presentableLabel, presentableText, type Presentable } from "../lib/useP
 import { EmptyState, Panel } from "./Panel";
 import { MediaTransport } from "./MediaTransport";
 import { SlideCanvas } from "./SlideCanvas";
+import { TickerBand } from "./TickerBand";
 import { VideoSurface } from "./VideoSurface";
 
 function Stage({
@@ -178,6 +180,7 @@ export function StagePanel({
   audio,
   onAudioChange,
   media,
+  ticker,
 }: {
   preview: Presentable | null;
   live: LiveContent | null;
@@ -200,6 +203,7 @@ export function StagePanel({
     restart: () => void;
     toggleLoop: () => void;
   };
+  ticker: Ticker;
 }) {
   return (
     <div className="flex min-h-0 flex-col gap-2">
@@ -243,7 +247,7 @@ export function StagePanel({
         </button>
       </div>
 
-      <Panel title="Live" accent="gold" className="flex-1">
+      <Panel title="Live" accent="gold" className="flex-1" bodyClassName="relative [container-type:size]">
         <Stage
           body={live ? bodyText(live.body) : null}
           asset={liveAsset(live?.body)}
@@ -256,6 +260,9 @@ export function StagePanel({
           audio={audio}
           command={media.command}
         />
+        {/* Shown here as well as on the wall, so the operator can see what the
+            congregation is reading rather than trusting that it is there. */}
+        <TickerBand ticker={ticker} theme={theme} />
       </Panel>
 
       {live?.body.kind === "media" ? (

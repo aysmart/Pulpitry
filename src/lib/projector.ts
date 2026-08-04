@@ -111,6 +111,25 @@ export const setAudio = (audio: AudioState) => invoke<AudioState>("set_audio", {
 export const onAudio = (handler: (audio: AudioState) => void): Promise<UnlistenFn> =>
   listen<AudioState>(EVENT_AUDIO, (event) => handler(event.payload));
 
+/** A band of text crawling across the screen, over whatever is live. */
+export interface Ticker {
+  text: string;
+  visible: boolean;
+  /** "top" or "bottom". */
+  position: "top" | "bottom";
+  /** Seconds for one pass across the screen. Larger is slower. */
+  speed: number;
+}
+
+export const EVENT_TICKER = "ticker:changed";
+
+export const getTicker = () => invoke<Ticker>("get_ticker");
+
+export const setTicker = (ticker: Ticker) => invoke<Ticker>("set_ticker", { ticker });
+
+export const onTicker = (handler: (ticker: Ticker) => void): Promise<UnlistenFn> =>
+  listen<Ticker>(EVENT_TICKER, (event) => handler(event.payload));
+
 /** What the operator has asked the clip to do. Both surfaces obey it. */
 export interface MediaCommand {
   playing: boolean;

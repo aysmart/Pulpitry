@@ -175,3 +175,14 @@
     animation: none;
   }
 }
+
+/* The announcement band. One pass carries the text from just off the right
+   edge to just off the left, so nothing pops in or out mid-screen. */
+@keyframes pulpitry-ticker {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}

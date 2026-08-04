@@ -26,7 +26,9 @@
       "Bash(sed -i '' \"s/byText\\('New'\\).click\\(\\)/byText\\('Adjust'\\).click\\(\\)/\" media-preview.mjs)",
       "Bash(node media-preview.mjs settings)",
       "Bash(sips -c 60 470 --cropOffset 96 970 media-themeedit.png --out edithdr.png)",
-      "Bash(sips -Z 940 edithdr.png --out edithdr-big.png)"
+      "Bash(sips -Z 940 edithdr.png --out edithdr-big.png)",
+      "Bash(node media-preview.mjs notice)",
+      "Bash(TICKER=\"Church picnic this Saturday, 10am at Riverside Park — sign up in the foyer\" THEME=theme-gradient.json node projector-preview.mjs \"For God so loved the world, that he gave his only begotten Son.\" \"John 3:16 \\(KJV\\)\" ticker-wall)"
     ]
   }
 }

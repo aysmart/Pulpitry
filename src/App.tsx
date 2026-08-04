@@ -31,6 +31,7 @@ import { usePresentation } from "./lib/usePresentation";
 import { useAudio } from "./lib/useAudio";
 import { useMedia } from "./lib/useMedia";
 import { useSchedule } from "./lib/useSchedule";
+import { useTicker } from "./lib/useTicker";
 import { useSemanticIndex } from "./lib/useSemanticIndex";
 import { useSpokenReferences } from "./lib/useSpokenReferences";
 import { useSuggestions } from "./lib/useSuggestions";
@@ -80,6 +81,7 @@ export default function App() {
   const schedule = useSchedule(setError);
   const { audio, change: changeAudio } = useAudio();
   const media = useMedia();
+  const { ticker, change: changeTicker } = useTicker();
 
   const stageEntry = useCallback(
     async (index: number) => {
@@ -324,6 +326,7 @@ export default function App() {
           audio={audio}
           onAudioChange={changeAudio}
           media={media}
+          ticker={ticker}
         />
         <ScripturePanel
           translation={translation}
@@ -342,6 +345,8 @@ export default function App() {
           liveKey={liveKey}
           theme={settings?.projector ?? DEFAULT_THEME}
           onApplyTheme={applyTheme}
+          ticker={ticker}
+          onTickerChange={changeTicker}
           onError={setError}
           detections={detections}
           references={references}

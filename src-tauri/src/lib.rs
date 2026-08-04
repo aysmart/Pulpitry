@@ -20,6 +20,7 @@ use catalog::{Catalog, Item};
 use detect::Detector;
 use projector::{
     AudioState, Display, LiveContent, MediaCommand, MediaProgress, Projector, ProjectorState,
+    Ticker,
 };
 use semantic::{IndexStatus, Semantic};
 use settings::{ProjectorTheme, Settings, SettingsView};
@@ -249,6 +250,16 @@ fn get_audio(projector: State<'_, Arc<Projector>>) -> AudioState {
 #[tauri::command]
 fn set_audio(projector: State<'_, Arc<Projector>>, audio: AudioState) -> AudioState {
     projector.set_audio(audio)
+}
+
+#[tauri::command]
+fn get_ticker(projector: State<'_, Arc<Projector>>) -> Ticker {
+    projector.ticker()
+}
+
+#[tauri::command]
+fn set_ticker(projector: State<'_, Arc<Projector>>, ticker: Ticker) -> Ticker {
+    projector.set_ticker(ticker)
 }
 
 #[tauri::command]
@@ -492,6 +503,8 @@ pub fn run() {
             set_live,
             get_audio,
             set_audio,
+            get_ticker,
+            set_ticker,
             get_media,
             set_media,
             get_media_progress,
