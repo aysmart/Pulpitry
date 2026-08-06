@@ -10,6 +10,42 @@ export interface SongSection {
   lines: string[];
 }
 
+/** Whether a song's words may lawfully be put on a screen. */
+export type RightsStatus = "unknown" | "publicDomain" | "licensed" | "restricted";
+
+/**
+ * Where a song's words came from and on what terms.
+ *
+ * Pulpitry deliberately does not integrate CCLI. CCLI is a licence a church
+ * buys and reports against, not a service an app can call, and the obligation
+ * is theirs rather than ours. What an app can do is refuse to let the question
+ * go unasked, which is what this is for.
+ */
+export interface SongRights {
+  status: RightsStatus;
+  author: string;
+  /** Separate from the author because words and tune expire separately, and
+   *  only the words are what this app reproduces. */
+  composer: string;
+  /** The terms verbatim: the evidence for what `status` claims. */
+  terms: string;
+  /** Where the words came from, so the claim can be traced. */
+  source: string;
+  /** The church's own CCLI song number, kept for their reporting and sent
+   *  nowhere. */
+  ccli: string;
+}
+
+/** A song nobody has answered for yet. Deliberately not "cleared". */
+export const unknownRights = (): SongRights => ({
+  status: "unknown",
+  author: "",
+  composer: "",
+  terms: "",
+  source: "",
+  ccli: "",
+});
+
 /**
  * What one line of a service plan points at.
  *
@@ -43,7 +79,7 @@ export interface PlanEntry {
 
 /** The part of a library item that differs by kind. */
 export type ItemBody =
-  | { kind: "song"; sections: SongSection[] }
+  | { kind: "song"; sections: SongSection[]; rights: SongRights }
   | { kind: "image" }
   | { kind: "media"; looping: boolean }
   | { kind: "template"; theme: ProjectorTheme }

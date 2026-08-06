@@ -6,7 +6,11 @@ import {
   catalogSave,
   catalogSearch,
   newItem,
+  unknownRights,
   type Item,
+  type ItemBody,
+  type RightsStatus,
+  type SongRights,
   type SongSection,
 } from "../lib/catalog";
 import type { ProjectorTheme } from "../lib/theme";
@@ -58,6 +62,138 @@ function storedView(): View {
 
 const FIELD =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-2 py-1.5 text-[12.5px] text-pulpitry-text outline-none placeholder:text-pulpitry-muted focus-visible:focus-ring";
+
+/**
+ * How each rights answer is shown.
+ *
+ * Only two of the four get a badge in the list. "Public domain" is the answer
+ * for most of the library and marking it everywhere would turn the badge into
+ * wallpaper; "licensed" is a settled question and needs no flag either. What an
+ * operator has to see at a glance is the song nobody has answered for, and the
+ * one that has been answered with no.
+ */
+const RIGHTS: Record<
+  RightsStatus,
+  { label: string; badge: string | null; className: string; note: string }
+> = {
+  publicDomain: {
+    label: "Public domain",
+    badge: null,
+    className: "",
+    note: "Old enough, or dedicated. No licence is needed by anyone.",
+  },
+  licensed: {
+    label: "Covered by our licence",
+    badge: null,
+    className: "",
+    note: "Under copyright, and covered by a licence this church holds. Record the CCLI number so it can be reported.",
+  },
+  unknown: {
+    label: "Not established",
+    badge: "?",
+    className: "border-pulpitry-line text-pulpitry-muted",
+    note: "Nobody has checked. This is not the same as cleared — most worship music written since 1930 needs a licence.",
+  },
+  restricted: {
+    label: "Needs a licence we do not have",
+    badge: "!",
+    className: "border-pulpitry-gold/60 text-pulpitry-gold",
+    note: "Kept in the library so it can be found and planned for, but not cleared to project.",
+  },
+};
+
+/** A quiet mark on songs whose rights are unanswered or refused. */
+function RightsBadge({ status }: { status: RightsStatus }) {
+  const rights = RIGHTS[status];
+  if (!rights.badge) return null;
+  return (
+    <span
+      title={`${rights.label}. ${rights.note}`}
+      aria-label={rights.label}
+      className={`shrink-0 rounded border px-1 text-[9.5px] leading-[1.35] ${rights.className}`}
+    >
+      {rights.badge}
+    </span>
+  );
+}
+
+/**
+ * The provenance fields, folded away until asked for.
+ *
+ * Below the lyrics and closed by default because it is not what an operator
+ * came here to type. It is what somebody has to be able to answer later, and a
+ * form that demanded it before a song could be saved would only teach people to
+ * put anything in the box.
+ */
+function RightsEditor({
+  rights,
+  onChange,
+}: {
+  rights: SongRights;
+  onChange: (rights: SongRights) => void;
+}) {
+  const set = (patch: Partial<SongRights>) => onChange({ ...rights, ...patch });
+
+  return (
+    <details className="shrink-0 rounded border border-pulpitry-line bg-pulpitry-raised/40">
+      <summary className="cursor-pointer px-2 py-1.5 text-[11px] text-pulpitry-muted focus-visible:focus-ring">
+        Rights — {RIGHTS[rights.status].label}
+      </summary>
+      <div className="flex flex-col gap-1.5 border-t border-pulpitry-line p-2">
+        <label className="flex flex-col gap-1 text-[11px] text-pulpitry-muted">
+          May this be projected?
+          <select
+            value={rights.status}
+            onChange={(event) => set({ status: event.target.value as RightsStatus })}
+            className={FIELD}
+          >
+            {(Object.keys(RIGHTS) as RightsStatus[]).map((status) => (
+              <option key={status} value={status}>
+                {RIGHTS[status].label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="text-[11px] leading-snug text-pulpitry-muted">{RIGHTS[rights.status].note}</p>
+
+        <input
+          value={rights.author}
+          placeholder="Words by"
+          onChange={(event) => set({ author: event.target.value })}
+          className={FIELD}
+        />
+        <input
+          value={rights.composer}
+          placeholder="Music by"
+          onChange={(event) => set({ composer: event.target.value })}
+          className={FIELD}
+        />
+        <input
+          value={rights.terms}
+          placeholder="Copyright line, as printed"
+          onChange={(event) => set({ terms: event.target.value })}
+          className={FIELD}
+        />
+        <input
+          value={rights.source}
+          placeholder="Where these words came from"
+          onChange={(event) => set({ source: event.target.value })}
+          className={FIELD}
+        />
+        <input
+          value={rights.ccli}
+          placeholder="CCLI song number"
+          onChange={(event) => set({ ccli: event.target.value })}
+          className={FIELD}
+        />
+        <p className="text-[11px] leading-snug text-pulpitry-muted">
+          Pulpitry does not report to CCLI for you — that licence is between your church and them.
+          The number is kept here so it is to hand when you do.
+        </p>
+      </div>
+    </details>
+  );
+}
 
 /**
  * Every section item carries the song's whole section list, so Prev and Next
@@ -165,9 +301,12 @@ export function SongLibrary({
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Item | null>(null);
   const [view, setView] = useState<View>(storedView);
-  const [editing, setEditing] = useState<{ title: string; author: string; body: string } | null>(
-    null,
-  );
+  const [editing, setEditing] = useState<{
+    title: string;
+    subtitle: string;
+    body: string;
+    rights: SongRights;
+  } | null>(null);
 
   const refresh = useCallback(
     async (keep?: number | null) => {
@@ -194,9 +333,10 @@ export function SongLibrary({
     if (!title) return;
     try {
       const sections = parseSections(editing.body);
+      const body: ItemBody = { kind: "song", sections, rights: editing.rights };
       const item: Item = selected
-        ? { ...selected, title, subtitle: editing.author.trim(), body: { kind: "song", sections } }
-        : { ...newItem(title, { kind: "song", sections }), subtitle: editing.author.trim() };
+        ? { ...selected, title, subtitle: editing.subtitle.trim(), body }
+        : { ...newItem(title, body), subtitle: editing.subtitle.trim() };
       const saved = await catalogSave(item);
       setEditing(null);
       await refresh(saved.id);
@@ -226,9 +366,9 @@ export function SongLibrary({
           className={FIELD}
         />
         <input
-          value={editing.author}
-          placeholder="Author or attribution"
-          onChange={(event) => setEditing({ ...editing, author: event.target.value })}
+          value={editing.subtitle}
+          placeholder="Subtitle — the passage it sets, or a note"
+          onChange={(event) => setEditing({ ...editing, subtitle: event.target.value })}
           className={FIELD}
         />
         <textarea
@@ -242,6 +382,11 @@ export function SongLibrary({
             ? "A blank line starts a new slide. A short first line becomes its label."
             : "Give it a title to save."}
         </p>
+        <RightsEditor
+          rights={editing.rights}
+          onChange={(rights) => setEditing({ ...editing, rights })}
+        />
+
         <div className="flex gap-1.5">
           <button
             type="button"
@@ -307,7 +452,7 @@ export function SongLibrary({
             // Without this the save path treats a new song as an edit of
             // whichever one is open and overwrites it.
             setSelected(null);
-            setEditing({ title: "", author: "", body: "" });
+            setEditing({ title: "", subtitle: "", body: "", rights: unknownRights() });
           }}
           title="Add a song"
           className="rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1.5 text-[12.5px] text-pulpitry-text hover:border-pulpitry-gold-dim hover:text-pulpitry-gold focus-visible:focus-ring"
@@ -337,8 +482,11 @@ export function SongLibrary({
                         open ? "bg-pulpitry-teal-dim" : "hover:bg-pulpitry-raised"
                       }`}
                     >
-                      <span className="block truncate text-[12.5px] text-pulpitry-text">
-                        {song.title}
+                      <span className="flex items-center gap-1.5 text-[12.5px] text-pulpitry-text">
+                        <span className="min-w-0 truncate">{song.title}</span>
+                        {song.body.kind === "song" ? (
+                          <RightsBadge status={song.body.rights.status} />
+                        ) : null}
                       </span>
                       {song.subtitle ? (
                         <span className="block truncate text-[11px] text-pulpitry-muted">
@@ -353,8 +501,10 @@ export function SongLibrary({
                           onClick={() =>
                             setEditing({
                               title: song.title,
-                              author: song.subtitle,
+                              subtitle: song.subtitle,
                               body: song.body.kind === "song" ? toText(song.body.sections) : "",
+                              rights:
+                                song.body.kind === "song" ? song.body.rights : unknownRights(),
                             })
                           }
                           className="rounded px-1.5 py-0.5 text-[11px] text-pulpitry-muted hover:text-pulpitry-text focus-visible:focus-ring"

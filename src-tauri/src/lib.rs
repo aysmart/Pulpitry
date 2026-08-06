@@ -26,7 +26,8 @@ use projector::{
 use semantic::{IndexStatus, Semantic};
 use settings::{ProjectorTheme, Settings, SettingsView};
 use speech::{SpeechManager, SpeechStatus};
-use tauri::{Emitter, Manager, State};
+use anyhow::Context;
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Commands return plain strings on failure so the operator UI can show them.
 type CommandResult<T> = Result<T, String>;
@@ -313,6 +314,50 @@ fn projector_state(projector: State<'_, Arc<Projector>>) -> ProjectorState {
     projector.state()
 }
 
+/// Reads the bundled hymn library and hands it to the catalog.
+fn seed_hymns(app: &AppHandle, catalog: &Catalog) -> anyhow::Result<()> {
+    use std::io::Read;
+
+    let manifest_path = app
+        .path()
+        .resolve("resources/hymns.json", tauri::path::BaseDirectory::Resource)
+        .context("could not locate the hymn manifest")?;
+    let manifest: catalog::HymnManifest =
+        serde_json::from_str(&std::fs::read_to_string(&manifest_path)?)
+            .context("the hymn manifest is malformed")?;
+
+    let path = app
+        .path()
+        .resolve(
+            &format!("resources/{}", manifest.file),
+            tauri::path::BaseDirectory::Resource,
+        )
+        .context("could not locate the bundled hymns")?;
+
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(std::fs::File::open(&path)?).read_to_string(&mut text)?;
+    let hymns: Vec<catalog::BundledHymn> =
+        serde_json::from_str(&text).context("the bundled hymns are malformed")?;
+
+    // The manifest and the bundle are written by the same script in the same
+    // run, so disagreeing means one of the two was replaced on its own -- a
+    // half-applied update, and a reason to stop rather than seed a library
+    // that is not the one the checksum claims.
+    if hymns.len() as i64 != manifest.hymn_count {
+        anyhow::bail!(
+            "the hymn bundle holds {} hymns but the manifest says {}",
+            hymns.len(),
+            manifest.hymn_count
+        );
+    }
+
+    let imported = catalog.import_hymns(&manifest, &hymns)?;
+    if imported > 0 {
+        println!("[hymns] imported {imported} public-domain hymns");
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn catalog_save(
     app: tauri::AppHandle,
@@ -406,6 +451,23 @@ pub fn run() {
             for path in catalog.media_paths().unwrap_or_default() {
                 allow_asset(app.handle(), Some(&path));
             }
+            // The bundled hymns, seeded once. Off the main thread with the
+            // translations: 266 songs is not slow, but it is disk work and the
+            // window should paint first.
+            {
+                let handle = app.handle().clone();
+                let catalog = Arc::clone(&catalog);
+                std::thread::spawn(move || {
+                    if let Err(error) = seed_hymns(&handle, &catalog) {
+                        // Not fatal, and deliberately not shown: the operator
+                        // still has an app, just an empty song list, and an
+                        // error box on launch about hymns they did not ask for
+                        // would be the more annoying failure.
+                        eprintln!("[hymns] {error:#}");
+                    }
+                });
+            }
+
             app.manage(catalog);
 
             // Detection searches whichever translation the operator last chose.

@@ -45,7 +45,39 @@ CREATE VIRTUAL TABLE IF NOT EXISTS catalog_fts USING fts5(
     text,
     tokenize='porter unicode61'
 );
+
+-- What has already been seeded, so a bundled library is imported once rather
+-- than on every launch, and again only when the bundle itself changes.
+CREATE TABLE IF NOT EXISTS catalog_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 "#;
+
+/// The manifest written by scripts/build-hymns.mjs.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HymnManifest {
+    pub source: String,
+    pub file: String,
+    pub hymn_count: i64,
+    pub checksum: String,
+}
+
+/// One hymn as the build script writes it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundledHymn {
+    pub title: String,
+    pub author: String,
+    pub composer: String,
+    pub copyright: String,
+    pub source: String,
+    pub sections: Vec<SongSection>,
+    /// Passages the hymn draws on, as the source recorded them.
+    #[serde(default)]
+    pub scripture: Vec<String>,
+}
 
 /// A labelled block of a song: "Verse 1", "Chorus", "Bridge".
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -54,6 +86,57 @@ pub struct SongSection {
     pub label: String,
     /// Kept as written. A lyric breaks where the writer broke it.
     pub lines: Vec<String>,
+}
+
+/// Whether a song's words may lawfully be put on a screen.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum RightsStatus {
+    /// Nobody has said yet. The default, and deliberately not "fine" -- an
+    /// unanswered question should look unanswered.
+    #[default]
+    Unknown,
+    /// Old enough, or dedicated, so no licence is needed by anyone.
+    PublicDomain,
+    /// Under copyright, and covered by a licence this church holds.
+    Licensed,
+    /// Under copyright and not covered. Still worth keeping in the library:
+    /// knowing a song may not be used is more useful than not having it.
+    Restricted,
+}
+
+/// Where a song's words came from and on what terms.
+///
+/// Pulpitry deliberately does not integrate CCLI. CCLI is a licence a church
+/// buys and reports against, not a service an app can call, and the obligation
+/// is theirs rather than ours -- pretending otherwise would put this app
+/// between a church and its own legal position. What an app can do is refuse to
+/// let the question go unasked, which is what this is for.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SongRights {
+    #[serde(default)]
+    pub status: RightsStatus,
+    /// Who wrote the words, as the source stated it.
+    #[serde(default)]
+    pub author: String,
+    /// Kept separate because words and tune expire separately: an eighteenth
+    /// century text set to a modern tune is not public domain as a whole, and
+    /// only one of those halves is the half this app reproduces.
+    #[serde(default)]
+    pub composer: String,
+    /// The terms verbatim. This is the evidence for the claim `status` makes,
+    /// and somebody checking that claim wants the publisher's own sentence
+    /// rather than our summary of it.
+    #[serde(default)]
+    pub terms: String,
+    /// Where the words were taken from, so the claim can be traced back.
+    #[serde(default)]
+    pub source: String,
+    /// The church's own CCLI song number, kept for their reporting. Recorded
+    /// here and sent nowhere.
+    #[serde(default)]
+    pub ccli: String,
 }
 
 /// What one line of a service plan points at.
@@ -102,7 +185,13 @@ pub struct PlanEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum ItemBody {
-    Song { sections: Vec<SongSection> },
+    Song {
+        sections: Vec<SongSection>,
+        /// Defaulted so songs saved before provenance existed still load. They
+        /// come back as `Unknown`, which is the honest answer for them.
+        #[serde(default)]
+        rights: SongRights,
+    },
     /// Images carry nothing beyond the file path on the item itself.
     Image,
     Media { looping: bool },
@@ -131,7 +220,7 @@ impl ItemBody {
     /// than they remember a song's exact title.
     fn searchable(&self) -> String {
         match self {
-            ItemBody::Song { sections } => sections
+            ItemBody::Song { sections, .. } => sections
                 .iter()
                 .flat_map(|section| section.lines.iter().cloned())
                 .collect::<Vec<_>>()
@@ -233,6 +322,92 @@ impl Catalog {
         transaction.commit()?;
 
         Ok(Item { id: Some(id), updated_at: now, ..item.clone() })
+    }
+
+    /// Seeds the bundled hymns, and does nothing once they are in.
+    ///
+    /// Every hymn here is public domain -- see scripts/build-hymns.mjs, which
+    /// drops anything whose words are not -- so a church can hold a service on
+    /// a fresh install without owning a licence or answering a legal question
+    /// first.
+    ///
+    /// Existing songs are never touched. A title already in the library is
+    /// skipped whole, because the operator may have corrected its wording or
+    /// its verse order, and a seed that overwrote that would undo their work
+    /// silently on an upgrade.
+    pub fn import_hymns(&self, manifest: &HymnManifest, hymns: &[BundledHymn]) -> Result<usize> {
+        if self.meta("hymns")?.as_deref() == Some(manifest.checksum.as_str()) {
+            return Ok(0);
+        }
+
+        let mut imported = 0;
+        for hymn in hymns {
+            if self.song_titled(&hymn.title)? {
+                continue;
+            }
+
+            let item = Item {
+                id: None,
+                title: hymn.title.clone(),
+                // The passages it draws on, which is how an operator picks a
+                // hymn to sit beside a reading.
+                subtitle: hymn.scripture.join(", "),
+                body: ItemBody::Song {
+                    sections: hymn.sections.clone(),
+                    rights: SongRights {
+                        status: RightsStatus::PublicDomain,
+                        author: hymn.author.clone(),
+                        composer: hymn.composer.clone(),
+                        terms: hymn.copyright.clone(),
+                        source: if hymn.source.is_empty() {
+                            manifest.source.clone()
+                        } else {
+                            format!("{} — {}", manifest.source, hymn.source)
+                        },
+                        ccli: String::new(),
+                    },
+                },
+                path: None,
+                updated_at: 0,
+            };
+            self.save(&item)?;
+            imported += 1;
+        }
+
+        self.set_meta("hymns", &manifest.checksum)?;
+        Ok(imported)
+    }
+
+    /// Whether a song of this title is already in the library.
+    fn song_titled(&self, title: &str) -> Result<bool> {
+        let connection = self.connection.lock();
+        let found: Option<i64> = connection
+            .query_row(
+                "SELECT id FROM catalog_items WHERE kind = 'song' AND title = ?1 LIMIT 1",
+                params![title],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(found.is_some())
+    }
+
+    fn meta(&self, key: &str) -> Result<Option<String>> {
+        let connection = self.connection.lock();
+        Ok(connection
+            .query_row("SELECT value FROM catalog_meta WHERE key = ?1", params![key], |row| {
+                row.get(0)
+            })
+            .optional()?)
+    }
+
+    fn set_meta(&self, key: &str, value: &str) -> Result<()> {
+        let connection = self.connection.lock();
+        connection.execute(
+            "INSERT INTO catalog_meta(key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        )?;
+        Ok(())
     }
 
     pub fn remove(&self, id: i64) -> Result<()> {
@@ -366,6 +541,7 @@ mod tests {
                     label: "Verse 1".into(),
                     lines: lines.iter().map(|line| line.to_string()).collect(),
                 }],
+                rights: SongRights::default(),
             },
             path: None,
             updated_at: 0,
@@ -400,7 +576,10 @@ mod tests {
     fn every_body_kind_round_trips() {
         let catalog = Catalog::in_memory().expect("catalog");
         let bodies = vec![
-            ItemBody::Song { sections: vec![SongSection { label: "Chorus".into(), lines: vec!["x".into()] }] },
+            ItemBody::Song {
+                sections: vec![SongSection { label: "Chorus".into(), lines: vec!["x".into()] }],
+                rights: SongRights::default(),
+            },
             ItemBody::Image,
             ItemBody::Media { looping: true },
             ItemBody::Template { theme: Box::new(ProjectorTheme::default()) },
@@ -446,6 +625,87 @@ mod tests {
             assert_eq!(catalog.get(saved.id.unwrap()).expect("get").unwrap().body, body);
             assert_eq!(catalog.list(&kind, 10).expect("list").len(), 1);
         }
+    }
+
+    fn hymn(title: &str) -> BundledHymn {
+        BundledHymn {
+            title: title.into(),
+            author: "John Newton, 1779.".into(),
+            composer: String::new(),
+            copyright: "public domain.".into(),
+            source: String::new(),
+            sections: vec![SongSection {
+                label: "Verse 1".into(),
+                lines: vec!["Amazing grace! How sweet the sound".into()],
+            }],
+            scripture: vec!["Eph 2:4-9".into()],
+        }
+    }
+
+    fn manifest(checksum: &str) -> HymnManifest {
+        HymnManifest {
+            source: "The Open Hymnal Project".into(),
+            file: "hymns.json.gz".into(),
+            hymn_count: 1,
+            checksum: checksum.into(),
+        }
+    }
+
+    #[test]
+    fn seeded_hymns_arrive_marked_public_domain() {
+        let catalog = Catalog::in_memory().unwrap();
+        assert_eq!(catalog.import_hymns(&manifest("aaa"), &[hymn("Amazing Grace")]).unwrap(), 1);
+
+        let songs = catalog.list("song", 10).unwrap();
+        assert_eq!(songs.len(), 1);
+        let ItemBody::Song { rights, .. } = &songs[0].body else { panic!("not a song") };
+        assert_eq!(rights.status, RightsStatus::PublicDomain);
+        assert_eq!(rights.terms, "public domain.");
+        // The passages it draws on, which is what an operator picks it by.
+        assert_eq!(songs[0].subtitle, "Eph 2:4-9");
+    }
+
+    #[test]
+    fn seeding_twice_imports_nothing_the_second_time() {
+        let catalog = Catalog::in_memory().unwrap();
+        catalog.import_hymns(&manifest("aaa"), &[hymn("Amazing Grace")]).unwrap();
+        assert_eq!(catalog.import_hymns(&manifest("aaa"), &[hymn("Amazing Grace")]).unwrap(), 0);
+    }
+
+    /// The case that matters on upgrade: a corrected bundle must not undo an
+    /// operator's own edits to a hymn they have already fixed.
+    #[test]
+    fn a_new_bundle_leaves_an_existing_title_alone() {
+        let catalog = Catalog::in_memory().unwrap();
+        catalog.import_hymns(&manifest("aaa"), &[hymn("Amazing Grace")]).unwrap();
+
+        let mut edited = catalog.list("song", 10).unwrap().remove(0);
+        edited.body = ItemBody::Song {
+            sections: vec![SongSection {
+                label: "Verse 1".into(),
+                lines: vec!["the operator's own wording".into()],
+            }],
+            rights: SongRights::default(),
+        };
+        catalog.save(&edited).unwrap();
+
+        assert_eq!(catalog.import_hymns(&manifest("bbb"), &[hymn("Amazing Grace")]).unwrap(), 0);
+        let songs = catalog.list("song", 10).unwrap();
+        assert_eq!(songs.len(), 1);
+        let ItemBody::Song { sections, .. } = &songs[0].body else { panic!("not a song") };
+        assert_eq!(sections[0].lines[0], "the operator's own wording");
+    }
+
+    /// Songs saved before provenance existed must still load, and must not come
+    /// back claiming to be cleared for use.
+    #[test]
+    fn a_song_without_rights_loads_as_unknown() {
+        let body: ItemBody = serde_json::from_str(
+            r#"{"kind":"song","sections":[{"label":"Verse 1","lines":["old"]}]}"#,
+        )
+        .unwrap();
+        let ItemBody::Song { rights, .. } = &body else { panic!("not a song") };
+        assert_eq!(rights.status, RightsStatus::Unknown);
     }
 
     #[test]
