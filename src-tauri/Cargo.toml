@@ -56,6 +56,12 @@ keyring = { version = "3.6", features = ["apple-native"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6", features = ["windows-native"] }
 
+# The Secret Service, reached over D-Bus, which is what GNOME Keyring and KWallet
+# both speak. Needs libsecret at build time; without this target the crate is
+# simply absent on Linux and every use of it fails to resolve.
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6", features = ["linux-native"] }
+
 # Dependencies are optimised even in dev builds. Unoptimised candle makes
 # embedding roughly an order of magnitude slower, which turns the one-off index
 # build from two minutes into twenty during development. Our own crate stays
