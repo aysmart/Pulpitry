@@ -84,7 +84,8 @@ jobs:
             libasound2-dev \
             patchelf \
             rpm \
-            file
+            file \
+            xdg-utils
 
       - name: Install dependencies
         run: npm ci
