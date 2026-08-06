@@ -27,6 +27,17 @@ const outputDir = resolve(root, "src-tauri/resources");
 
 const ARUL = "https://raw.githubusercontent.com/aruljohn/Bible-kjv/master";
 const SCROLL = "https://raw.githubusercontent.com/scrollmapper/bible_databases/master/formats/json";
+/*
+ * The World English Bible, one file per book.
+ *
+ * Its own source because scrollmapper does not carry it, and it is the one
+ * modern-English translation here that is unambiguously public domain --
+ * eBible.org, which distributes it for the translators, says so in as many
+ * words. Several modern translations sitting in "public domain" collections
+ * elsewhere (LEB, MKJV, LITV) are freely readable but still under copyright,
+ * and shipping one of those is the mistake this set exists to avoid.
+ */
+const WEB_JSON = "https://raw.githubusercontent.com/TehShrike/world-english-bible/master/json";
 
 /**
  * The bundled set.
@@ -49,6 +60,7 @@ const TRANSLATIONS = [
   { id: "WEBSTER", name: "Webster's Bible", year: 1833, source: "scroll", file: "Webster" },
   { id: "GENEVA", name: "Geneva Bible", year: 1599, source: "scroll", file: "Geneva1599" },
   { id: "DRC", name: "Douay-Rheims (Challoner)", year: 1752, source: "scroll", file: "DRC" },
+  { id: "WEB", name: "World English Bible", year: 2000, source: "web" },
 ];
 
 /** Canonical order and display names. Also the repo filename for the KJV source. */
@@ -213,6 +225,43 @@ async function loadScroll(id, file) {
   return { rows, skipped: [...skipped] };
 }
 
+/**
+ * The World English Bible, assembled from one file per book.
+ *
+ * A verse arrives as one or more "paragraph text" entries -- the translation
+ * breaks mid-verse at paragraph and poetry boundaries -- so segments sharing a
+ * chapter and verse are joined in the order they appear. Taking only the first
+ * would silently truncate every verse that spans a break.
+ */
+async function loadWeb() {
+  const rows = [];
+
+  for (let number = 1; number <= BOOKS.length; number++) {
+    const name = BOOKS[number - 1][0];
+    // The files are the book name lowercased with everything else stripped:
+    // "1 Samuel" becomes 1samuel.json.
+    const file = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const entries = await fetchJson(`${WEB_JSON}/${file}.json`);
+
+    const verses = new Map();
+    for (const entry of entries) {
+      if (typeof entry.verseNumber !== "number" || typeof entry.value !== "string") continue;
+      const key = `${entry.chapterNumber}:${entry.verseNumber}`;
+      const existing = verses.get(key);
+      verses.set(key, existing ? `${existing} ${entry.value}` : entry.value);
+    }
+
+    for (const [key, value] of verses) {
+      const [chapter, verse] = key.split(":").map(Number);
+      const text = repair("WEB", clean(value));
+      if (!text) continue;
+      rows.push([number, name, chapter, verse, text]);
+    }
+  }
+
+  return { rows, skipped: [] };
+}
+
 function validate(id, rows) {
   if (rows.length < 25_000) {
     throw new Error(`${id}: only ${rows.length} verses — expected a complete Bible`);
@@ -257,7 +306,11 @@ async function main() {
   for (const entry of selected) {
     process.stdout.write(`${entry.id.padEnd(8)} fetching…`);
     const { rows, skipped } =
-      entry.source === "arul" ? await loadArul(entry.id) : await loadScroll(entry.id, entry.file);
+      entry.source === "arul"
+        ? await loadArul(entry.id)
+        : entry.source === "web"
+          ? await loadWeb()
+          : await loadScroll(entry.id, entry.file);
 
     validate(entry.id, rows);
     rows.sort((a, b) => a[0] - b[0] || a[2] - b[2] || a[3] - b[3]);

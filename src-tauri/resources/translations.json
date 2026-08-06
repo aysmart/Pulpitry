@@ -78,5 +78,13 @@
     "file": "DRC.tsv.gz",
     "verseCount": 31432,
     "checksum": "20fd978dccf6f7b9"
+  },
+  {
+    "id": "WEB",
+    "name": "World English Bible",
+    "year": 2000,
+    "file": "WEB.tsv.gz",
+    "verseCount": 31098,
+    "checksum": "3f560df1a446e8b7"
   }
 ]
