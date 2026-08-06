@@ -1,7 +1,8 @@
 name: Build
 
-# Every push builds installable packages for both platforms, because the whole
-# point of the exercise is that Windows cannot be assumed to work from a Mac.
+# Every push builds installable packages for all three platforms, because the
+# whole point of the exercise is that Windows and Linux cannot be assumed to
+# work from a Mac.
 # Tagging v* additionally publishes them as a release.
 on:
   push:
@@ -20,7 +21,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
-      # One platform failing should not hide the state of the other.
+      # One platform failing should not hide the state of the others.
       fail-fast: false
       matrix:
         include:
@@ -36,6 +37,9 @@ jobs:
           - name: Windows
             os: windows-latest
             target: x86_64-pc-windows-msvc
+          - name: Linux (x86_64)
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
 
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +67,24 @@ jobs:
         with:
           path: src-tauri/resources/embedder
           key: embedder-${{ hashFiles('scripts/build-embedder.mjs') }}
+
+      # Tauri renders through the system webview, which on Linux is WebKitGTK
+      # and is not installed on the runner. Held at 22.04 because that is the
+      # oldest glibc we want to require: an AppImage built on a newer one
+      # refuses to start on an older distribution, and a church PC is rarely
+      # the newest thing in the building.
+      - name: Install the Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libasound2-dev \
+            patchelf \
+            rpm \
+            file
 
       - name: Install dependencies
         run: npm ci
@@ -94,6 +116,9 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
             src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
+            src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
 
   release:
     name: Publish a release
@@ -114,9 +139,12 @@ jobs:
           fail_on_unmatched_files: true
           # Said plainly rather than left for someone to discover on first run.
           body: |
-            Installers for macOS (Apple silicon and Intel) and Windows.
+            Installers for macOS (Apple silicon and Intel), Windows, and Linux
+            (.deb, .rpm and .AppImage, x86_64).
 
             These builds are **not code signed**. macOS will refuse to open the
             app until it is opened once from the right-click menu, and Windows
             SmartScreen will warn. Signing needs an Apple Developer ID and a
-            Windows code signing certificate added as repository secrets.
+            Windows code signing certificate added as repository secrets. Linux
+            packages are unaffected — that platform does not gate on a
+            signature.
