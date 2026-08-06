@@ -14,10 +14,17 @@ tab and no bundled Chromium.
 | 4 | Exact verse detection | Done |
 | 5 | Paraphrase/semantic matching | Done |
 | 6 | Preview/Live panes, projector window, queue | Done |
-| 7 | Song/lyrics library | Not started |
-| 8 | Service schedule | Not started |
+| 7 | Song/lyrics library | Done |
+| 8 | Service schedule | Done |
 
-Phases 7 and 8 are the remaining work: a song library and a service running order.
+Built since the original plan, and not phases of it: themes with an editor,
+custom slides, images and video in the library, scrolling announcements, a
+model-assisted suggestion layer, and recognising a reference the speaker names
+out loud.
+
+The plan is finished. What comes next is not on this table yet -- CCLI
+reporting is the obvious candidate, since a song library that shows copyrighted
+lyrics needs the licence number on screen and a record of what was used.
 
 ## Architecture
 
