@@ -2,7 +2,7 @@
 name = "pulpitry"
 version = "0.1.0"
 description = "Live speech transcription, Bible verse detection, and worship presentation."
-authors = ["Pulpitry"]
+authors = ["Ayorinde G. Smart"]
 edition = "2021"
 rust-version = "1.82"
 

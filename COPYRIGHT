@@ -1,0 +1,13 @@
+Pulpitry
+Copyright © 2026 Ayorinde G. Smart. All rights reserved.
+
+Pulpitry is proprietary software. No licence to use, copy, modify or
+distribute the source code is granted, and none should be inferred from the
+availability of a binary.
+
+The bundled Bible translations are public domain. The bundled hymn library is
+public domain and comes from the Open Hymnal Project (openhymnal.org); the
+build script that assembles it drops any hymn whose words are not.
+
+Third-party components retain their own licences, which are listed in the
+dependency manifests and reproduced with the packages that carry them.

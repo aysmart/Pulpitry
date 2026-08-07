@@ -38,5 +38,7 @@
   },
   "allowScripts": {
     "esbuild@0.28.1": true
-  }
+  },
+  "author": "Ayorinde G. Smart",
+  "license": "UNLICENSED"
 }
