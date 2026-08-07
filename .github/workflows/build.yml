@@ -17,9 +17,16 @@ name: Build
 on:
   push:
     branches: [main]
-    tags: ["v*"]
-  pull_request:
+    # Every pattern the plan job understands has to be listed here too, or the
+    # tag never reaches it.
+    tags: ["v*", "win-*", "windows-*", "linux-*", "mac-*", "macos-*"]
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: Which platforms to build
+        type: choice
+        default: desktop
+        options: [desktop, windows, linux, macos, all, none]
 
 # A second push should not race the first for the same artifacts.
 concurrency:
@@ -34,9 +41,16 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.pick.outputs.matrix }}
+      any: ${{ steps.pick.outputs.any }}
     steps:
       - id: pick
         shell: bash
+        # Runner minutes are finite and macOS bills at ten times Linux, so what
+        # builds is chosen deliberately rather than by default. A tag says which
+        # platform it is for; a manual run picks from a list; an ordinary push
+        # builds nothing, because most pushes are a comment or a README and
+        # paying for four runners to prove that is how a month's allowance
+        # disappears.
         run: |
           set -euo pipefail
           windows='{"name":"Windows","os":"windows-latest","target":"x86_64-pc-windows-msvc"}'
@@ -44,17 +58,47 @@ jobs:
           arm='{"name":"macOS (Apple silicon)","os":"macos-14","target":"aarch64-apple-darwin"}'
           intel='{"name":"macOS (Intel)","os":"macos-13","target":"x86_64-apple-darwin"}'
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
-             [ "${{ startsWith(github.ref, 'refs/tags/') }}" = "true" ]; then
-            echo "matrix={\"include\":[$windows,$linux,$arm,$intel]}" >> "$GITHUB_OUTPUT"
-            echo "Building all four: this is a tag or a manual run."
+          choose() {
+            case "$1" in
+              windows) echo "$windows" ;;
+              linux)   echo "$linux" ;;
+              macos)   echo "$arm,$intel" ;;
+              desktop) echo "$windows,$linux" ;;
+              all)     echo "$windows,$linux,$arm,$intel" ;;
+              none|*)  echo "" ;;
+            esac
+          }
+
+          ref='${{ github.ref }}'
+          want=none
+
+          if [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then
+            want='${{ inputs.platforms }}'
+            reason="manual run"
           else
-            echo "matrix={\"include\":[$windows,$linux]}" >> "$GITHUB_OUTPUT"
-            echo "Building Windows and Linux. macOS is built locally; tag or dispatch to include it."
+            case "${ref#refs/tags/}" in
+              win-*|windows-*) want=windows; reason="a Windows tag" ;;
+              linux-*)         want=linux;   reason="a Linux tag" ;;
+              mac-*|macos-*)   want=macos;   reason="a macOS tag" ;;
+              v*)              want=all;     reason="a release tag" ;;
+              *)               want=none;    reason="an ordinary push -- tag it or dispatch it to build" ;;
+            esac
+          fi
+
+          entries=$(choose "$want")
+          if [ -z "$entries" ]; then
+            echo "matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
+            echo "any=false" >> "$GITHUB_OUTPUT"
+            echo "Building nothing: $reason."
+          else
+            echo "matrix={\"include\":[$entries]}" >> "$GITHUB_OUTPUT"
+            echo "any=true" >> "$GITHUB_OUTPUT"
+            echo "Building $want: $reason."
           fi
 
   package:
     needs: plan
+    if: needs.plan.outputs.any == 'true'
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
