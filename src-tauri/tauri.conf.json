@@ -35,6 +35,8 @@
     "active": true,
     "publisher": "Ayorinde G. Smart",
     "copyright": "\u00a9 2026 Ayorinde G. Smart",
+    "license": "Proprietary",
+    "homepage": "https://castavox.com",
     "targets": [
       "app",
       "dmg",
