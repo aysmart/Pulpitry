@@ -339,7 +339,7 @@ fn request_body(config: &Config, context: &str) -> serde_json::Value {
 /// Naming the provider is the price of not compiling aws-lc-rs, which drags a
 /// C build chain onto every machine that builds this. Failure here means one
 /// was already installed, which is equally fine.
-fn install_crypto_provider() {
+pub(crate) fn install_crypto_provider() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
         let _ = rustls::crypto::ring::default_provider().install_default();

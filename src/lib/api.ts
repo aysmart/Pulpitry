@@ -16,6 +16,18 @@ export interface Settings {
   /** Verse detection searches this translation. */
   translation: string;
 
+  /**
+   * Which recogniser turns audio into words: "azure" or "local".
+   *
+   * Azure streams and needs an account; its free tier is about five hours a
+   * month. The local engine runs whisper.cpp on this machine, needs nothing,
+   * and is a beat behind because a model cannot transcribe a sentence until
+   * it ends.
+   */
+  speechEngine: string;
+  /** The whisper.cpp model, by file name. Empty until one is chosen. */
+  speechModel: string;
+
   /** Optional Azure AI Foundry model for paraphrase suggestions. */
   assistEnabled: boolean;
   assistEndpoint: string;
@@ -30,6 +42,42 @@ export interface Settings {
   /** How the congregation-facing window looks. */
   projector: ProjectorTheme;
 }
+
+/** One whisper.cpp model the operator could transcribe with. */
+export interface SpeechModel {
+  /** File name, which is also its identity: "ggml-base.en.bin". */
+  file: string;
+  /** What to show: "base.en". */
+  label: string;
+  bytes: number;
+  /** The `.en` builds are better at English and cannot do anything else. */
+  englishOnly: boolean;
+  /** Smaller and faster, at some cost in accuracy. */
+  quantised: boolean;
+  installed: boolean;
+}
+
+/** Progress while a model is fetched. */
+export interface ModelProgress {
+  file: string;
+  received?: number;
+  total?: number;
+  /** downloading | ready | error */
+  state: string;
+  error?: string;
+}
+
+/**
+ * Which models exist and which are here.
+ *
+ * Asked of whisper.cpp's own repository rather than listed in the app, so it
+ * gains new ones without a release. Works offline, reporting what is already
+ * downloaded.
+ */
+export const speechModels = () => invoke<SpeechModel[]>("speech_models");
+
+export const downloadSpeechModel = (file: string) =>
+  invoke<void>("download_speech_model", { file });
 
 export interface SettingsView extends Settings {
   hasAzureKey: boolean;

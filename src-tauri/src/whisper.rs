@@ -94,6 +94,10 @@ pub struct ModelInfo {
 /// an operator who has downloaded one can still choose it in a hall with no
 /// connection.
 pub fn catalogue(data_dir: &Path) -> Vec<ModelInfo> {
+    // rustls has no provider unless one is installed, and this may be the
+    // first thing in the process to make an HTTPS request -- the assistant
+    // installs one too, but the operator may never have turned it on.
+    crate::assist::install_crypto_provider();
     let mut found: Vec<ModelInfo> = Vec::new();
 
     if let Ok(response) = reqwest::blocking::Client::builder()
@@ -167,6 +171,10 @@ pub fn is_installed(data_dir: &Path, file: &str) -> bool {
 
 /// Fetches a model, reporting progress as (received, total).
 pub fn download(data_dir: &Path, file: &str, progress: impl Fn(u64, u64)) -> Result<PathBuf> {
+    // rustls has no provider unless one is installed, and this may be the
+    // first thing in the process to make an HTTPS request -- the assistant
+    // installs one too, but the operator may never have turned it on.
+    crate::assist::install_crypto_provider();
     let target = model_path(data_dir, file);
     if is_installed(data_dir, file) {
         return Ok(target);
@@ -553,6 +561,19 @@ mod tests {
         let lower = text.to_lowercase();
         assert!(lower.contains("god so loved the world"), "wrong words back: {text}");
         assert!(!lower.contains("["), "apparatus survived: {text}");
+    }
+
+    /// The list has to arrive here too, not only in the sibling product.
+    #[test]
+    #[ignore = "reaches the network"]
+    fn lists_the_models_that_exist() {
+        let dir = std::env::temp_dir().join("pulpitry-model-test");
+        let found = catalogue(&dir);
+        assert!(found.len() > 10, "expected a real catalogue, got {}", found.len());
+        assert!(found.iter().any(|m| m.label.contains("base")), "no base model listed");
+        // Smallest first, so the operator scanning it meets the affordable ones.
+        assert!(found[0].bytes <= found[found.len() - 1].bytes, "not sorted by size");
+        println!("{} models; smallest {} at {} MB", found.len(), found[0].label, found[0].bytes / 1048576);
     }
 
     #[test]

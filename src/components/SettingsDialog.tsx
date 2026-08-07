@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 
 import { NodeRuntimeNotice } from "./NodeRuntimeNotice";
 
@@ -9,7 +10,11 @@ import {
   saveAssistKey,
   saveAzureKey,
   saveSettings,
+  speechModels,
+  downloadSpeechModel,
+  type ModelProgress,
   type SettingsView,
+  type SpeechModel,
 } from "../lib/api";
 
 /** Azure Speech regions, by the identifier the SDK expects. */
@@ -33,6 +38,13 @@ const LANGUAGES = [
   { code: "es-ES", label: "Spanish (Spain)" },
   { code: "pt-BR", label: "Portuguese (Brazil)" },
 ];
+
+/** Bytes as something a person can weigh against their own machine. */
+function describeSize(bytes: number): string {
+  return bytes >= 1024 ** 3
+    ? `${(bytes / 1024 ** 3).toFixed(1)} GB`
+    : `${Math.round(bytes / 1024 ** 2)} MB`;
+}
 
 const FIELD =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-2 text-[13px] text-pulpitry-text outline-none focus-visible:focus-ring";
@@ -71,8 +83,61 @@ export function SettingsDialog({
   const [semanticEnabled, setSemanticEnabled] = useState(settings.semanticEnabled);
   const [semanticThreshold, setSemanticThreshold] = useState(settings.semanticThreshold);
 
+  const [engine, setEngine] = useState(settings.speechEngine || "azure");
+  const [model, setModel] = useState(settings.speechModel);
+  const [models, setModels] = useState<SpeechModel[]>([]);
+  const [modelNote, setModelNote] = useState<string | null>(null);
+  const [fetching, setFetching] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Only when the operator actually wants it: this reaches whisper.cpp's
+  // repository, and doing it on every dialog open would be a round trip nobody
+  // asked for.
+  useEffect(() => {
+    if (engine !== "local" || models.length > 0) return;
+    let cancelled = false;
+    setModelNote("Looking up the available models…");
+    speechModels()
+      .then((found) => {
+        if (cancelled) return;
+        setModels(found);
+        setModelNote(
+          found.length
+            ? `${found.length} models available. Smaller is faster and less accurate; a quantised one is a good place to start on an older machine.`
+            : "No models could be listed. Check the connection, or use Azure for now.",
+        );
+      })
+      .catch((err) => !cancelled && setModelNote(String(err)));
+    return () => {
+      cancelled = true;
+    };
+  }, [engine, models.length]);
+
+  // The download runs in the Rust core and reports as it goes, so a 1.5 GB
+  // model does not look like a frozen dialog.
+  useEffect(() => {
+    const unlisten = listen<ModelProgress>("speech-model-progress", (event) => {
+      const p = event.payload;
+      if (p.state === "downloading" && p.total) {
+        setModelNote(`Downloading ${p.file} — ${Math.round((p.received! * 100) / p.total)}%`);
+        return;
+      }
+      setFetching(false);
+      if (p.state === "ready") {
+        setModelNote(`${p.file} is ready.`);
+        setModel(p.file);
+        // Re-listed so it shows as downloaded and the choice visibly took.
+        speechModels().then(setModels).catch(() => {});
+      } else {
+        setModelNote(`Could not download ${p.file}. ${p.error ?? ""}`);
+      }
+    });
+    return () => {
+      void unlisten.then((off) => off());
+    };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -101,6 +166,8 @@ export function SettingsDialog({
         assistApiVersion: assistApiVersion.trim(),
         semanticEnabled,
         semanticThreshold,
+        speechEngine: engine,
+        speechModel: model,
         // Carried through untouched: the look is edited in the Themes tab, and
         // a stale copy held open in this dialog would undo it on save.
         projector: settings.projector,
@@ -150,9 +217,79 @@ export function SettingsDialog({
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto px-5 py-4">
           <Section
             title="Transcription"
-            note="Live transcription uses Azure Speech and runs on the Node runtime already on this machine. Verse detection runs locally and needs no network."
+            note="Where the words come from. Verse detection is local either way and needs no network."
           >
-            <NodeRuntimeNotice />
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[12px] text-pulpitry-muted">Engine</span>
+              <select
+                value={engine}
+                onChange={(event) => setEngine(event.target.value)}
+                className={FIELD}
+              >
+                <option value="azure">Azure Speech — needs an account</option>
+                <option value="local">This machine — no account needed</option>
+              </select>
+              <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                Azure streams: words appear as they are spoken and a verse can be found
+                mid-sentence. This machine transcribes a sentence once it ends, so a verse
+                arrives a second or two later — but it needs no account, no key and no network,
+                and it costs nothing per hour.
+              </span>
+            </label>
+
+            {engine === "local" ? (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[12px] text-pulpitry-muted">Model</span>
+                <div className="flex gap-2">
+                  <select
+                    value={model}
+                    onChange={(event) => setModel(event.target.value)}
+                    className={`min-w-0 flex-1 ${FIELD}`}
+                  >
+                    {model && !models.some((m) => m.file === model) ? (
+                      /* Shown before the list arrives, so the box does not read
+                         as unset when a choice is already stored. */
+                      <option value={model}>{model}</option>
+                    ) : null}
+                    {models.length === 0 && !model ? <option value="">—</option> : null}
+                    {models.map((m) => (
+                      <option key={m.file} value={m.file}>
+                        {/* Size first: on the machine most churches own, that is
+                            the number that decides. */}
+                        {m.label} — {describeSize(m.bytes)} ·{" "}
+                        {[
+                          m.englishOnly ? "English only" : "any language",
+                          m.quantised ? "smaller, slightly less accurate" : null,
+                          m.installed ? "downloaded" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!model || fetching}
+                    onClick={() => {
+                      setFetching(true);
+                      setModelNote("Starting the download…");
+                      void downloadSpeechModel(model).catch((err) => {
+                        setFetching(false);
+                        setModelNote(String(err));
+                      });
+                    }}
+                    className="rounded border border-pulpitry-line px-3 py-2 text-[12.5px] text-pulpitry-text disabled:opacity-40 focus-visible:focus-ring"
+                  >
+                    {fetching ? "Downloading…" : "Download"}
+                  </button>
+                </div>
+                {modelNote ? (
+                  <span className="text-[11.5px] leading-snug text-pulpitry-muted">{modelNote}</span>
+                ) : null}
+              </label>
+            ) : (
+              <NodeRuntimeNotice />
+            )}
 
             <label className="flex flex-col gap-1.5">
               <span className="text-[12px] text-pulpitry-muted">
