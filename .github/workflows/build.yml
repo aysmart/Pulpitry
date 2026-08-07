@@ -1,9 +1,18 @@
-name: Build for Windows
+name: Build
 
-# Windows only. macOS and Linux are built locally -- macOS natively, Linux in a
-# container -- and repeating them on a hosted runner buys nothing. Windows is the
-# one platform that cannot be built from the machine this is developed on, which
-# is exactly why it is the one kept here.
+# Which platforms run, and why they differ:
+#
+#   Windows  every push. It cannot be built on the machine this is developed
+#            on, so nothing else would ever catch a break.
+#   Linux    every push. The cheapest runner GitHub bills -- 1x, against 2x for
+#            Windows and 10x for macOS -- and where the platform-specific
+#            breakage actually lives. Four Linux-only bugs turned up in one
+#            afternoon of building it by hand.
+#   macOS    tags and manual runs only. It is built natively on the development
+#            machine several times a day, so a break is noticed in minutes for
+#            free. Paying 10x per push to learn it later is the trade not worth
+#            making.
+#
 # Tagging v* additionally publishes the result as a release.
 on:
   push:
@@ -18,18 +27,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Which platforms this run should build. A matrix cannot be filtered by event
+  # once it exists, so it is decided here and read back with fromJSON.
+  plan:
+    name: Decide the platforms
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        shell: bash
+        run: |
+          set -euo pipefail
+          windows='{"name":"Windows","os":"windows-latest","target":"x86_64-pc-windows-msvc"}'
+          linux='{"name":"Linux (x86_64)","os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}'
+          arm='{"name":"macOS (Apple silicon)","os":"macos-14","target":"aarch64-apple-darwin"}'
+          intel='{"name":"macOS (Intel)","os":"macos-13","target":"x86_64-apple-darwin"}'
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
+             [ "${{ startsWith(github.ref, 'refs/tags/') }}" = "true" ]; then
+            echo "matrix={\"include\":[$windows,$linux,$arm,$intel]}" >> "$GITHUB_OUTPUT"
+            echo "Building all four: this is a tag or a manual run."
+          else
+            echo "matrix={\"include\":[$windows,$linux]}" >> "$GITHUB_OUTPUT"
+            echo "Building Windows and Linux. macOS is built locally; tag or dispatch to include it."
+          fi
+
   package:
+    needs: plan
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
-      # A matrix of one, kept as a matrix so a second target -- arm64 Windows,
-      # most likely -- is an added line rather than a rewrite.
+      # One platform failing should not hide the others' results.
       fail-fast: false
-      matrix:
-        include:
-          - name: Windows
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -58,6 +89,24 @@ jobs:
           path: src-tauri/resources/embedder
           key: embedder-${{ hashFiles('scripts/build-embedder.mjs') }}
 
+      # Tauri renders through the system webview, which on Linux is WebKitGTK
+      # and is not on the runner. Held at 22.04 because that is the oldest glibc
+      # worth requiring. xdg-utils is for linuxdeploy, which shells out to
+      # xdg-open while assembling the AppImage.
+      - name: Install the Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libasound2-dev \
+            patchelf \
+            rpm \
+            file \
+            xdg-utils
+
       - name: Install dependencies
         run: npm ci
 
@@ -85,8 +134,12 @@ jobs:
           name: pulpitry-${{ matrix.target }}
           if-no-files-found: error
           path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
             src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
+            src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
 
   release:
     name: Publish a release
@@ -107,11 +160,12 @@ jobs:
           fail_on_unmatched_files: true
           # Said plainly rather than left for someone to discover on first run.
           body: |
-            Windows installers (.msi and .exe, x64).
+            Installers for macOS (Apple silicon and Intel), Windows, and Linux
+            (.deb, .rpm and .AppImage, x86_64). A tag builds all four, which is
+            why tags are the trigger that includes macOS.
 
-            macOS and Linux packages are built locally and published to
-            https://github.com/aysmart/castavox-downloads rather than here.
-
-            These builds are **not code signed**, so Windows SmartScreen will
-            warn. Signing needs a Windows code signing certificate added as a
-            repository secret.
+            These builds are **not code signed**. macOS will refuse to open the
+            app until it is opened once from the right-click menu, and Windows
+            SmartScreen will warn. Signing needs an Apple Developer ID and a
+            Windows code signing certificate added as repository secrets. Linux
+            is unaffected — that platform does not gate on a signature.
