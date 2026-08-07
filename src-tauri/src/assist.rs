@@ -770,12 +770,25 @@ mod tests {
         }
     }
 
+    /// A client with the TLS backend already chosen.
+    ///
+    /// `rustls-no-provider` means nothing installs one for us, so a client
+    /// built without this panics on first use. The app installs it when the
+    /// assistant starts; a test that builds its own client reaches a client
+    /// sooner than that. It passed on macOS and Windows only because some
+    /// other test happened to install the provider first, which is a race
+    /// rather than a guarantee -- and on Linux it lost.
+    fn client() -> reqwest::blocking::Client {
+        install_crypto_provider();
+        reqwest::blocking::Client::new()
+    }
+
     #[test]
     fn sends_a_well_formed_foundry_request_and_reads_the_reply() {
         let reply = r#"{"choices":[{"message":{"content":"{\"references\":[{\"reference\":\"John 3:16\",\"kind\":\"allusion\",\"confidence\":0.86,\"why\":\"gave his only son\"}]}"}}]}"#;
         let (endpoint, server) = stub_server(reply, "200 OK");
 
-        let client = reqwest::blocking::Client::new();
+        let client = client();
         let reading = ask(&client, &config_for(&endpoint), "God loved the world so much he gave his only son")
             .expect("request should succeed");
         let proposals = reading.references;
@@ -800,7 +813,7 @@ mod tests {
     #[test]
     fn a_rejected_request_is_an_error_not_a_silent_empty_result() {
         let (endpoint, server) = stub_server(r#"{"error":"unauthorized"}"#, "401 Unauthorized");
-        let client = reqwest::blocking::Client::new();
+        let client = client();
 
         let outcome = ask(&client, &config_for(&endpoint), "some speech to consider");
         let _ = server.join();
