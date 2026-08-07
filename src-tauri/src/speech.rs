@@ -76,6 +76,9 @@ pub struct SpeechManager {
     generation: AtomicU64,
     status: Mutex<SpeechStatus>,
     session: Mutex<Option<Session>>,
+    /// Kept for the life of the app rather than the session: the model it holds
+    /// is expensive to load, and the operator can change which one they want.
+    local: Mutex<Option<Arc<crate::whisper::Local>>>,
 }
 
 impl SpeechManager {
@@ -87,6 +90,7 @@ impl SpeechManager {
             generation: AtomicU64::new(0),
             status: Mutex::new(SpeechStatus::idle()),
             session: Mutex::new(None),
+            local: Mutex::new(None),
         }
     }
 
@@ -137,6 +141,29 @@ impl SpeechManager {
         while self.is_current(generation) {
             self.set_status("starting", None, None);
 
+            // Local transcription needs no sidecar, no key and no network, so
+            // it takes a different path entirely -- but it reports through the
+            // same dispatch, so everything downstream is unaware of which
+            // engine produced the words.
+            if settings::load(&self.app).map(|s| s.speech_engine == "local").unwrap_or(false) {
+                match self.run_local(generation) {
+                    Ok(()) => {}
+                    Err(err) => {
+                        self.teardown_generation(generation);
+                        if !self.is_current(generation) {
+                            break;
+                        }
+                        self.set_status("error", Some(format!("{err:#}")), None);
+                        // A missing model will not appear on a retry.
+                        self.desired.store(false, Ordering::SeqCst);
+                    }
+                }
+                if !self.is_current(generation) {
+                    break;
+                }
+                continue;
+            }
+
             match self.spawn_session(generation) {
                 Ok((events, device)) => {
                     self.set_status("listening", None, Some(device));
@@ -179,6 +206,80 @@ impl SpeechManager {
         if !self.desired.load(Ordering::SeqCst) && !failed {
             self.set_status("idle", None, None);
         }
+    }
+
+    /// Transcribes on this machine until stopped.
+    ///
+    /// Reports through the same `dispatch` the Azure sidecar feeds, so the
+    /// transcript, the detector and everything downstream cannot tell which
+    /// engine produced a line.
+    fn run_local(&self, generation: u64) -> Result<()> {
+        let settings = settings::load(&self.app)?;
+        let data_dir = self.app.path().app_data_dir()?;
+
+        if settings.speech_model.trim().is_empty() {
+            return Err(anyhow!(
+                "FATAL: Choose a speech model in Settings to transcribe on this machine."
+            ));
+        }
+        if !crate::whisper::is_installed(&data_dir, &settings.speech_model) {
+            return Err(anyhow!(
+                "FATAL: {} has not been downloaded. Download it in Settings.",
+                settings.speech_model
+            ));
+        }
+
+        let engine = {
+            let mut slot = self.local.lock();
+            match slot.as_ref() {
+                Some(existing) => {
+                    // Kept between sessions: loading a model is expensive, and
+                    // the operator may have changed which one they want.
+                    existing.request(&settings.speech_model);
+                    Arc::clone(existing)
+                }
+                None => {
+                    let made = Arc::new(crate::whisper::Local::new(
+                        data_dir.clone(),
+                        settings.speech_model.clone(),
+                    ));
+                    *slot = Some(Arc::clone(&made));
+                    made
+                }
+            }
+        };
+
+        let audio_stop = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = sync_channel::<Vec<i16>>(64);
+        let device = audio::start_capture(settings.input_device_id.clone(), tx, Arc::clone(&audio_stop))?;
+
+        self.set_status("listening", None, Some(device));
+
+        // Ends the loop when the operator stops listening or this generation is
+        // superseded; capture is told to stop at the same time.
+        let stop = Arc::clone(&audio_stop);
+        let result = std::thread::scope(|scope| {
+            scope.spawn(|| {
+                while !stop.load(Ordering::Relaxed) {
+                    if !self.is_current(generation) {
+                        stop.store(true, Ordering::SeqCst);
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                }
+            });
+
+            engine.run(
+                rx,
+                Arc::clone(&audio_stop),
+                |note| self.set_status("listening", Some(note), None),
+                |text| self.dispatch(&serde_json::json!({ "type": "recognizing", "text": text })),
+                |text| self.dispatch(&serde_json::json!({ "type": "recognized", "text": text })),
+            )
+        });
+
+        audio_stop.store(true, Ordering::SeqCst);
+        result
     }
 
     /// Starts the sidecar and the capture thread. Returns the sidecar's event

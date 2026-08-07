@@ -40,6 +40,14 @@ pub struct Settings {
 
     /// Local embedding-based paraphrase matching. Offline and free, so it is on
     /// by default; the index costs a couple of minutes to build once.
+    /// Which recogniser turns audio into words: "azure" or "local".
+    ///
+    /// Defaults to Azure, because that is what an existing install already
+    /// uses and a silent change of engine would be a change of behaviour
+    /// nobody asked for.
+    pub speech_engine: String,
+    /// The whisper.cpp model, by file name. Empty until one is chosen.
+    pub speech_model: String,
     pub semantic_enabled: bool,
     /// Cosine similarity a match must reach to be shown, 0 to 1.
     pub semantic_threshold: f32,
@@ -123,6 +131,8 @@ impl Default for Settings {
             assist_endpoint: String::new(),
             assist_model: String::new(),
             assist_api_version: DEFAULT_ASSIST_API_VERSION.into(),
+            speech_engine: "azure".to_string(),
+            speech_model: String::new(),
             semantic_enabled: true,
             // Measured against the full 31,102-verse index, and against the
             // negative class that actually matters. Announcements are easy to

@@ -50,6 +50,11 @@ tokio = { version = "1", features = ["time"] }
 
 # Pinned to 3.x: it wraps the platform credential stores behind the stable
 # Entry API. 4.x is a rewrite with a different store-registration model.
+# Local transcription, for anyone who cannot run an Azure subscription. Wraps
+# whisper.cpp, which builds with the toolchain already required here and uses
+# Metal on macOS. Models are not vendored: they are fetched on request.
+whisper-rs = { version = "0.16", default-features = false }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3.6", features = ["apple-native"] }
 

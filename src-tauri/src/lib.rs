@@ -9,6 +9,7 @@ mod projector;
 mod semantic;
 mod settings;
 mod speech;
+mod whisper;
 mod spoken;
 mod suggestion;
 
@@ -166,6 +167,45 @@ fn stop_transcription(manager: State<'_, Arc<SpeechManager>>) -> CommandResult<(
 #[tauri::command]
 fn node_status() -> node::NodeStatus {
     node::status()
+}
+
+/// Which whisper.cpp models exist and which are already here.
+///
+/// Asked of whisper.cpp's own repository rather than listed in this app, so it
+/// gains new models without a release and the sizes are whatever the files
+/// actually are. Works offline, reporting what is already downloaded.
+#[tauri::command]
+async fn speech_models(app: AppHandle) -> CommandResult<Vec<whisper::ModelInfo>> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    // Off the UI thread: this reaches the network.
+    tauri::async_runtime::spawn_blocking(move || whisper::catalogue(&dir))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Fetches a model, reporting progress as `speech-model-progress` events.
+#[tauri::command]
+async fn download_speech_model(app: AppHandle, file: String) -> CommandResult<()> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let report = |received: u64, total: u64| {
+            let _ = handle.emit(
+                "speech-model-progress",
+                serde_json::json!({
+                    "file": file, "received": received, "total": total, "state": "downloading",
+                }),
+            );
+        };
+        let payload = match whisper::download(&dir, &file, report) {
+            Ok(_) => serde_json::json!({ "file": file, "state": "ready" }),
+            Err(error) => serde_json::json!({
+                "file": file, "state": "error", "error": format!("{error:#}"),
+            }),
+        };
+        let _ = handle.emit("speech-model-progress", payload);
+    });
+    Ok(())
 }
 
 #[tauri::command]
@@ -559,6 +599,8 @@ pub fn run() {
             start_transcription,
             stop_transcription,
             speech_status,
+            speech_models,
+            download_speech_model,
             node_status,
             library_status,
             list_translations,
