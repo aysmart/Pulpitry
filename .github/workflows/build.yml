@@ -110,17 +110,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check types
-        run: npx tsc --noEmit
-
-      - name: Test the core
-        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
-
+      # Before anything compiles the crate. Tauri's build script checks the
+      # resource globs in tauri.conf.json, and resources/embedder/* not existing
+      # is a hard build failure rather than a missing file at runtime -- so with
+      # these below the tests, a cold cache broke the build on every platform at
+      # once and looked like a test failure.
       - name: Build the speech sidecar
         run: npm run sidecar:build
 
       - name: Prepare the embedding model
         run: npm run embedder:build
+
+      - name: Check types
+        run: npx tsc --noEmit
+
+      - name: Test the core
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
 
       - name: Package
         run: npx tauri build --target ${{ matrix.target }}
