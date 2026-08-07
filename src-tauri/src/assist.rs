@@ -385,7 +385,7 @@ fn ask(
 
 /// Azure AI Foundry's inference route, tolerating either the resource root or a
 /// full path, with or without a trailing slash.
-fn endpoint_url(endpoint: &str, api_version: &str) -> String {
+pub(crate) fn endpoint_url(endpoint: &str, api_version: &str) -> String {
     let base = endpoint.trim().trim_end_matches('/');
     let path = if base.ends_with("/chat/completions") {
         base.to_string()

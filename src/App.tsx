@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { HistoryDialog } from "./components/HistoryDialog";
 import { ScripturePanel } from "./components/ScripturePanel";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { StagePanel } from "./components/StagePanel";
@@ -69,6 +70,7 @@ export default function App() {
   });
   const [translation, setTranslation] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -310,6 +312,7 @@ export default function App() {
           status={status}
           onClear={clear}
           onExport={() => void saveTranscript()}
+          onOpenHistory={() => setHistoryOpen(true)}
           exporting={exporting}
         />
         <StagePanel
@@ -377,6 +380,8 @@ export default function App() {
           </span>
         )}
       </footer>
+
+      {historyOpen ? <HistoryDialog onClose={() => setHistoryOpen(false)} /> : null}
 
       {settingsOpen && settings ? (
         <SettingsDialog

@@ -30,6 +30,14 @@ cpal = "0.18"
 rusqlite = { version = "0.40", features = ["bundled"] }
 # Translation files are shipped gzipped: ~1.3 MB each instead of ~4.5 MB.
 flate2 = "1"
+
+# A .docx is a zip of XML, written by hand below: the format needed is four
+# small files, and a document-model crate would be a large dependency to
+# produce them.
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# PDF has no such shortcut -- it is a binary format with an object graph and
+# font metrics, and hand-rolling one is a week nobody should spend.
+printpdf = { version = "0.7", default-features = false }
 # Pure-Rust inference: statically linked, so there is no ONNX Runtime dylib to
 # bundle, sign and notarise separately on each platform.
 candle-core = "0.11"

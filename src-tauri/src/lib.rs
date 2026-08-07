@@ -9,6 +9,9 @@ mod projector;
 mod semantic;
 mod settings;
 mod speech;
+mod exports;
+mod summarise;
+mod transcripts;
 mod whisper;
 mod spoken;
 mod suggestion;
@@ -27,6 +30,8 @@ use projector::{
 use semantic::{IndexStatus, Semantic};
 use settings::{ProjectorTheme, Settings, SettingsView};
 use speech::{SpeechManager, SpeechStatus};
+use summarise::Description;
+use transcripts::{Session, Transcripts};
 use anyhow::Context;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -298,6 +303,153 @@ fn export_transcript(path: String, contents: String) -> CommandResult<u64> {
     Ok(contents.len() as u64)
 }
 
+/// The most recent services, newest first.
+#[tauri::command]
+fn history_list(
+    transcripts: State<'_, Arc<Transcripts>>,
+    limit: Option<i64>,
+) -> CommandResult<Vec<Session>> {
+    transcripts.list(limit.unwrap_or(200)).map_err(to_message)
+}
+
+/// The services whose transcript contains a phrase.
+#[tauri::command]
+fn history_search(
+    transcripts: State<'_, Arc<Transcripts>>,
+    query: String,
+    limit: Option<i64>,
+) -> CommandResult<Vec<Session>> {
+    transcripts.search(&query, limit.unwrap_or(200)).map_err(to_message)
+}
+
+#[tauri::command]
+fn history_get(
+    transcripts: State<'_, Arc<Transcripts>>,
+    id: i64,
+) -> CommandResult<Option<Session>> {
+    transcripts.get(id).map_err(to_message)
+}
+
+#[tauri::command]
+fn history_lines(
+    transcripts: State<'_, Arc<Transcripts>>,
+    id: i64,
+) -> CommandResult<Vec<transcripts::Line>> {
+    transcripts.lines(id).map_err(to_message)
+}
+
+#[tauri::command]
+fn history_retitle(
+    transcripts: State<'_, Arc<Transcripts>>,
+    id: i64,
+    title: String,
+) -> CommandResult<()> {
+    transcripts.retitle(id, &title).map_err(to_message)
+}
+
+#[tauri::command]
+fn history_remove(transcripts: State<'_, Arc<Transcripts>>, id: i64) -> CommandResult<()> {
+    transcripts.remove(id).map_err(to_message)
+}
+
+/// Whether summarising can be offered at all.
+///
+/// Asked before the button is drawn, so a church without a model is told why
+/// rather than shown something that always fails.
+#[tauri::command]
+fn summary_available(app: AppHandle) -> bool {
+    settings::load(&app)
+        .map(|settings| summarise::available(&settings, settings::has_assist_key()))
+        .unwrap_or(false)
+}
+
+/// Asks the model what a recorded service was about.
+///
+/// Stores what comes back, so it is asked once per service rather than once per
+/// time somebody opens it.
+#[tauri::command]
+async fn summarise_session(
+    app: AppHandle,
+    transcripts: State<'_, Arc<Transcripts>>,
+    id: i64,
+) -> CommandResult<Description> {
+    let settings = settings::load(&app).map_err(to_message)?;
+    let key = settings::load_assist_key()
+        .map_err(to_message)?
+        .filter(|key| !key.trim().is_empty())
+        .ok_or_else(|| {
+            "Summaries need the assistant. Add a model key and endpoint in Settings.".to_string()
+        })?;
+    if !summarise::available(&settings, true) {
+        return Err(
+            "Summaries need the assistant. Set the endpoint and deployment in Settings.".into()
+        );
+    }
+
+    let lines = transcripts.lines(id).map_err(to_message)?;
+    if lines.is_empty() {
+        return Err("There is nothing recorded for this service.".into());
+    }
+    let transcript =
+        lines.into_iter().map(|line| line.text).collect::<Vec<_>>().join(" ");
+
+    // Off the UI thread: one request against an hour of speech.
+    let described = tauri::async_runtime::spawn_blocking(move || {
+        summarise::describe(&settings, &key, &transcript)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+    .map_err(to_message)?;
+
+    transcripts
+        .describe(id, &described.title, &described.summary, &described.topics)
+        .map_err(to_message)?;
+    Ok(described)
+}
+
+/// Writes a service's summary to a file the operator chose.
+///
+/// The summary is stored as Markdown and converted here, so every format says
+/// the same thing and there is one text to get right.
+#[tauri::command]
+fn export_summary(
+    transcripts: State<'_, Arc<Transcripts>>,
+    id: i64,
+    path: String,
+    format: String,
+) -> CommandResult<u64> {
+    let session = transcripts
+        .get(id)
+        .map_err(to_message)?
+        .ok_or_else(|| "That service is no longer here.".to_string())?;
+    if session.summary.trim().is_empty() {
+        return Err("This service has not been summarised yet.".into());
+    }
+
+    let (title, markdown, topics) = (&session.title, &session.summary, &session.topics);
+    let bytes = match format.as_str() {
+        "markdown" => {
+            let mut out = String::new();
+            if !title.is_empty() {
+                out.push_str(&format!("# {title}\n\n"));
+            }
+            out.push_str(markdown);
+            if !topics.is_empty() {
+                out.push_str(&format!("\n\n**Subjects:** {}\n", topics.join(", ")));
+            }
+            out.into_bytes()
+        }
+        "text" => exports::to_text(title, markdown, topics).into_bytes(),
+        "docx" => exports::to_docx(title, markdown, topics).map_err(to_message)?,
+        "pdf" => exports::to_pdf(title, markdown, topics).map_err(to_message)?,
+        other => return Err(format!("{other} is not a format this can write.")),
+    };
+
+    let written = bytes.len() as u64;
+    std::fs::write(&path, bytes).map_err(|err| format!("could not write {path}: {err}"))?;
+    Ok(written)
+}
+
 #[tauri::command]
 fn get_live(projector: State<'_, Arc<Projector>>) -> Option<LiveContent> {
     projector.live()
@@ -560,7 +712,16 @@ pub fn run() {
             );
             app.manage(Arc::clone(&detector));
 
-            app.manage(Arc::new(SpeechManager::new(app.handle().clone(), detector)));
+            // Shares the database file with the library and the catalogue, in
+            // its own tables and on its own connection.
+            let transcripts = Arc::new(transcripts::Transcripts::open(&data_dir)?);
+            app.manage(Arc::clone(&transcripts));
+
+            app.manage(Arc::new(SpeechManager::new(
+                app.handle().clone(),
+                detector,
+                transcripts,
+            )));
 
             // Importing 31,102 verses takes a moment on first launch. Do it off
             // the main thread so the window paints immediately, and tell the UI
@@ -628,6 +789,15 @@ pub fn run() {
             resolve_reference,
             adjacent_verse,
             export_transcript,
+            history_list,
+            history_search,
+            history_get,
+            history_lines,
+            history_retitle,
+            history_remove,
+            summary_available,
+            summarise_session,
+            export_summary,
             semantic_status,
             get_live,
             set_live,

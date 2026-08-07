@@ -12,6 +12,7 @@ export function TranscriptPanel({
   status,
   onClear,
   onExport,
+  onOpenHistory,
   exporting,
 }: {
   lines: TranscriptLine[];
@@ -19,6 +20,7 @@ export function TranscriptPanel({
   status: SpeechStatus;
   onClear: () => void;
   onExport: () => void;
+  onOpenHistory: () => void;
   exporting: boolean;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
@@ -47,8 +49,20 @@ export function TranscriptPanel({
       title="Live Transcription"
       accent={status.state === "listening" ? "gold" : "neutral"}
       actions={
-        lines.length > 0 ? (
-          <div className="flex gap-0.5">
+        <div className="flex gap-0.5">
+          {/* Always offered, unlike Export and Clear: the moment somebody
+              wants last week's transcript is exactly when this one is
+              empty. */}
+          <button
+            type="button"
+            onClick={onOpenHistory}
+            title="Look back at what was preached: transcripts, summaries and exports"
+            className="rounded px-1.5 py-0.5 text-[11px] text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
+          >
+            Past services
+          </button>
+          {lines.length > 0 ? (
+            <>
             <button
               type="button"
               onClick={onExport}
@@ -65,8 +79,9 @@ export function TranscriptPanel({
             >
               Clear
             </button>
-          </div>
-        ) : null
+            </>
+          ) : null}
+        </div>
       }
       bodyClassName="px-3 py-2"
     >

@@ -84,11 +84,19 @@ pub struct SpeechManager {
     /// Azure and this machine costs no audio and does not surrender the device
     /// in front of a congregation.
     leg: AtomicU64,
+    /// Every settled utterance is written here as it arrives, so a service that
+    /// ends with the window being closed still leaves a record.
+    transcripts: Arc<crate::transcripts::Transcripts>,
 }
 
 impl SpeechManager {
-    pub fn new(app: AppHandle, detector: Arc<Detector>) -> Self {
+    pub fn new(
+        app: AppHandle,
+        detector: Arc<Detector>,
+        transcripts: Arc<crate::transcripts::Transcripts>,
+    ) -> Self {
         Self {
+            transcripts,
             app,
             detector,
             desired: AtomicBool::new(false),
@@ -109,6 +117,9 @@ impl SpeechManager {
         if self.desired.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
+        if let Err(err) = self.transcripts.begin() {
+            eprintln!("[transcript] could not open a session: {err:#}");
+        }
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         let manager = Arc::clone(self);
         tauri::async_runtime::spawn(async move { manager.supervise(generation).await });
@@ -119,6 +130,9 @@ impl SpeechManager {
         // Half a sentence left over from this service would otherwise be
         // stitched onto the first words of the next one.
         self.detector.reset();
+        if let Err(err) = self.transcripts.end() {
+            eprintln!("[transcript] could not close the session: {err:#}");
+        }
         self.desired.store(false, Ordering::SeqCst);
         self.generation.fetch_add(1, Ordering::SeqCst);
         self.teardown();
@@ -480,6 +494,12 @@ impl SpeechManager {
                 );
             }
             "recognized" if !text.is_empty() => {
+                // Kept before anything else touches it. Detection can fail, the
+                // window can close, the model can be wrong -- none of that
+                // should cost the operator the record of what was said.
+                if let Err(err) = self.transcripts.append(text) {
+                    eprintln!("[transcript] could not keep a line: {err:#}");
+                }
                 // Detection runs off-thread; the transcript must not wait on it.
                 self.detector.on_final(text);
                 let _ = self.app.emit(
