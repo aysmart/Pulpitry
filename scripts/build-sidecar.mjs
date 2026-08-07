@@ -25,14 +25,28 @@ const sidecarDir = resolve(root, "src-sidecar");
 const outputDir = resolve(root, "src-tauri/resources/sidecar");
 const outputPath = resolve(outputDir, "pulpitry-speech.cjs");
 
-/**
- * npm is a `.cmd` shim on Windows, and execFileSync does not apply PATHEXT,
- * so the bare name is not found there.
- */
-const executable = (cmd) => (process.platform === "win32" && cmd === "npm" ? "npm.cmd" : cmd);
+const onWindows = process.platform === "win32";
 
+/**
+ * Runs a command, and copes with npm being a batch file on Windows.
+ *
+ * Two separate problems, and fixing only the first is why this looked solved
+ * and was not. npm is a `.cmd` shim there and execFileSync does not apply
+ * PATHEXT, so the bare name is not found -- hence the suffix. Then Node 20.12
+ * closed CVE-2024-27980 by refusing to spawn `.cmd` and `.bat` at all without
+ * a shell, so the suffixed name started failing with a bare EINVAL that names
+ * neither npm nor the reason.
+ *
+ * `shell: true` is the documented answer. Nothing here interpolates user input
+ * into a command line, so handing one to a shell adds no exposure.
+ */
 const run = (cmd, args, options = {}) =>
-  execFileSync(executable(cmd), args, { stdio: "inherit", cwd: root, ...options });
+  execFileSync(onWindows && cmd === "npm" ? "npm.cmd" : cmd, args, {
+    stdio: "inherit",
+    cwd: root,
+    shell: onWindows,
+    ...options,
+  });
 
 function ensureDependencies() {
   if (existsSync(resolve(sidecarDir, "node_modules"))) return;

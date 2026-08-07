@@ -29,6 +29,63 @@ const outputDir = resolve(root, "src-tauri/resources/embedder");
 
 const REPO = "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main";
 
+/**
+ * One float32 to its float16 bit pattern, round-to-nearest-even.
+ *
+ * Written out rather than using the built-in half-precision typed array, which
+ * needs Node 24. Everything else here runs on Node 18, and a build script that
+ * dies with a ReferenceError on a supported Node is a worse trade than thirty
+ * lines of bit shuffling.
+ *
+ * Round-to-nearest-even because that is what IEEE 754 specifies and what the
+ * built-in does. Truncating instead would bias every weight toward zero -- a
+ * small error, repeated across twenty-two million of them.
+ */
+/** A Float32Array to packed half-precision bytes, little-endian. */
+function toHalfBytes(floats) {
+  const bits = new Uint32Array(floats.buffer, floats.byteOffset, floats.length);
+  const halves = new Uint16Array(floats.length);
+  for (let i = 0; i < floats.length; i++) halves[i] = halfFromFloatBits(bits[i]);
+  return Buffer.from(halves.buffer, halves.byteOffset, halves.byteLength);
+}
+
+function halfFromFloatBits(x) {
+  const sign = (x >>> 16) & 0x8000;
+  const exponent = (x >>> 23) & 0xff;
+  let mantissa = x & 0x7fffff;
+
+  // Infinity and NaN. A NaN has to stay a NaN, so keep a mantissa bit set:
+  // dropping them all would silently turn it into an infinity.
+  if (exponent === 0xff) return sign | 0x7c00 | (mantissa ? 0x0200 : 0);
+
+  // float32 is biased by 127, float16 by 15.
+  const e = exponent - 127 + 15;
+
+  // Too large to represent: saturate to infinity.
+  if (e >= 0x1f) return sign | 0x7c00;
+
+  if (e <= 0) {
+    // Below the smallest subnormal, everything rounds to a signed zero.
+    if (e < -10) return sign;
+
+    // Subnormal: restore the implicit leading bit and shift it down.
+    mantissa |= 0x800000;
+    const shift = 14 - e;
+    const half = mantissa >>> shift;
+    const remainder = mantissa & ((1 << shift) - 1);
+    const halfway = 1 << (shift - 1);
+    const roundUp = remainder > halfway || (remainder === halfway && (half & 1) === 1);
+    return sign | (half + (roundUp ? 1 : 0));
+  }
+
+  // Normal. A carry out of the mantissa lands in the exponent, which is exactly
+  // right -- including when it carries all the way to infinity.
+  const half = (e << 10) | (mantissa >>> 13);
+  const remainder = mantissa & 0x1fff;
+  const roundUp = remainder > 0x1000 || (remainder === 0x1000 && (half & 1) === 1);
+  return sign | (half + (roundUp ? 1 : 0));
+}
+
 async function download(name) {
   const response = await fetch(`${REPO}/${name}`);
   if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`);
@@ -67,8 +124,7 @@ function toHalfPrecision(buffer) {
       const floats = new Float32Array(
         raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
       );
-      const halves = new Float16Array(floats);
-      bytes = Buffer.from(halves.buffer, halves.byteOffset, halves.byteLength);
+      bytes = toHalfBytes(floats);
       dtype = "F16";
     } else {
       bytes = Buffer.from(raw);
