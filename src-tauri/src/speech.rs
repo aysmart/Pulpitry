@@ -79,6 +79,11 @@ pub struct SpeechManager {
     /// Kept for the life of the app rather than the session: the model it holds
     /// is expensive to load, and the operator can change which one they want.
     local: Mutex<Option<Arc<crate::whisper::Local>>>,
+    /// Bumped when the running recogniser must be replaced -- an engine change,
+    /// and nothing else. Audio capture is untouched by it, so moving between
+    /// Azure and this machine costs no audio and does not surrender the device
+    /// in front of a congregation.
+    leg: AtomicU64,
 }
 
 impl SpeechManager {
@@ -91,6 +96,7 @@ impl SpeechManager {
             status: Mutex::new(SpeechStatus::idle()),
             session: Mutex::new(None),
             local: Mutex::new(None),
+            leg: AtomicU64::new(0),
         }
     }
 
@@ -119,6 +125,32 @@ impl SpeechManager {
         self.set_status("idle", None, None);
     }
 
+    /// Tells a running session that the engine choice has changed.
+    ///
+    /// The model needs no such signal: the local engine holds it and picks up a
+    /// change between utterances. Only swapping engine replaces the recogniser.
+    pub fn engine_changed(&self) {
+        self.model_changed();
+        self.leg.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// Tells a running local engine to use a different model.
+    ///
+    /// Costs nothing when the model has not moved -- the engine compares it
+    /// against what it has loaded and does nothing if they match -- so this is
+    /// safe to call on every save.
+    pub fn model_changed(&self) {
+        if let Some(local) = self.local.lock().as_ref() {
+            if let Ok(settings) = settings::load(&self.app) {
+                local.request(&settings.speech_model);
+            }
+        }
+    }
+
+    fn leg_current(&self, generation: u64, leg: u64) -> bool {
+        self.is_current(generation) && self.leg.load(Ordering::SeqCst) == leg
+    }
+
     fn is_current(&self, generation: u64) -> bool {
         self.desired.load(Ordering::SeqCst) && self.generation.load(Ordering::SeqCst) == generation
     }
@@ -145,9 +177,17 @@ impl SpeechManager {
             // it takes a different path entirely -- but it reports through the
             // same dispatch, so everything downstream is unaware of which
             // engine produced the words.
+            let leg = self.leg.load(Ordering::SeqCst);
+
             if settings::load(&self.app).map(|s| s.speech_engine == "local").unwrap_or(false) {
                 match self.run_local(generation) {
-                    Ok(()) => {}
+                    Ok(()) => {
+                        // Ended because the operator swapped engine: go straight
+                        // round again rather than treating it as a fault.
+                        if self.leg.load(Ordering::SeqCst) != leg {
+                            continue;
+                        }
+                    }
                     Err(err) => {
                         self.teardown_generation(generation);
                         if !self.is_current(generation) {
@@ -169,6 +209,12 @@ impl SpeechManager {
                     self.set_status("listening", None, Some(device));
                     backoff = BACKOFF_START;
                     self.pump(generation, events).await;
+                    // Swapped to local: loop immediately, no backoff and no
+                    // "reconnecting" notice for something the operator did.
+                    if self.leg.load(Ordering::SeqCst) != leg {
+                        self.teardown_generation(generation);
+                        continue;
+                    }
                     self.teardown_generation(generation);
                     if !self.is_current(generation) {
                         break;
@@ -257,11 +303,14 @@ impl SpeechManager {
 
         // Ends the loop when the operator stops listening or this generation is
         // superseded; capture is told to stop at the same time.
+        let leg = self.leg.load(Ordering::SeqCst);
         let stop = Arc::clone(&audio_stop);
         let result = std::thread::scope(|scope| {
             scope.spawn(|| {
                 while !stop.load(Ordering::Relaxed) {
-                    if !self.is_current(generation) {
+                    // Ends on a stop, and on an engine change -- which is not a
+                    // failure, so the supervisor starts the other leg at once.
+                    if !self.leg_current(generation, leg) {
                         stop.store(true, Ordering::SeqCst);
                         break;
                     }
@@ -358,9 +407,12 @@ impl SpeechManager {
     /// Drains sidecar output until it terminates or the session is superseded.
     async fn pump(&self, generation: u64, mut events: tauri::async_runtime::Receiver<CommandEvent>) {
         let mut pending = String::new();
+        let leg = self.leg.load(Ordering::SeqCst);
 
         while let Some(event) = events.recv().await {
-            if !self.is_current(generation) {
+            // Leaves on an engine change as well as a stop. The sidecar is torn
+            // down by the caller either way.
+            if !self.leg_current(generation, leg) {
                 return;
             }
             match event {

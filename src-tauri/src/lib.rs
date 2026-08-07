@@ -64,7 +64,25 @@ fn save_settings(
     semantic: State<'_, Arc<Semantic>>,
     settings: Settings,
 ) -> CommandResult<SettingsView> {
+    // Read before the save, so the engine can be compared against what it was.
+    let was = settings::load(&app).ok();
     settings::save(&app, &settings).map_err(to_message)?;
+
+    // Reaches a session already listening: the model is picked up between
+    // utterances, and changing engine replaces the recogniser while capture
+    // keeps going. Without this, both would wait for a restart.
+    //
+    // Only when the engine actually changed. Signalled on every save, adjusting
+    // the paraphrase threshold would rebuild the recogniser mid-service, which
+    // is exactly the interruption this exists to avoid.
+    if let Some(speech) = app.try_state::<Arc<SpeechManager>>() {
+        let engine_moved = was.as_ref().is_none_or(|old| old.speech_engine != settings.speech_engine);
+        if engine_moved {
+            speech.engine_changed();
+        } else {
+            speech.model_changed();
+        }
+    }
     detector.set_translation(&settings.translation);
     assistant.configure(&settings);
     // Switching translation invalidates the index; configure() rebuilds it.
