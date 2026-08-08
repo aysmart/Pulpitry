@@ -84,11 +84,17 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
         ],
     });
 
+    // Before the client is built, not after: rustls picks its provider when the
+    // client is constructed, and installing one afterwards is too late -- the
+    // build panics on a background thread and takes the request with it. This
+    // is not a test-only concern; it would have failed for every operator who
+    // ever pressed Summarise.
+    crate::assist::install_crypto_provider();
+
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .build()
         .context("could not prepare the request")?;
-    crate::assist::install_crypto_provider();
 
     let response = client
         .post(crate::assist::endpoint_url(
@@ -104,8 +110,19 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
     let status = response.status();
     let payload = response.text().unwrap_or_default();
     if !status.is_success() {
+        // 404 from Foundry almost never means the deployment is missing. It
+        // means the route was wrong -- most often an API version predating the
+        // /models route, which fails in exactly the same way as a typo and
+        // gives the operator nothing to go on.
+        let hint = if status.as_u16() == 404 {
+            "\n\nA 404 here usually means the API version is too old for this \
+             endpoint rather than that the deployment is missing. Clearing the \
+             API version field restores the default, which is known to work."
+        } else {
+            ""
+        };
         bail!(
-            "Azure AI Foundry returned {status}: {}",
+            "Azure AI Foundry returned {status}: {}{hint}",
             payload.chars().take(300).collect::<String>()
         );
     }
@@ -281,6 +298,105 @@ mod tests {
         let text = "For God so loved the world.";
         assert_eq!(excerpt(text), text);
     }
+
+    /*
+     * The real thing: this deployment, this key, a transcript of the length a
+     * service actually produces.
+     *
+     * Ignored by default because it costs money and needs the network. Run it
+     * deliberately, and run it after any change to the request body -- the
+     * whole class of bug it exists to catch is a parameter one model family
+     * accepts and another rejects, which no amount of local testing finds.
+     *
+     *   cargo test --release --lib summarise::tests::against_the_real_model -- --ignored --nocapture
+     */
+    #[test]
+    #[ignore = "calls the configured model and costs money"]
+    fn against_the_real_model() {
+        let home = std::env::var("HOME").expect("HOME");
+        let path = format!("{home}/Library/Application Support/com.pulpitry.desktop/settings.json");
+        let stored = std::fs::read_to_string(&path).expect("settings.json -- configure the app first");
+        let mut settings: Settings = serde_json::from_str(&stored).expect("settings.json did not parse");
+        // A version stored before the default moved on would 404 against the
+        // /models route, which is a stale setting rather than a broken build.
+        if settings.assist_api_version.trim().is_empty() || settings.assist_api_version == "2024-02-01" {
+            eprintln!("(overriding stale api version {})", settings.assist_api_version);
+            settings.assist_api_version = crate::settings::DEFAULT_ASSIST_API_VERSION.into();
+        }
+
+        let key = crate::settings::load_assist_key()
+            .expect("keychain")
+            .expect("no model key stored -- set one in Settings first");
+
+        eprintln!("endpoint: {}", settings.assist_endpoint);
+        eprintln!("model:    {}", settings.assist_model);
+        eprintln!("version:  {}", settings.assist_api_version);
+        assert!(available(&settings, true), "the assistant is not fully configured");
+
+        let described = describe(&settings, &key, SERMON).expect("the model call failed");
+
+        eprintln!("\n--- title ---\n{}", described.title);
+        eprintln!("\n--- summary (markdown) ---\n{}", described.summary);
+        eprintln!("\n--- topics ---\n{:?}", described.topics);
+
+        assert!(!described.title.is_empty());
+        assert!(described.summary.len() > 80, "suspiciously short for a whole talk");
+        assert!(!described.topics.is_empty(), "no subjects were identified");
+
+        // The exports read this, so it has to be the Markdown we promised.
+        let text = crate::exports::to_text(&described.title, &described.summary, &described.topics);
+        eprintln!("\n--- as plain text ---\n{text}");
+        assert!(crate::exports::to_pdf(&described.title, &described.summary, &described.topics).is_ok());
+        assert!(crate::exports::to_docx(&described.title, &described.summary, &described.topics).is_ok());
+    }
+
+    /// A transcript with the shape of the real thing: a stated subject, a
+    /// passage expounded, illustration, and a conclusion that lands.
+    const SERMON: &str = "\
+Good morning church. Turn with me if you would to Luke chapter fifteen, and we \
+are going to read from verse eleven. Jesus said a certain man had two sons and \
+the younger of them said to his father, father give me the portion of goods \
+that falleth to me. Now I want you to notice something about that request. He \
+is not asking for a loan. He is asking for his inheritance, and an inheritance \
+is what you receive when your father has died. So what the younger son is \
+really saying is, I wish you were dead. And the remarkable thing, the thing \
+that ought to stop us this morning, is that the father gives it to him. He \
+divides unto them his living. He lets him go. \
+Now the boy goes into a far country and there he wastes his substance with \
+riotous living, and when he has spent all there arose a mighty famine in that \
+land and he began to be in want. Isn't that always the way. The famine always \
+comes after the money runs out. And he goes and joins himself to a citizen of \
+that country who sends him into the fields to feed pigs, and remember this is a \
+Jewish boy, there is no lower place for him to go. And he would gladly have \
+filled his belly with the husks that the pigs did eat, and no man gave unto \
+him. \
+But then it says, and when he came to himself. When he came to himself. He \
+had not been himself all that time. And he says I will arise and go to my \
+father, and I will say unto him, father I have sinned against heaven and before \
+thee and am no more worthy to be called thy son, make me as one of thy hired \
+servants. Now he rehearses that speech. He practises it all the way home. And \
+here is what I want you to see. He never gets to finish it. \
+Because when he was yet a great way off his father saw him. A great way off. \
+Which means the father was looking. Which means the father had been looking \
+every day since the boy left. And he ran. In that culture an old man did not \
+run, he would have to gather up his robes and expose his legs and it was \
+undignified, and the father does not care. He runs and falls on his neck and \
+kisses him. And the boy starts his speech, father I have sinned against heaven \
+and in thy sight and am no more worthy to be called thy son, and the father is \
+not even listening, he is calling to the servants, bring forth the best robe \
+and put it on him and put a ring on his hand and shoes on his feet. \
+And I have to tell you about the elder brother, because the parable does not \
+end with the party. The elder brother is in the field and he hears the music \
+and he will not go in. He says lo these many years do I serve thee, neither \
+transgressed I at any time thy commandment. Do you hear it. Serve. He has been \
+in the father's house all this time and he has been thinking of himself as a \
+servant. He is as lost as his brother was, he is just lost in the field instead \
+of in the far country. And the father comes out to him too. The father goes out \
+twice in this story. \
+So let me close with this. Some of us this morning are in the far country and \
+you know exactly what I am talking about. And some of us have never left the \
+field, and we are angry, and we do not know why. And the father is out looking \
+for both of you. Let us pray.";
 
     #[test]
     fn a_model_is_needed_before_this_is_offered() {

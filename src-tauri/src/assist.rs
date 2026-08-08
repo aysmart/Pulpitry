@@ -387,8 +387,31 @@ fn ask(
 /// full path, with or without a trailing slash.
 pub(crate) fn endpoint_url(endpoint: &str, api_version: &str) -> String {
     let base = endpoint.trim().trim_end_matches('/');
+
+    /*
+     * An AI Foundry resource serves its models under /models.
+     *
+     * The portal shows the resource as https://name.services.ai.azure.com/,
+     * which is what an operator naturally pastes in -- and posting straight to
+     * that answers 404, because the resource is a front door for several
+     * inference APIs rather than one of them. Adding the segment here means the
+     * address people are actually given is the address that works.
+     *
+     * Left alone when they have already named a route: /models because they
+     * read the documentation, /openai/deployments/... because they are pointing
+     * at an Azure OpenAI deployment, which is a different shape entirely.
+     */
+    let foundry = base
+        .split("://")
+        .nth(1)
+        .and_then(|rest| rest.split('/').next())
+        .is_some_and(|host| host.ends_with(".services.ai.azure.com"));
+    let routed = base.contains("/models") || base.contains("/openai/");
+
+    let base = if foundry && !routed { format!("{base}/models") } else { base.to_string() };
+
     let path = if base.ends_with("/chat/completions") {
-        base.to_string()
+        base.clone()
     } else {
         format!("{base}/chat/completions")
     };
@@ -500,6 +523,30 @@ fn extract_json_object(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_foundry_resource_gets_its_models_segment() {
+        // What the portal shows, and what an operator therefore pastes in.
+        assert_eq!(
+            endpoint_url("https://church-gpt.services.ai.azure.com/", "2024-05-01-preview"),
+            "https://church-gpt.services.ai.azure.com/models/chat/completions?api-version=2024-05-01-preview"
+        );
+        // Already routed: left exactly as given, both shapes.
+        assert_eq!(
+            endpoint_url("https://church-gpt.services.ai.azure.com/models", "v1"),
+            "https://church-gpt.services.ai.azure.com/models/chat/completions?api-version=v1"
+        );
+        assert!(endpoint_url(
+            "https://r.services.ai.azure.com/openai/deployments/gpt-4o/chat/completions",
+            "2024-02-01"
+        )
+        .starts_with("https://r.services.ai.azure.com/openai/deployments/gpt-4o/chat/completions?"));
+        // Anything else is somebody's own gateway; do not rewrite their path.
+        assert_eq!(
+            endpoint_url("https://my-proxy.example.com", "v1"),
+            "https://my-proxy.example.com/chat/completions?api-version=v1"
+        );
+    }
 
     #[test]
     fn a_tls_backend_is_installed_before_any_request() {
