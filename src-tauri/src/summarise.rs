@@ -67,8 +67,17 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
         // Low, not zero: the summary is prose and should read as prose, but the
         // topics and the title must not drift on a re-run of the same service.
         "temperature": 0.2,
-        "max_tokens": 1200,
-        "response_format": { "type": "json_object" },
+        // Room for a summary of a whole service plus its topics. Too small and
+        // the JSON arrives truncated, which reads as a parse failure rather
+        // than as the length problem it is.
+        "max_tokens": 2000,
+        //
+        // Deliberately no "response_format": Azure AI Foundry serves models
+        // from several families and only the OpenAI ones accept it -- a Llama
+        // or Mistral deployment rejects the whole request with a 400, which is
+        // a strange way to be told the parameter was optional. The prompt asks
+        // for JSON and `read` copes with the ways a model dresses it up, which
+        // is what the rest of this file already relies on.
         "messages": [
             { "role": "system", "content": SYSTEM },
             { "role": "user", "content": excerpt(transcript) },
@@ -160,8 +169,23 @@ fn read(content: &str) -> Result<Description> {
         .unwrap_or(text);
     let text = text.strip_suffix("```").map(str::trim_end).unwrap_or(text);
 
-    let value: serde_json::Value =
-        serde_json::from_str(text).context("the model did not return usable JSON")?;
+    // Straight parse first; failing that, the JSON object out of the middle of
+    // whatever else was said. Without a response_format to compel it, a model
+    // is free to open with "Here is the summary:" -- and throwing that away is
+    // cheaper than a failed summary of an hour of speech.
+    let value: serde_json::Value = match serde_json::from_str(text) {
+        Ok(value) => value,
+        Err(_) => {
+            let embedded = text
+                .find('{')
+                .zip(text.rfind('}'))
+                .filter(|(open, close)| close > open)
+                .map(|(open, close)| &text[open..=close])
+                .ok_or_else(|| anyhow!("the model did not return JSON at all"))?;
+            serde_json::from_str(embedded)
+                .context("the model did not return usable JSON")?
+        }
+    };
 
     let title = value.get("title").and_then(|v| v.as_str()).unwrap_or_default().trim().to_string();
     let summary =
@@ -222,6 +246,18 @@ mod tests {
     #[test]
     fn a_reply_with_no_summary_is_an_error() {
         assert!(read(r#"{"title":"A","topics":[]}"#).is_err());
+    }
+
+    #[test]
+    fn json_buried_in_chat_is_still_read() {
+        // Without response_format nothing compels a model to answer with bare
+        // JSON, and several like to introduce themselves first.
+        let got = read("Certainly! Here is the summary you asked for:\n\n\
+                        {\"title\":\"Coming Home\",\"summary\":\"He taught on the prodigal.\",\
+                        \"topics\":[\"grace\"]}\n\nLet me know if you would like more detail.")
+            .unwrap();
+        assert_eq!(got.title, "Coming Home");
+        assert_eq!(got.topics, vec!["grace"]);
     }
 
     #[test]
