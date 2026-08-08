@@ -31,8 +31,11 @@ use crate::settings::Settings;
 /// worth paying for. The middle is dropped rather than the end: a sermon states
 /// its subject early and concludes late, and losing either costs more than
 /// losing an illustration from the middle.
-const HEAD_WORDS: usize = 4_000;
-const TAIL_WORDS: usize = 2_000;
+/// Roughly 30,000 words: about four hours of speech, which is longer than any
+/// single service, so in practice a whole one is sent whole. The middle is
+/// still what gives way if something ever runs past it.
+const HEAD_WORDS: usize = 20_000;
+const TAIL_WORDS: usize = 10_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -62,28 +65,6 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
         bail!("There is not enough here to summarise yet.");
     }
 
-    let body = serde_json::json!({
-        "model": settings.assist_model.trim(),
-        // Low, not zero: the summary is prose and should read as prose, but the
-        // topics and the title must not drift on a re-run of the same service.
-        "temperature": 0.2,
-        // Room for a summary of a whole service plus its topics. Too small and
-        // the JSON arrives truncated, which reads as a parse failure rather
-        // than as the length problem it is.
-        "max_tokens": 2000,
-        //
-        // Deliberately no "response_format": Azure AI Foundry serves models
-        // from several families and only the OpenAI ones accept it -- a Llama
-        // or Mistral deployment rejects the whole request with a 400, which is
-        // a strange way to be told the parameter was optional. The prompt asks
-        // for JSON and `read` copes with the ways a model dresses it up, which
-        // is what the rest of this file already relies on.
-        "messages": [
-            { "role": "system", "content": SYSTEM },
-            { "role": "user", "content": excerpt(transcript) },
-        ],
-    });
-
     // Before the client is built, not after: rustls picks its provider when the
     // client is constructed, and installing one afterwards is too late -- the
     // build panics on a background thread and takes the request with it. This
@@ -96,20 +77,36 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
         .build()
         .context("could not prepare the request")?;
 
-    let response = client
-        .post(crate::assist::endpoint_url(
-            &settings.assist_endpoint,
-            &settings.assist_api_version,
-        ))
-        .header("api-key", key)
-        .header("content-type", "application/json")
-        .json(&body)
-        .send()
-        .context("could not reach the Azure AI Foundry endpoint")?;
+    let url = crate::assist::endpoint_url(&settings.assist_endpoint, &settings.assist_api_version);
+    let excerpt = excerpt(transcript);
 
-    let status = response.status();
-    let payload = response.text().unwrap_or_default();
-    if !status.is_success() {
+    /*
+     * Ask for guaranteed JSON, and settle for asking nicely.
+     *
+     * One endpoint serves models from several families. The OpenAI ones honour
+     * response_format and return JSON that always parses; a Llama or Mistral
+     * deployment rejects the entire request rather than ignoring the parameter.
+     *
+     * So this is feature detection rather than a list of model names, which
+     * would be wrong the week after it was written: send the strict request,
+     * and if the deployment says it cannot do that, send it again without.
+     * The retry costs nothing when it happens -- a rejected request generates
+     * no tokens -- and nothing at all for the models that accept it.
+     */
+    let (payload, status) = match post(&client, &url, key, &body(settings, &excerpt, true)) {
+        Reply::Refused { payload, .. } if rejects_strict_json(&payload) => {
+            match post(&client, &url, key, &body(settings, &excerpt, false)) {
+                Reply::Ok { payload } => (payload, None),
+                Reply::Refused { payload, status } => (payload, Some(status)),
+                Reply::Unreachable(error) => return Err(error),
+            }
+        }
+        Reply::Ok { payload } => (payload, None),
+        Reply::Refused { payload, status } => (payload, Some(status)),
+        Reply::Unreachable(error) => return Err(error),
+    };
+
+    if let Some(status) = status {
         // 404 from Foundry almost never means the deployment is missing. It
         // means the route was wrong -- most often an API version predating the
         // /models route, which fails in exactly the same way as a typo and
@@ -140,26 +137,150 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
     read(content)
 }
 
+/// What came back, told apart by whether it is worth retrying.
+enum Reply {
+    Ok { payload: String },
+    Refused { status: reqwest::StatusCode, payload: String },
+    /// The network, TLS, or a timeout -- nothing a different body would fix.
+    Unreachable(anyhow::Error),
+}
+
+fn post(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    key: &str,
+    body: &serde_json::Value,
+) -> Reply {
+    let sent = client
+        .post(url)
+        .header("api-key", key)
+        // Bearer as well as api-key: Foundry's model router accepts the former
+        // and some gateways in front of it only speak that. Sending both costs
+        // a header and saves a class of confusing 401.
+        .header("authorization", format!("Bearer {key}"))
+        .header("content-type", "application/json")
+        .json(body)
+        .send();
+
+    match sent {
+        Err(error) => Reply::Unreachable(
+            anyhow::Error::new(error).context("could not reach the model endpoint"),
+        ),
+        Ok(response) => {
+            let status = response.status();
+            let payload = response.text().unwrap_or_default();
+            if status.is_success() {
+                Reply::Ok { payload }
+            } else {
+                Reply::Refused { status, payload }
+            }
+        }
+    }
+}
+
+/// The request body, with or without the parameter not every model accepts.
+fn body(settings: &Settings, excerpt: &str, strict_json: bool) -> serde_json::Value {
+    let mut body = serde_json::json!({
+        "model": settings.assist_model.trim(),
+        // Low, not zero: the summary is prose and should read as prose, but the
+        // topics and the title must not drift on a re-run of the same service.
+        "temperature": 0.3,
+        // Room to be thorough. A summary worth reading instead of the service
+        // runs to well over a thousand words once it has main points, the
+        // passages, the illustrations and the application -- and a budget that
+        // cuts it off mid-sentence arrives as a JSON parse failure rather than
+        // as the length problem it actually is.
+        "max_tokens": 8000,
+        "messages": [
+            { "role": "system", "content": SYSTEM },
+            { "role": "user", "content": excerpt },
+        ],
+    });
+
+    if strict_json {
+        body["response_format"] = serde_json::json!({ "type": "json_object" });
+    }
+    body
+}
+
+/// Whether a refusal was about `response_format` rather than about us.
+///
+/// Matched on the message because there is no code for it: the families that
+/// cannot do this disagree about the status, the error type and the wording,
+/// and all that is reliably shared is that they name the parameter they are
+/// complaining about. A false positive costs one retry; a false negative costs
+/// the operator their summary, so this errs towards retrying.
+fn rejects_strict_json(payload: &str) -> bool {
+    let lower = payload.to_ascii_lowercase();
+    lower.contains("response_format")
+        || lower.contains("json_object")
+        || lower.contains("json mode")
+}
+
 const SYSTEM: &str = "\
 You are given the transcript of a sermon or teaching, produced by automatic \
 speech recognition. It will contain mishearings, especially of names and \
 places; read past them.
+
+Write the summary a capable assistant would write if handed this transcript \
+and asked to do a thorough job. Someone who missed the service should be able \
+to read it and know what was taught, how it was argued, and what they were \
+asked to do -- not merely what the subject was. Length follows the material: a \
+forty-minute exposition deserves several hundred words and often more. Never \
+pad, and never cut something the speaker clearly laboured over.
 
 Reply with JSON only, with exactly these keys:
 
   \"title\"   a short title. If the speaker gave one, use theirs. If not, write \
 one that says what the teaching was actually about. Never invent a series name \
 or a date.
-  \"summary\" Markdown. Open with two or three sentences saying what was \
-taught. Then '## Main points' as a bulleted list, and '## Passages' listing any \
-scripture that was clearly being expounded, if there was any. Use only \
-headings, bullets, bold and italics.
-  \"topics\"  three to eight short subjects, as noun phrases: \"forgiveness\", \
+  \"summary\" Markdown, structured as set out below.
+  \"topics\"  four to ten short subjects, as noun phrases: \"forgiveness\", \
 \"the parable of the sower\", \"suffering and hope\".
 
-Summarise only what was said. Do not add doctrine, application or scripture the \
-speaker did not raise. If the transcript is too fragmentary to summarise \
-honestly, say so in the summary rather than inventing content.";
+Structure the summary like this, leaving out any section the transcript does \
+not support:
+
+  Two or three sentences of prose saying what was taught and where it landed. \
+No heading above this; it opens the document.
+
+  ## Main points
+  A numbered list, one item per movement of the argument. Open each with a \
+short **bold** phrase naming the point, then an em dash and two or three \
+sentences developing it -- what was claimed, how it was argued, and any \
+distinction the speaker drew. Indent bullets beneath an item for sub-points \
+they genuinely developed.
+
+  ## Passages
+  A bulleted list of the scripture actually expounded, each reference in \
+**bold**, then an em dash and what was drawn from it. Where a verse was quoted \
+and the wording matters, put it on its own line beneath as a > blockquote.
+
+  ## Illustrations
+  Any story, image, analogy or example used, as a bulleted list: what it was, \
+and what it was for. Omit the section entirely if there were none.
+
+  ## Application
+  What the speaker actually called for, as a bulleted list. Only what they \
+said; never add your own.
+
+  ## Notable quotations
+  Up to three sentences worth preserving in the speaker's own words, each as a \
+> blockquote. Omit if nothing stood out.
+
+Formatting. Use **bold** for the thing being named and *italic* for emphasis \
+and for the speaker's phrases quoted inline. Use > blockquotes for scripture \
+and for direct quotations of more than a few words. Use a table only where the \
+speaker genuinely set things side by side. A --- rule may separate major \
+sections. Always put a heading on its own line. No images, no code blocks, no \
+links. Do not put a heading above the opening paragraph, and do not repeat the \
+title inside the summary.
+
+Summarise only what was said. Do not add doctrine, application or scripture \
+the speaker did not raise, and do not smooth over a passage they left \
+unresolved. Where the recognition is too garbled to be sure, say so in passing \
+rather than guessing. If the transcript is too fragmentary to summarise \
+honestly, say that in the summary instead of inventing content.";
 
 /// The head and tail of a long transcript, joined with a note.
 fn excerpt(transcript: &str) -> String {
@@ -239,6 +360,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_refusal_about_json_mode_is_told_from_a_real_failure() {
+        // The families that cannot do this each phrase it differently, and the
+        // point of matching loosely is that a new one should still be caught.
+        assert!(rejects_strict_json(
+            r#"{"error":{"message":"Extra inputs are not permitted: response_format"}}"#
+        ));
+        assert!(rejects_strict_json(
+            r#"{"error":{"message":"'json_object' is not supported by this model"}}"#
+        ));
+        assert!(rejects_strict_json(r#"{"error":{"message":"JSON mode is unavailable"}}"#));
+
+        // These must not trigger a retry: the second attempt would fail the
+        // same way and the operator would wait twice as long to be told.
+        assert!(!rejects_strict_json(r#"{"error":{"code":"401","message":"Access denied"}}"#));
+        assert!(!rejects_strict_json(r#"{"error":{"code":"404","message":"Resource not found"}}"#));
+        assert!(!rejects_strict_json(r#"{"error":{"message":"Rate limit exceeded"}}"#));
+    }
+
+    #[test]
+    fn the_strict_parameter_is_the_only_difference_between_the_two_bodies() {
+        let mut settings = Settings::default();
+        settings.assist_model = "gpt-4o-mini".into();
+
+        let strict = body(&settings, "a transcript", true);
+        let plain = body(&settings, "a transcript", false);
+
+        assert_eq!(strict["response_format"]["type"], "json_object");
+        assert!(plain.get("response_format").is_none(), "the fallback must not send it");
+
+        // Everything the summary depends on survives the fallback.
+        for field in ["model", "temperature", "max_tokens", "messages"] {
+            assert_eq!(strict[field], plain[field], "{field} differed");
+        }
+    }
+
+    #[test]
     fn reads_a_plain_reply() {
         let got = read(r#"{"title":"Coming Home","summary":"He taught on the prodigal.","topics":["grace","repentance"]}"#).unwrap();
         assert_eq!(got.title, "Coming Home");
@@ -284,13 +441,15 @@ mod tests {
 
     #[test]
     fn a_long_transcript_keeps_its_beginning_and_its_end() {
-        let words: Vec<String> = (0..10_000).map(|i| format!("w{i}")).collect();
+        // Past HEAD + TAIL, which is about four hours of speech -- longer than
+        // any real service, so this is the safety valve rather than the norm.
+        let words: Vec<String> = (0..40_000).map(|i| format!("w{i}")).collect();
         let excerpt = excerpt(&words.join(" "));
 
         assert!(excerpt.contains("w0"), "the opening states the subject");
-        assert!(excerpt.contains("w9999"), "the conclusion is where it lands");
+        assert!(excerpt.contains("w39999"), "the conclusion is where it lands");
         assert!(excerpt.contains("omitted"), "and the gap is admitted to");
-        assert!(!excerpt.contains(" w5000 "), "the middle is what gives way");
+        assert!(!excerpt.contains(" w25000 "), "the middle is what gives way");
     }
 
     #[test]

@@ -38,6 +38,15 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 # PDF has no such shortcut -- it is a binary format with an object graph and
 # font metrics, and hand-rolling one is a week nobody should spend.
 printpdf = { version = "0.7", default-features = false }
+# Markdown, parsed by something that actually implements CommonMark.
+#
+# The summary is written by a model and read by a church: it will contain
+# tables, nested lists, code fences and every other construct the spec allows,
+# and hand-rolling that was producing a new edge case per test run. GFM
+# extensions on, because that is the dialect people mean when they say
+# Markdown. Pure Rust, no C, no build chain.
+pulldown-cmark = { version = "0.13", default-features = false, features = ["simd", "html"] }
+
 # Pure-Rust inference: statically linked, so there is no ONNX Runtime dylib to
 # bundle, sign and notarise separately on each platform.
 candle-core = "0.11"
