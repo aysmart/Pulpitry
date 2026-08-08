@@ -316,6 +316,24 @@ pub fn plain(runs: &[Span]) -> String {
 }
 
 
+/// Spans as text, keeping the one mark whose absence would change the meaning.
+///
+/// Bold and italic are emphasis: dropping them costs a reader nothing they
+/// cannot infer. Strikethrough is negation -- printed as ordinary text, "the
+/// ~~safety~~ field" becomes an assertion that the field is safe. So the marks
+/// stay, in the notation every reader of plain text already knows.
+fn readable(runs: &[Span]) -> String {
+    runs.iter()
+        .map(|span| {
+            if span.strike && !span.text.trim().is_empty() {
+                format!("~~{}~~", span.text)
+            } else {
+                span.text.clone()
+            }
+        })
+        .collect()
+}
+
 /// The whole thing as plain text.
 pub fn to_text(title: &str, markdown: &str, topics: &[String]) -> String {
     let mut out = String::new();
@@ -340,7 +358,7 @@ pub fn to_text(title: &str, markdown: &str, topics: &[String]) -> String {
 
         match block {
             Block::Heading { level, text } => {
-                let text = plain(&text);
+                let text = readable(&text);
                 out.push_str(&text);
                 out.push('\n');
                 let rule = if level <= 2 { '-' } else { '.' };
@@ -348,24 +366,24 @@ pub fn to_text(title: &str, markdown: &str, topics: &[String]) -> String {
                 out.push_str("\n\n");
             }
             Block::Paragraph(text) => {
-                out.push_str(&plain(&text));
+                out.push_str(&readable(&text));
                 out.push_str("\n\n");
             }
             Block::Bullet { depth, text } => {
                 out.push_str(&"    ".repeat(depth as usize));
                 out.push_str(if depth == 0 { "  \u{2022} " } else { "  \u{2013} " });
-                out.push_str(&plain(&text));
+                out.push_str(&readable(&text));
                 out.push('\n');
             }
             Block::Numbered { depth, number, text } => {
                 out.push_str(&"    ".repeat(depth as usize));
                 out.push_str(&format!("  {number}. "));
-                out.push_str(&plain(&text));
+                out.push_str(&readable(&text));
                 out.push('\n');
             }
             Block::Quote(text) => {
                 // The convention every mail client and terminal already reads.
-                for line in wrap(&plain(&text), 70) {
+                for line in wrap(&readable(&text), 70) {
                     out.push_str("  > ");
                     out.push_str(&line);
                     out.push('\n');
@@ -657,6 +675,64 @@ fn escape_xml(text: &str) -> String {
 
 /* --------------------------------------------------------------------- PDF */
 
+/// Advance widths for the built-in Helvetica faces, in thousandths of an em.
+///
+/// Adobe's own metrics for the standard 14 fonts. Embedded rather than
+/// estimated because an estimate is what produced a page with text running off
+/// the right edge and bold runs printed on top of the words after them: the
+/// layout has to know how wide a string actually is, and printpdf only exposes
+/// glyph metrics for fonts it embeds, which the built-in ones are not.
+///
+/// The oblique faces share their upright's widths, which is what makes them
+/// oblique rather than italic.
+fn advance(c: char, bold: bool) -> u16 {
+    const REGULAR: [u16; 95] = [
+        278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556,
+        556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722,
+        722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722,
+        667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556,
+        556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500,
+        500, 334, 260, 334, 584,
+    ];
+    const BOLD: [u16; 95] = [
+        278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556,
+        556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611, 975, 722, 722, 722,
+        722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722,
+        667, 944, 667, 667, 611, 333, 278, 333, 584, 556, 333, 556, 611, 556, 611, 556, 333, 611,
+        611, 278, 278, 556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556,
+        500, 389, 280, 389, 584,
+    ];
+
+    let table = if bold { &BOLD } else { &REGULAR };
+    let code = c as u32;
+
+    if (0x20..0x7f).contains(&code) {
+        return table[(code - 0x20) as usize];
+    }
+
+    // The handful beyond ASCII that a summary actually uses. Everything else
+    // takes a middling width, which costs a hair of alignment on a character
+    // that will not appear.
+    match c {
+        '\u{2013}' => 556,                          // en dash
+        '\u{2014}' => 1000,                         // em dash
+        '\u{2018}' | '\u{2019}' => if bold { 238 } else { 222 },
+        '\u{201c}' | '\u{201d}' => if bold { 500 } else { 333 },
+        '\u{2022}' => 350,                          // bullet
+        '\u{2026}' => 1000,                         // ellipsis
+        '\u{00a0}' => table[0],                     // no-break space
+        '\u{2611}' | '\u{2610}' => 778,            // task list boxes
+        _ => 556,
+    }
+}
+
+/// How wide a string is, in millimetres, at a given size and weight.
+fn width_of(text: &str, size: f32, bold: bool) -> f32 {
+    let thousandths: u32 = text.chars().map(|c| u32::from(advance(c, bold))).sum();
+    // Thousandths of an em, to points, to millimetres.
+    thousandths as f32 / 1000.0 * size / 2.834_646
+}
+
 /// A PDF, laid out at A4 with the text wrapped by hand.
 pub fn to_pdf(title: &str, markdown: &str, topics: &[String]) -> Result<Vec<u8>> {
     use printpdf::*;
@@ -683,11 +759,8 @@ pub fn to_pdf(title: &str, markdown: &str, topics: &[String]) -> Result<Vec<u8>>
     let mut current = document.get_page(page).get_layer(layer);
     let mut y = H - TOP;
 
-    // Helvetica's average character is about half its point size; good enough
-    // to wrap a paragraph without shipping font metrics.
-    let per_char = |size: f32| size * 0.35 / 2.83465;
-    let usable = W - LEFT - RIGHT;
-    let columns = |size: f32, indent: f32| ((usable - indent) / per_char(size)).max(10.0) as usize;
+    // How much room a line has, once its own indent is taken off.
+    let room = |indent: f32| (W - LEFT - RIGHT - indent).max(20.0);
 
     let mut draw = |current: &mut PdfLayerReference,
                     y: &mut f32,
@@ -721,14 +794,30 @@ pub fn to_pdf(title: &str, markdown: &str, topics: &[String]) -> Result<Vec<u8>>
 
             let mut x = LEFT + indent;
             for span in line {
-                let font = match (span.bold || force_bold, span.italic) {
+                let heavy = span.bold || force_bold;
+                let font = match (heavy, span.italic) {
                     (true, true) => &bold_italic,
                     (true, false) => &bold,
                     (false, true) => &italic,
                     (false, false) => &regular,
                 };
                 current.use_text(&span.text, size, Mm(x), Mm(*y), font);
-                x += span.text.chars().count() as f32 * per_char(size);
+
+                let advance = width_of(&span.text, size, heavy);
+                if span.strike {
+                    // Struck-through text that prints as ordinary text says the
+                    // opposite of what was written, so the line is drawn.
+                    current.add_rect(
+                        Rect::new(
+                            Mm(x),
+                            Mm(*y + size * 0.09),
+                            Mm(x + advance),
+                            Mm(*y + size * 0.115),
+                        )
+                        .with_mode(printpdf::path::PaintMode::Fill),
+                    );
+                }
+                x += advance;
             }
             *y -= size * 0.55;
         }
@@ -736,7 +825,7 @@ pub fn to_pdf(title: &str, markdown: &str, topics: &[String]) -> Result<Vec<u8>>
 
     if !title.is_empty() {
         let runs = [Span::plain(title)];
-        draw(&mut current, &mut y, wrap_spans(&runs, columns(20.0, 0.0)), 20.0, 0.0, true, false);
+        draw(&mut current, &mut y, wrap_spans(&runs, 20.0, room(0.0)), 20.0, 0.0, true, false);
         y -= 5.0;
     }
 
@@ -745,20 +834,20 @@ pub fn to_pdf(title: &str, markdown: &str, topics: &[String]) -> Result<Vec<u8>>
             Block::Heading { level, text } => {
                 y -= 3.5;
                 let size = if level <= 2 { 14.0 } else { 12.0 };
-                let lines = wrap_spans(&text, columns(size, 0.0));
+                let lines = wrap_spans(&text, size, room(0.0));
                 draw(&mut current, &mut y, lines, size, 0.0, true, false);
                 y -= 1.5;
             }
             Block::Paragraph(text) => {
-                let lines = wrap_spans(&text, columns(11.0, 0.0));
+                let lines = wrap_spans(&text, 11.0, room(0.0));
                 draw(&mut current, &mut y, lines, 11.0, 0.0, false, false);
                 y -= 3.0;
             }
             Block::Bullet { depth, text } => {
                 let indent = 5.0 + 6.0 * f32::from(depth);
-                let mut runs = vec![Span::plain(if depth == 0 { "\u{2022}  " } else { "\u{25e6}  " })];
+                let mut runs = vec![Span::plain(if depth == 0 { "\u{2022}  " } else { "\u{2013}  " })];
                 runs.extend(text);
-                let lines = wrap_spans(&runs, columns(11.0, indent));
+                let lines = wrap_spans(&runs, 11.0, room(indent));
                 draw(&mut current, &mut y, lines, 11.0, indent, false, false);
                 y -= 1.2;
             }
@@ -767,7 +856,7 @@ pub fn to_pdf(title: &str, markdown: &str, topics: &[String]) -> Result<Vec<u8>>
                 let mut runs =
                     vec![Span { text: format!("{number}.  "), bold: true, ..Span::default() }];
                 runs.extend(text);
-                let lines = wrap_spans(&runs, columns(11.0, indent));
+                let lines = wrap_spans(&runs, 11.0, room(indent));
                 draw(&mut current, &mut y, lines, 11.0, indent, false, false);
                 y -= 1.2;
             }
@@ -775,38 +864,68 @@ pub fn to_pdf(title: &str, markdown: &str, topics: &[String]) -> Result<Vec<u8>>
                 y -= 1.5;
                 let runs: Vec<Span> =
                     text.into_iter().map(|s| Span { italic: true, ..s }).collect();
-                let lines = wrap_spans(&runs, columns(11.0, 8.0));
+                let lines = wrap_spans(&runs, 11.0, room(8.0));
                 draw(&mut current, &mut y, lines, 11.0, 8.0, false, true);
                 y -= 3.0;
             }
             Block::Table { head, rows } => {
                 y -= 2.0;
-                // One row per line with the columns spaced out. A ruled grid
-                // would need column measurement this layout cannot do
-                // honestly, and a table that does not line up is worse than a
-                // list that does.
-                let widths = |cells: &Vec<Vec<Span>>| cells.iter().map(|c| plain(c)).collect::<Vec<_>>();
-                let all: Vec<Vec<String>> =
-                    std::iter::once(&head).chain(rows.iter()).map(widths).collect();
-                let count = all.iter().map(Vec::len).max().unwrap_or(0);
-                let mut column_width = vec![0usize; count];
-                for row in &all {
-                    for (at, text) in row.iter().enumerate() {
-                        column_width[at] = column_width[at].max(text.chars().count());
+                const SIZE: f32 = 10.0;
+                const GAP: f32 = 5.0;
+
+                /*
+                 * Columns placed at measured offsets, not padded with spaces.
+                 * Padding assumes every character is the same width, which is
+                 * true of a terminal and false of Helvetica -- the version that
+                 * did that produced a header sitting a centimetre left of the
+                 * column it belonged to.
+                 */
+                let all: Vec<&Vec<Vec<Span>>> =
+                    std::iter::once(&head).chain(rows.iter()).collect();
+                let count = all.iter().map(|row| row.len()).max().unwrap_or(0);
+
+                let mut widths = vec![0.0f32; count];
+                for (index, row) in all.iter().enumerate() {
+                    for (at, cell) in row.iter().enumerate() {
+                        let heavy = index == 0 && !head.is_empty();
+                        widths[at] = widths[at].max(width_of(&plain(cell), SIZE, heavy));
                     }
                 }
 
+                let mut offsets = vec![4.0f32; count];
+                for at in 1..count {
+                    offsets[at] = offsets[at - 1] + widths[at - 1] + GAP;
+                }
+
                 for (index, row) in all.iter().enumerate() {
-                    let mut line = String::new();
-                    for (at, text) in row.iter().enumerate() {
-                        line.push_str(text);
-                        if at + 1 < row.len() {
-                            line.push_str(&" ".repeat(column_width[at] - text.chars().count() + 2));
-                        }
+                    let heading = index == 0 && !head.is_empty();
+                    let top = y;
+                    let mut lowest = y;
+
+                    for (at, cell) in row.iter().enumerate() {
+                        let mut cell_y = top;
+                        let runs: Vec<Span> = cell.to_vec();
+                        let lines = wrap_spans(&runs, SIZE, room(offsets[at]).min(widths[at] + 0.5));
+                        draw(&mut current, &mut cell_y, lines, SIZE, offsets[at], heading, false);
+                        lowest = lowest.min(cell_y);
                     }
-                    let runs =
-                        vec![Span { text: line, bold: index == 0 && !head.is_empty(), ..Span::default() }];
-                    draw(&mut current, &mut y, vec![runs], 10.0, 4.0, false, false);
+
+                    y = lowest;
+                    // A rule under the head, as a table has. Clear of the
+                    // header's descenders above and the first row's ascenders
+                    // below, or it prints through one of them.
+                    if heading {
+                        y -= 2.2;
+                        current.set_fill_color(Color::Rgb(Rgb::new(0.78, 0.80, 0.83, None)));
+                        let right =
+                            LEFT + offsets[count - 1] + widths[count - 1];
+                        current.add_rect(
+                            Rect::new(Mm(LEFT + 4.0), Mm(y), Mm(right), Mm(y + 0.25))
+                                .with_mode(printpdf::path::PaintMode::Fill),
+                        );
+                        current.set_fill_color(Color::Rgb(Rgb::new(0.0, 0.0, 0.0, None)));
+                        y -= 4.2;
+                    }
                 }
                 y -= 3.0;
             }
@@ -827,35 +946,43 @@ pub fn to_pdf(title: &str, markdown: &str, topics: &[String]) -> Result<Vec<u8>>
 
     if !topics.is_empty() {
         y -= 5.0;
-        let lines = wrap_spans(&[Span::plain("Subjects")], columns(14.0, 0.0));
+        let lines = wrap_spans(&[Span::plain("Subjects")], 14.0, room(0.0));
         draw(&mut current, &mut y, lines, 14.0, 0.0, true, false);
         y -= 1.5;
-        let lines = wrap_spans(&[Span::plain(topics.join(",  "))], columns(11.0, 0.0));
+        let lines = wrap_spans(&[Span::plain(topics.join(",  "))], 11.0, room(0.0));
         draw(&mut current, &mut y, lines, 11.0, 0.0, false, false);
     }
 
     document.save_to_bytes().context("could not write the PDF")
 }
 
-/// Breaks a run of spans into lines of at most `columns` characters, on word
-/// boundaries, keeping each word's emphasis with it.
-fn wrap_spans(runs: &[Span], columns: usize) -> Vec<Vec<Span>> {
+/// Breaks spans into lines that fit `limit` millimetres, on word boundaries,
+/// keeping each word's emphasis with it.
+///
+/// Measured rather than counted: a character count cannot tell a `W` from an
+/// `i`, and the page that came out of the counting version had its right-hand
+/// margin overrun by half a sentence.
+fn wrap_spans(runs: &[Span], size: f32, limit: f32) -> Vec<Vec<Span>> {
     let mut lines: Vec<Vec<Span>> = Vec::new();
     let mut line: Vec<Span> = Vec::new();
-    let mut width = 0usize;
+    let mut width = 0.0f32;
 
     for span in runs {
         for word in span.text.split_whitespace() {
-            let needed = word.chars().count() + usize::from(!line.is_empty());
+            let spaced = if line.is_empty() { word.to_string() } else { format!(" {word}") };
+            let needed = width_of(&spaced, size, span.bold);
 
-            if !line.is_empty() && width + needed > columns {
+            if !line.is_empty() && width + needed > limit {
                 lines.push(std::mem::take(&mut line));
-                width = 0;
+                width = 0.0;
+                // Without the leading space, now that it starts a line.
+                let bare = word.to_string();
+                width += width_of(&bare, size, span.bold);
+                line.push(Span { text: bare, ..span.clone() });
+                continue;
             }
 
-            let text = if line.is_empty() { word.to_string() } else { format!(" {word}") };
-            width += text.chars().count();
-
+            width += needed;
             match line.last_mut() {
                 // Merged into the previous run when the emphasis matches, so a
                 // sentence is drawn in one call rather than one per word.
@@ -864,9 +991,9 @@ fn wrap_spans(runs: &[Span], columns: usize) -> Vec<Vec<Span>> {
                         && last.italic == span.italic
                         && last.strike == span.strike =>
                 {
-                    last.text.push_str(&text);
+                    last.text.push_str(&spaced)
                 }
-                _ => line.push(Span { text, ..span.clone() }),
+                _ => line.push(Span { text: spaced, ..span.clone() }),
             }
         }
     }
@@ -1058,9 +1185,11 @@ Something ~~struck out~~ and something ***emphatic***.
         assert!(text.contains("  > But when he was yet"), "a quote is marked as one");
         assert!(text.contains("Younger"), "the table is written out");
         assert!(text.contains("Subjects: grace, return"));
-        // Emphasis markers must not survive into a plain-text export.
+        // Emphasis is dropped, because a reader loses nothing they cannot
+        // infer. Strikethrough is kept, because losing it reverses the
+        // sentence: "the safety field" asserts what "~~safety~~" denied.
         assert!(!text.contains("**"), "{text}");
-        assert!(!text.contains("~~"), "{text}");
+        assert!(text.contains("~~struck out~~"), "{text}");
     }
 
     #[test]
@@ -1140,7 +1269,7 @@ Something ~~struck out~~ and something ***emphatic***.
             Span { text: "quick brown".into(), bold: true, ..Span::default() },
             Span::plain(" fox jumps over"),
         ];
-        let lines = wrap_spans(&runs, 12);
+        let lines = wrap_spans(&runs, 11.0, 40.0);
         assert!(lines.len() > 1, "{lines:?}");
 
         // Each line is its own run of text; the break between them is where the
@@ -1155,6 +1284,61 @@ Something ~~struck out~~ and something ***emphatic***.
             "the quick brown fox jumps over"
         );
         assert!(lines.iter().flatten().any(|s| s.bold && s.text.contains("quick")));
+    }
+
+    /// Writes the three exports somewhere they can be opened and looked at.
+    ///
+    /// Ignored, because it is for eyes rather than for CI: a layout bug is the
+    /// kind of thing an assertion will happily pass over and a person spots in
+    /// a second.
+    ///
+    ///   cargo test --release --lib exports::tests::write_them_out -- --ignored --nocapture
+    #[test]
+    #[ignore = "writes files for a person to look at"]
+    fn write_them_out() {
+        // The shape a real deployment actually returned for a real sermon.
+        const REAL: &str = r#"The parable of the prodigal son reveals the father's unconditional love and acceptance. The younger son's request for his inheritance is a de facto wish for his father's death, yet the father grants it, illustrating his willingness to let go.
+
+## Main points
+
+1. **The younger son's rebellion** — His request for an inheritance is a wish to be free of his father. He wastes it and hits the bottom, yet the father is waiting.
+   * The decision to give it is a remarkable act of love and trust.
+   * The downfall follows his own choices; the response is compassion.
+2. **The elder son's lostness** — He remained at home and is lost in his own way, viewing himself as a servant rather than a son.
+   * Calling himself a servant shows a flawed understanding of the relationship.
+
+## Passages
+
+* **Luke 15:11-32** — the whole parable.
+
+> But when he was yet a great way off, his father saw him, and had compassion, and ran, and fell on his neck, and kissed him.
+
+| Son | Where he was lost | What the father did |
+| --- | --- | --- |
+| Younger | The far country | Ran to meet him |
+| Elder | The field | Went out to plead |
+
+## Application
+
+* Recognise your own state, whether the *far country* or the ~~safety~~ field.
+
+---
+
+## Notable quotations
+
+> And the father is out looking for both of you.
+"#;
+
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../exports-preview");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let title = "The Father's Love for the Lost";
+        let topics = ["the prodigal son".to_string(), "lostness".into(), "grace".into()];
+
+        std::fs::write(dir.join("summary.txt"), to_text(title, REAL, &topics)).unwrap();
+        std::fs::write(dir.join("summary.docx"), to_docx(title, REAL, &topics).unwrap()).unwrap();
+        std::fs::write(dir.join("summary.pdf"), to_pdf(title, REAL, &topics).unwrap()).unwrap();
+        eprintln!("written to {}", dir.canonicalize().unwrap().display());
     }
 
     #[test]
