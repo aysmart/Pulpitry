@@ -479,7 +479,7 @@ mod tests {
         // A version stored before the default moved on would 404 against the
         // /models route, which is a stale setting rather than a broken build.
         if settings.assist_api_version.trim().is_empty() || settings.assist_api_version == "2024-02-01" {
-            eprintln!("(overriding stale api version {})", settings.assist_api_version);
+            crate::log_line!("(overriding stale api version {})", settings.assist_api_version);
             settings.assist_api_version = crate::settings::DEFAULT_ASSIST_API_VERSION.into();
         }
 
@@ -487,16 +487,16 @@ mod tests {
             .expect("keychain")
             .expect("no model key stored -- set one in Settings first");
 
-        eprintln!("endpoint: {}", settings.assist_endpoint);
-        eprintln!("model:    {}", settings.assist_model);
-        eprintln!("version:  {}", settings.assist_api_version);
+        crate::log_line!("endpoint: {}", settings.assist_endpoint);
+        crate::log_line!("model:    {}", settings.assist_model);
+        crate::log_line!("version:  {}", settings.assist_api_version);
         assert!(available(&settings, true), "the assistant is not fully configured");
 
         let described = describe(&settings, &key, SERMON).expect("the model call failed");
 
-        eprintln!("\n--- title ---\n{}", described.title);
-        eprintln!("\n--- summary (markdown) ---\n{}", described.summary);
-        eprintln!("\n--- topics ---\n{:?}", described.topics);
+        crate::log_line!("\n--- title ---\n{}", described.title);
+        crate::log_line!("\n--- summary (markdown) ---\n{}", described.summary);
+        crate::log_line!("\n--- topics ---\n{:?}", described.topics);
 
         assert!(!described.title.is_empty());
         assert!(described.summary.len() > 80, "suspiciously short for a whole talk");
@@ -504,7 +504,7 @@ mod tests {
 
         // The exports read this, so it has to be the Markdown we promised.
         let text = crate::exports::to_text(&described.title, &described.summary, &described.topics);
-        eprintln!("\n--- as plain text ---\n{text}");
+        crate::log_line!("\n--- as plain text ---\n{text}");
         assert!(crate::exports::to_pdf(&described.title, &described.summary, &described.topics).is_ok());
         assert!(crate::exports::to_docx(&described.title, &described.summary, &described.topics).is_ok());
     }

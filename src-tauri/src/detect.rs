@@ -184,7 +184,7 @@ impl Detector {
                 while let Ok((segment, text)) = incoming.recv() {
                     let Some(detector) = weak.upgrade() else { break };
                     if let Err(err) = detector.examine(segment, &text) {
-                        eprintln!("[detect] {err:#}");
+                        crate::log_line!("[detect] {err:#}");
                     }
                 }
             })

@@ -335,43 +335,9 @@ impl Projector {
         }
     }
 
-    /*
-     * Runs window work on the thread that owns the window system.
-     *
-     * Every command here arrives on one of Tauri's worker threads, and on
-     * Windows both creating a WebView2 window and asking the system about its
-     * monitors are only legal on the thread running the message loop. Called
-     * from anywhere else they wedge that loop -- and since all IPC crosses it,
-     * the whole app stops answering: no scripture, no songs, no settings, no
-     * relation to whatever was actually being done at the time.
-     *
-     * macOS marshals these calls for us, which is exactly why this went
-     * unnoticed until somebody opened the projector on Windows.
-     *
-     * Callers block until the main thread has run the closure. That is safe
-     * from a command and would deadlock from the main thread itself, since the
-     * work could not run until the caller returned -- so nothing here may be
-     * called from `setup` or from an event handler.
-     */
-    fn on_main<T, F>(&self, work: F) -> Result<T>
-    where
-        T: Send + 'static,
-        F: FnOnce(&AppHandle) -> T + Send + 'static,
-    {
-        let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        let app = self.app.clone();
-        self.app
-            .run_on_main_thread(move || {
-                let _ = tx.send(work(&app));
-            })
-            .map_err(|err| anyhow!("could not reach the window thread: {err}"))?;
-
-        rx.recv().map_err(|_| anyhow!("the window thread went away before answering"))
-    }
-
     pub fn displays(&self) -> Result<Vec<Display>> {
         let in_use = *self.display.lock();
-        self.on_main(move |app| Self::enumerate(app, in_use))?
+        Self::enumerate(&self.app, in_use)
     }
 
     /// Reads the monitor list. Only ever called on the main thread.
@@ -411,14 +377,7 @@ impl Projector {
     /// Defaults to the first display that is not the primary one — during a
     /// service the projector is essentially never the laptop screen.
     pub fn open(&self, requested: Option<usize>) -> Result<ProjectorState> {
-        // One hop, and all of it on the window thread: choosing the monitor,
-        // moving an open window, and building a new one are each illegal off it
-        // on Windows. Two hops would also let the monitor list change between
-        // them and land the window somewhere the caller was not told about.
-        let index = self.on_main(move |app| Self::place(app, requested))??;
-
-        // Set here rather than inside the closure, so no lock is ever held
-        // across a hop to another thread.
+        let index = Self::place(&self.app, requested)?;
         *self.display.lock() = Some(index);
         Ok(self.state())
     }
@@ -449,9 +408,21 @@ impl Projector {
             .unwrap_or(0))
     }
 
-    /// Opens the projector, or moves it if already open. Main thread only.
+    /// Opens the projector, or moves it if already open.
     ///
     /// Returns the display it landed on.
+    ///
+    /// # Must not be called from a synchronous command
+    ///
+    /// Tauri runs a synchronous command on the main thread, and building a
+    /// WebView2 window needs that thread free to pump its message loop while
+    /// the webview starts. Called from one, it waits for a loop that is waiting
+    /// for it -- and because every IPC message crosses that loop, the whole app
+    /// stops answering: no scripture, no songs, no settings, and nothing to
+    /// connect the symptom to the projector.
+    ///
+    /// So `open_projector` is an async command. macOS does not care either way,
+    /// which is why this only ever showed up on Windows.
     fn place(app: &AppHandle, requested: Option<usize>) -> Result<usize> {
         let index = Self::chosen(app, requested)?;
         let monitors = app
@@ -487,12 +458,9 @@ impl Projector {
     }
 
     pub fn close(&self) -> ProjectorState {
-        // Closing a window touches the same window system as opening one.
-        let _ = self.on_main(|app| {
-            if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
-                let _ = window.close();
-            }
-        });
+        if let Some(window) = self.app.get_webview_window(WINDOW_LABEL) {
+            let _ = window.close();
+        }
         *self.display.lock() = None;
         ProjectorState { open: false, display: None }
     }

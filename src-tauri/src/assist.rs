@@ -187,7 +187,7 @@ impl Assistant {
                     semantic.emit_suggestion(verse, score, "allusion", restated, context);
                 }
             }
-            Err(err) => eprintln!("[assist] restatement search failed: {err:#}"),
+            Err(err) => crate::log_line!("[assist] restatement search failed: {err:#}"),
         }
     }
 
@@ -255,7 +255,7 @@ impl Assistant {
                 // Losing the network mid-service must not produce a wall of
                 // identical errors; say it once until something changes.
                 if !self.reported_failure.swap(true, Ordering::SeqCst) {
-                    eprintln!("[assist] {err:#}");
+                    crate::log_line!("[assist] {err:#}");
                 }
                 return;
             }
@@ -274,7 +274,7 @@ impl Assistant {
             // The verification step: a reference the library cannot resolve is
             // discarded rather than shown.
             let Some(verse) = self.verify(&config.translation, &proposal.reference) else {
-                eprintln!(
+                crate::log_line!(
                     "[assist] discarded unresolvable reference {:?}",
                     proposal.reference
                 );

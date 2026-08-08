@@ -118,7 +118,7 @@ impl SpeechManager {
             return Ok(());
         }
         if let Err(err) = self.transcripts.begin() {
-            eprintln!("[transcript] could not open a session: {err:#}");
+            crate::log_line!("[transcript] could not open a session: {err:#}");
         }
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         let manager = Arc::clone(self);
@@ -131,7 +131,7 @@ impl SpeechManager {
         // stitched onto the first words of the next one.
         self.detector.reset();
         if let Err(err) = self.transcripts.end() {
-            eprintln!("[transcript] could not close the session: {err:#}");
+            crate::log_line!("[transcript] could not close the session: {err:#}");
         }
         self.desired.store(false, Ordering::SeqCst);
         self.generation.fetch_add(1, Ordering::SeqCst);
@@ -446,14 +446,14 @@ impl SpeechManager {
                     let line = String::from_utf8_lossy(&bytes);
                     let line = line.trim();
                     if !line.is_empty() {
-                        eprintln!("[sidecar] {line}");
+                        crate::log_line!("[sidecar] {line}");
                     }
                 }
                 CommandEvent::Error(err) => {
-                    eprintln!("[sidecar] error: {err}");
+                    crate::log_line!("[sidecar] error: {err}");
                 }
                 CommandEvent::Terminated(payload) => {
-                    eprintln!("[sidecar] terminated: {payload:?}");
+                    crate::log_line!("[sidecar] terminated: {payload:?}");
                     return;
                 }
                 _ => {}
@@ -483,7 +483,7 @@ impl SpeechManager {
         }
         match serde_json::from_str::<serde_json::Value>(line) {
             Ok(value) => self.dispatch(&value),
-            Err(_) => eprintln!("[sidecar] non-JSON output: {line}"),
+            Err(_) => crate::log_line!("[sidecar] non-JSON output: {line}"),
         }
     }
 
@@ -506,7 +506,7 @@ impl SpeechManager {
                 // window can close, the model can be wrong -- none of that
                 // should cost the operator the record of what was said.
                 if let Err(err) = self.transcripts.append(text) {
-                    eprintln!("[transcript] could not keep a line: {err:#}");
+                    crate::log_line!("[transcript] could not keep a line: {err:#}");
                 }
                 // Detection runs off-thread; the transcript must not wait on it.
                 self.detector.on_final(text);
@@ -533,7 +533,7 @@ impl SpeechManager {
                     .and_then(|v| v.as_str())
                     .unwrap_or("The speech service reported an error")
                     .to_string();
-                eprintln!("[sidecar] {detail}");
+                crate::log_line!("[sidecar] {detail}");
                 // A rejected key or malformed region will fail identically on
                 // every retry, so stop rather than reconnect in a loop.
                 if message.get("fatal").and_then(|v| v.as_bool()).unwrap_or(false) {
@@ -613,7 +613,7 @@ fn spawn_stdin_writer(
                 let mut guard = child.lock();
                 let Some(process) = guard.as_mut() else { break };
                 if let Err(err) = process.write(&bytes) {
-                    eprintln!("[audio] could not write to the sidecar: {err}");
+                    crate::log_line!("[audio] could not write to the sidecar: {err}");
                     break;
                 }
             }

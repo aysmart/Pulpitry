@@ -1338,7 +1338,7 @@ Something ~~struck out~~ and something ***emphatic***.
         std::fs::write(dir.join("summary.txt"), to_text(title, REAL, &topics)).unwrap();
         std::fs::write(dir.join("summary.docx"), to_docx(title, REAL, &topics).unwrap()).unwrap();
         std::fs::write(dir.join("summary.pdf"), to_pdf(title, REAL, &topics).unwrap()).unwrap();
-        eprintln!("written to {}", dir.canonicalize().unwrap().display());
+        crate::log_line!("written to {}", dir.canonicalize().unwrap().display());
     }
 
     #[test]

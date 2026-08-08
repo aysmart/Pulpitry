@@ -10,6 +10,7 @@ mod semantic;
 mod settings;
 mod speech;
 mod exports;
+mod log;
 mod summarise;
 mod transcripts;
 mod whisper;
@@ -108,7 +109,7 @@ fn save_settings(
 fn allow_asset(app: &tauri::AppHandle, path: Option<&str>) {
     let Some(path) = path.filter(|path| !path.is_empty()) else { return };
     if let Err(err) = app.asset_protocol_scope().allow_file(path) {
-        eprintln!("[assets] could not grant access to {path}: {err}");
+        crate::log_line!("[assets] could not grant access to {path}: {err}");
     }
 }
 
@@ -501,13 +502,28 @@ fn report_media_progress(projector: State<'_, Arc<Projector>>, progress: MediaPr
     projector.report_progress(progress);
 }
 
+/*
+ * The three projector commands are async, and must stay that way.
+ *
+ * Tauri runs a synchronous command on the main thread. Building a WebView2
+ * window needs that thread free to pump its message loop while the webview
+ * starts, so doing it from a synchronous command deadlocks on Windows -- as
+ * Tauri's own documentation for `WebviewWindowBuilder::build` says in as many
+ * words. And since every IPC message crosses that same loop, the app stops
+ * answering entirely: scripture, songs, themes and settings all go at once,
+ * with nothing pointing back at the projector.
+ *
+ * Async commands run on the async runtime instead, leaving the loop free.
+ * macOS is indifferent, which is why this survived every test on the machine it
+ * was written on.
+ */
 #[tauri::command]
-fn list_displays(projector: State<'_, Arc<Projector>>) -> CommandResult<Vec<Display>> {
+async fn list_displays(projector: State<'_, Arc<Projector>>) -> CommandResult<Vec<Display>> {
     projector.displays().map_err(to_message)
 }
 
 #[tauri::command]
-fn open_projector(
+async fn open_projector(
     projector: State<'_, Arc<Projector>>,
     display: Option<usize>,
 ) -> CommandResult<ProjectorState> {
@@ -515,8 +531,9 @@ fn open_projector(
 }
 
 #[tauri::command]
-fn close_projector(projector: State<'_, Arc<Projector>>) -> ProjectorState {
-    projector.close()
+async fn close_projector(projector: State<'_, Arc<Projector>>) -> CommandResult<ProjectorState> {
+    // Result rather than a bare value: an async command has to return one.
+    Ok(projector.close())
 }
 
 #[tauri::command]
@@ -647,6 +664,17 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
+            // First, so that everything after it can be explained if it fails.
+            // A GUI build on Windows has no console: without this the app can
+            // only fail silently, which is how a whole release went out fixing
+            // the wrong thing.
+            if let Ok(dir) = app.path().app_data_dir() {
+                if let Some(path) = log::start(&dir) {
+                    log::catch_panics();
+                    log::line(&format!("log: {}", path.display()));
+                }
+            }
+
             app.manage(Projector::new(app.handle().clone()));
 
             let library = Arc::new(Library::open(app.handle())?);
@@ -673,7 +701,7 @@ pub fn run() {
                         // still has an app, just an empty song list, and an
                         // error box on launch about hymns they did not ask for
                         // would be the more annoying failure.
-                        eprintln!("[hymns] {error:#}");
+                        crate::log_line!("[hymns] {error:#}");
                     }
                 });
             }
@@ -750,7 +778,7 @@ pub fn run() {
                     },
                 };
                 if let Some(message) = &status.error {
-                    eprintln!("[library] {message}");
+                    crate::log_line!("[library] {message}");
                 }
                 let ready = status.ready;
                 let _ = handle.emit(bible::EVENT_LIBRARY, status);

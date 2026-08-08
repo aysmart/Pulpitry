@@ -63,7 +63,7 @@ fn open_device(device_id: Option<&str>) -> Result<cpal::Device> {
         }
         // The saved device is gone — unplugged between services, say. Falling
         // back to the default beats refusing to start.
-        eprintln!("[audio] saved input device is unavailable; using the system default");
+        crate::log_line!("[audio] saved input device is unavailable; using the system default");
     }
 
     host.default_input_device()
@@ -267,7 +267,7 @@ fn build_stream(
     let mut converter = Converter::new(config.sample_rate, channels);
     let stop_on_error = Arc::clone(stop);
     let error_handler = move |err| {
-        eprintln!("[audio] input stream error: {err}");
+        crate::log_line!("[audio] input stream error: {err}");
         // A device that has gone away will never recover on its own; dropping
         // out lets the supervisor tear the session down and start a fresh one.
         stop_on_error.store(true, Ordering::SeqCst);

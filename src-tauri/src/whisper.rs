@@ -565,7 +565,7 @@ impl Local {
                     match (job, spoken) {
                         (Job::Settled(_), Ok(text)) if !text.is_empty() => final_text(text),
                         (Job::Partial(_), Ok(text)) if !text.is_empty() => interim(text),
-                        (_, Err(error)) => eprintln!("[whisper] {error:#}"),
+                        (_, Err(error)) => crate::log_line!("[whisper] {error:#}"),
                         _ => {}
                     }
                 }

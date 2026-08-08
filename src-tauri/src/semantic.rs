@@ -177,7 +177,7 @@ impl Semantic {
                 while let Ok(generation) = incoming.recv() {
                     let Some(semantic) = weak.upgrade() else { break };
                     if let Err(err) = semantic.prepare(generation) {
-                        eprintln!("[semantic] {err:#}");
+                        crate::log_line!("[semantic] {err:#}");
                         semantic.set_status(|status| {
                             status.state = "error".into();
                             status.error = Some(format!("{err:#}"));
@@ -271,7 +271,7 @@ impl Semantic {
         if unreadable > 0 {
             // Row counts would otherwise report the index as complete while it
             // matched nothing at all — a silent failure. Discard and redo.
-            eprintln!(
+            crate::log_line!(
                 "[semantic] {unreadable} stored vectors are in an old format; rebuilding {}",
                 config.translation
             );
@@ -397,7 +397,7 @@ impl Semantic {
         }
 
         if let Err(err) = self.match_and_emit(&config, context) {
-            eprintln!("[semantic] {err:#}");
+            crate::log_line!("[semantic] {err:#}");
         }
     }
 
