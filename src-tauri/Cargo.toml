@@ -49,6 +49,10 @@ pulldown-cmark = { version = "0.13", default-features = false, features = ["simd
 
 # Pure-Rust inference: statically linked, so there is no ONNX Runtime dylib to
 # bundle, sign and notarise separately on each platform.
+# Named directly so the index build can be given its own, smaller pool. candle
+# pulls it in regardless; without a pool of our own it takes every core, which
+# on Windows means taking them from the interface.
+rayon = "1"
 candle-core = "0.11"
 candle-nn = "0.11"
 candle-transformers = "0.11"

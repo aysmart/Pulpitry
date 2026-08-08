@@ -273,7 +273,7 @@ impl SpeechManager {
     /// Reports through the same `dispatch` the Azure sidecar feeds, so the
     /// transcript, the detector and everything downstream cannot tell which
     /// engine produced a line.
-    fn run_local(&self, generation: u64) -> Result<()> {
+    fn run_local(self: &Arc<Self>, generation: u64) -> Result<()> {
         let settings = settings::load(&self.app)?;
         let data_dir = self.app.path().app_data_dir()?;
 
@@ -332,12 +332,20 @@ impl SpeechManager {
                 }
             });
 
+            // Cloned rather than borrowed: the last two run on the decoder
+            // thread, which outlives this call by design.
+            let interim = Arc::clone(self);
+            let settled = Arc::clone(self);
             engine.run(
                 rx,
                 Arc::clone(&audio_stop),
                 |note| self.set_status("listening", Some(note), None),
-                |text| self.dispatch(&serde_json::json!({ "type": "recognizing", "text": text })),
-                |text| self.dispatch(&serde_json::json!({ "type": "recognized", "text": text })),
+                move |text| {
+                    interim.dispatch(&serde_json::json!({ "type": "recognizing", "text": text }))
+                },
+                move |text| {
+                    settled.dispatch(&serde_json::json!({ "type": "recognized", "text": text }))
+                },
             )
         });
 

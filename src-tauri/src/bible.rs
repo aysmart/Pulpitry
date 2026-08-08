@@ -413,21 +413,36 @@ impl Library {
     ///
     /// Returned in batches so an interrupted index build resumes where it left
     /// off rather than starting the two-minute job again.
+    /// Verses after `after` that have no vector yet, in id order.
+    ///
+    /// The caller advances `after` past the last id it received, so the scan
+    /// never revisits ground it has covered.
     pub fn verses_awaiting_embedding(
         &self,
         translation: &str,
+        after: i64,
         limit: i64,
     ) -> Result<Vec<(i64, String)>> {
         let connection = self.connection.lock();
         let mut statement = connection.prepare(
+            /*
+             * Everything past `after` that still has no vector.
+             *
+             * The obvious form of this -- no cursor, just "the first N without
+             * one" -- re-scans from the beginning of the translation on every
+             * call. That is invisible for the first batch and ruinous by the
+             * thousandth: the work grows with what has already been done, so
+             * the build gets slower the closer it is to finishing. Carrying a
+             * cursor makes each batch cost the same as the first.
+             */
             "SELECT v.id, v.text FROM verses v
              LEFT JOIN verse_embeddings e ON e.verse_id = v.id
-             WHERE v.translation = ?1 AND e.verse_id IS NULL
+             WHERE v.translation = ?1 AND v.id > ?2 AND e.verse_id IS NULL
              ORDER BY v.id
-             LIMIT ?2",
+             LIMIT ?3",
         )?;
         let rows = statement
-            .query_map(params![translation, limit], |row| Ok((row.get(0)?, row.get(1)?)))?;
+            .query_map(params![translation, after, limit], |row| Ok((row.get(0)?, row.get(1)?)))?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 

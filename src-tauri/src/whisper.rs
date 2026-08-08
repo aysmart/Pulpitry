@@ -33,7 +33,7 @@
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -70,6 +70,9 @@ const MAX_UTTERANCE: Duration = Duration::from_secs(18);
 /// How often the growing buffer is decoded to show words before the sentence
 /// ends. Every interim costs a full decode, so this is deliberately unhurried.
 const INTERIM_EVERY: Duration = Duration::from_millis(2_200);
+/// Settled utterances outstanding before the operator is told the machine is
+/// losing. Three is a genuine backlog rather than one slow decode.
+const BEHIND_AFTER: usize = 3;
 
 /// One model the operator could choose.
 #[derive(Debug, Clone, serde::Serialize, PartialEq)]
@@ -237,6 +240,18 @@ struct Loaded {
 /// never during a decode, and a model that fails to load leaves the previous
 /// one in place -- a bad choice in a settings dialog must not take the
 /// transcript down in the middle of a sermon.
+/// A piece of audio waiting to be decoded.
+///
+/// The distinction matters when the machine is behind: a settled utterance is
+/// the transcript and is always decoded, a partial one is a courtesy and is the
+/// first thing dropped.
+enum Job {
+    /// A complete utterance. Never discarded.
+    Settled(Vec<f32>),
+    /// A sentence still being spoken. Discarded freely.
+    Partial(Vec<f32>),
+}
+
 pub struct Local {
     data_dir: PathBuf,
     threads: i32,
@@ -363,13 +378,28 @@ impl Local {
     /// `interim` is shown and never detected against; `final_text` is what the
     /// detector reads. That is the same split the Azure bridge reports, so
     /// everything downstream is unaware of which engine produced it.
+    ///
+    /// # Why the decoding happens on its own thread
+    ///
+    /// Whisper is not guaranteed to run faster than the person talking. On a
+    /// machine where it does not, decoding on the thread that drains the
+    /// microphone is fatal rather than merely slow: capture arrives over a
+    /// bounded channel, so every second spent decoding is a second nobody is
+    /// reading from it, and the audio is not delayed -- it is dropped on the
+    /// floor. Speech genuinely disappears, and the transcript is wrong in a way
+    /// the operator cannot see.
+    ///
+    /// So this thread does nothing but listen and cut the audio into
+    /// utterances. Decoding happens behind it, and the two are allowed to drift
+    /// apart, because falling behind is recoverable and losing what was said is
+    /// not.
     pub fn run(
-        &self,
+        self: &Arc<Self>,
         pcm: Receiver<Vec<i16>>,
         stop: Arc<AtomicBool>,
         note: impl Fn(String),
-        interim: impl Fn(String),
-        final_text: impl Fn(String),
+        interim: impl Fn(String) + Send + 'static,
+        final_text: impl Fn(String) + Send + 'static,
     ) -> Result<()> {
         self.ensure(&note)?;
 
@@ -379,12 +409,21 @@ impl Local {
         let mut silence = Duration::ZERO;
         let mut spoke = false;
         let mut last_interim = Instant::now();
+        // How many settled utterances the decoder still owes us, and whether we
+        // have already said something about it.
+        let mut waiting = 0usize;
+        let mut warned = false;
+
+        let (jobs, decoded, done, worker) = Arc::clone(self).decoder(&stop, interim, final_text);
 
         while !stop.load(Ordering::Relaxed) {
             let Ok(chunk) = pcm.recv() else { break };
             if chunk.is_empty() {
                 continue;
             }
+
+            // Whatever the decoder finished while we were listening.
+            waiting = waiting.saturating_sub(done.swap(0, Ordering::Relaxed));
 
             let span = Duration::from_secs_f32(chunk.len() as f32 / rate);
             let loudness = rms(&chunk);
@@ -406,11 +445,31 @@ impl Local {
             let overran = held >= MAX_UTTERANCE;
 
             if ended || overran {
-                let text = self.transcribe(&buffer)?;
-                if !text.is_empty() {
-                    final_text(text);
+                // Never dropped, however far behind the decoder is: this is the
+                // transcript, and a queued sentence arrives late where a
+                // discarded one never arrives at all.
+                let _ = jobs.send(Job::Settled(std::mem::take(&mut buffer)));
+                buffer.reserve(TARGET_SAMPLE_RATE as usize * 20);
+                waiting += 1;
+
+                /*
+                 * Say so when the machine cannot keep up.
+                 *
+                 * Without this the only symptom is a transcript arriving later
+                 * and later, which reads as the app being broken rather than as
+                 * the model being too large for the hardware -- and the person
+                 * at the desk is the only one who can fix that, by choosing a
+                 * smaller one. Reported once per session rather than per
+                 * utterance: it is a standing condition, not an event.
+                 */
+                if waiting >= BEHIND_AFTER && !warned {
+                    warned = true;
+                    note(format!(
+                        "Transcription is running behind: {waiting} utterances are still \
+                         being decoded. This model is too large for this machine -- a \
+                         smaller one under Settings will keep up."
+                    ));
                 }
-                buffer.clear();
                 silence = Duration::ZERO;
                 spoke = false;
                 last_interim = Instant::now();
@@ -421,27 +480,99 @@ impl Local {
                 continue;
             }
 
-            // Something on screen while the sentence is still being said. Only
-            // worth the decode once there is enough audio to read.
-            if spoke && held >= MIN_UTTERANCE && last_interim.elapsed() >= INTERIM_EVERY {
-                if let Ok(text) = self.transcribe(&buffer) {
-                    if !text.is_empty() {
-                        interim(text);
-                    }
-                }
+            // Something on screen while the sentence is still being said, and
+            // the first thing to go when the machine cannot keep up. Skipped
+            // outright while the decoder is busy: an interim is a courtesy, and
+            // queueing them is what turns a slow machine into a stuck one --
+            // each decode covers a longer buffer than the last, so every one
+            // takes longer than the interval that triggers it.
+            if spoke
+                && held >= MIN_UTTERANCE
+                && last_interim.elapsed() >= INTERIM_EVERY
+                && !decoded.load(Ordering::Relaxed)
+            {
+                let _ = jobs.send(Job::Partial(buffer.clone()));
                 last_interim = Instant::now();
             }
         }
 
-        // Whatever was still being said when the operator stopped.
+        // Whatever was still being said when the operator stopped. Sent as
+        // settled: it is the end of a sentence somebody spoke, and the fact
+        // that a pause never arrived to close it does not make it disposable.
         if spoke && buffer.len() as f32 / rate >= MIN_UTTERANCE.as_secs_f32() {
-            if let Ok(text) = self.transcribe(&buffer) {
-                if !text.is_empty() {
-                    final_text(text);
-                }
-            }
+            let _ = jobs.send(Job::Settled(buffer));
         }
+
+        // Closing the queue is what ends the decoder's loop.
+        drop(jobs);
+
+        // Waited for rather than abandoned: anything still queued is transcript
+        // that was spoken and not yet reported, and dropping the thread here
+        // would discard it. On a machine that has fallen behind this can take a
+        // moment, which is the cost of not losing what was said.
+        if let Some(worker) = worker {
+            let _ = worker.join();
+        }
+
         Ok(())
+    }
+
+    /// What the decoder has been handed.
+    fn decoder(
+        self: Arc<Self>,
+        stop: &Arc<AtomicBool>,
+        interim: impl Fn(String) + Send + 'static,
+        final_text: impl Fn(String) + Send + 'static,
+    ) -> (
+        std::sync::mpsc::Sender<Job>,
+        Arc<AtomicBool>,
+        Arc<AtomicUsize>,
+        Option<std::thread::JoinHandle<()>>,
+    ) {
+        // Unbounded on purpose. A bound here would push back on the thread
+        // draining the microphone, which is the one thing that must never
+        // block; settled utterances are at most MAX_UTTERANCE long and stop
+        // arriving when the operator stops talking, so the queue drains.
+        let (tx, rx) = std::sync::mpsc::channel::<Job>();
+        let busy = Arc::new(AtomicBool::new(false));
+        let finished = Arc::new(AtomicUsize::new(0));
+
+        let working = Arc::clone(&busy);
+        let counted = Arc::clone(&finished);
+        let stop = Arc::clone(stop);
+        let engine = self;
+
+        let worker = std::thread::Builder::new()
+            .name("pulpitry-whisper".into())
+            .spawn(move || {
+                while let Ok(job) = rx.recv() {
+                    if stop.load(Ordering::Relaxed) {
+                        // Finish what was settled; abandon anything partial.
+                        if matches!(job, Job::Partial(_)) {
+                            continue;
+                        }
+                    }
+                    working.store(true, Ordering::Relaxed);
+                    let audio = match &job {
+                        Job::Settled(audio) | Job::Partial(audio) => audio,
+                    };
+                    let spoken = engine.transcribe(audio);
+                    working.store(false, Ordering::Relaxed);
+
+                    if matches!(job, Job::Settled(_)) {
+                        counted.fetch_add(1, Ordering::Relaxed);
+                    }
+                    match (job, spoken) {
+                        (Job::Settled(_), Ok(text)) if !text.is_empty() => final_text(text),
+                        (Job::Partial(_), Ok(text)) if !text.is_empty() => interim(text),
+                        (_, Err(error)) => eprintln!("[whisper] {error:#}"),
+                        _ => {}
+                    }
+                }
+            })
+            .ok();
+
+        (tx, busy, finished, worker)
     }
 }
 

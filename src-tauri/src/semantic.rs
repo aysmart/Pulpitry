@@ -124,6 +124,36 @@ pub struct Semantic {
     queue: SyncSender<u64>,
 }
 
+/// Keeps the index build off the last few cores.
+///
+/// The matrix multiplies underneath run on rayon, which by default takes every
+/// core there is. On macOS that is survivable: the window server runs the
+/// interface at a higher quality of service and it stays responsive regardless.
+/// Windows makes no such distinction -- a thread pool at normal priority
+/// competes with the interface on equal terms, and the result is an app that
+/// looks hung for as long as the build takes.
+///
+/// So the pool is capped, leaving room for the interface, the microphone and
+/// whatever else the machine is doing during a service. A build that takes
+/// somewhat longer and lets the operator keep working is the better trade every
+/// time: nobody is waiting on the index, and everybody is waiting on the app.
+///
+/// Returns the pool. Work has to be handed to it with `install`; holding it is
+/// not enough, since rayon routes by the calling thread's pool rather than by
+/// what happens to be in scope.
+fn restrain() -> Option<rayon::ThreadPool> {
+    let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    // Two spare on anything with room for them, and never fewer than one.
+    let spare = if cores >= 8 { 3 } else { 2 };
+    let workers = cores.saturating_sub(spare).max(1);
+
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(workers)
+        .thread_name(|index| format!("pulpitry-embed-{index}"))
+        .build()
+        .ok()
+}
+
 impl Semantic {
     pub fn new(app: AppHandle, library: Arc<Library>, model_dir: PathBuf) -> Arc<Self> {
         let (queue, incoming) = sync_channel::<u64>(4);
@@ -266,7 +296,11 @@ impl Semantic {
 
     fn build(&self, translation: &str, generation: u64, mut done: i64, total: i64) -> Result<()> {
         let embedder = self.embedder()?;
+        let pool = restrain();
         let mut since_report = 0usize;
+        // Where the scan has reached. Verses arrive in id order, so this only
+        // ever moves forward.
+        let mut after = 0i64;
 
         loop {
             if !self.current(generation) {
@@ -275,13 +309,20 @@ impl Semantic {
 
             let pending = self
                 .library
-                .verses_awaiting_embedding(translation, BATCH as i64)?;
+                .verses_awaiting_embedding(translation, after, BATCH as i64)?;
             if pending.is_empty() {
                 break;
             }
+            after = pending.last().map(|(id, _)| *id).unwrap_or(after);
 
             let texts: Vec<String> = pending.iter().map(|(_, text)| text.clone()).collect();
-            let vectors = embedder.embed(&texts)?;
+            // Inside the pool, not merely alongside it: rayon dispatches to
+            // whichever pool the calling thread belongs to, so work handed to it
+            // from outside still lands on the global one and takes every core.
+            let vectors = match &pool {
+                Some(pool) => pool.install(|| embedder.embed(&texts))?,
+                None => embedder.embed(&texts)?,
+            };
 
             let rows: Vec<(i64, Vec<u8>)> = pending
                 .iter()

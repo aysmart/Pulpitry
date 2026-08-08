@@ -3700,6 +3700,7 @@ dependencies = [
  "parking_lot",
  "printpdf",
  "pulldown-cmark",
+ "rayon",
  "reqwest",
  "rusqlite",
  "rustls",

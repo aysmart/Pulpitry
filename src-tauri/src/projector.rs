@@ -335,18 +335,55 @@ impl Projector {
         }
     }
 
+    /*
+     * Runs window work on the thread that owns the window system.
+     *
+     * Every command here arrives on one of Tauri's worker threads, and on
+     * Windows both creating a WebView2 window and asking the system about its
+     * monitors are only legal on the thread running the message loop. Called
+     * from anywhere else they wedge that loop -- and since all IPC crosses it,
+     * the whole app stops answering: no scripture, no songs, no settings, no
+     * relation to whatever was actually being done at the time.
+     *
+     * macOS marshals these calls for us, which is exactly why this went
+     * unnoticed until somebody opened the projector on Windows.
+     *
+     * Callers block until the main thread has run the closure. That is safe
+     * from a command and would deadlock from the main thread itself, since the
+     * work could not run until the caller returned -- so nothing here may be
+     * called from `setup` or from an event handler.
+     */
+    fn on_main<T, F>(&self, work: F) -> Result<T>
+    where
+        T: Send + 'static,
+        F: FnOnce(&AppHandle) -> T + Send + 'static,
+    {
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        let app = self.app.clone();
+        self.app
+            .run_on_main_thread(move || {
+                let _ = tx.send(work(&app));
+            })
+            .map_err(|err| anyhow!("could not reach the window thread: {err}"))?;
+
+        rx.recv().map_err(|_| anyhow!("the window thread went away before answering"))
+    }
+
     pub fn displays(&self) -> Result<Vec<Display>> {
-        let monitors = self
-            .app
+        let in_use = *self.display.lock();
+        self.on_main(move |app| Self::enumerate(app, in_use))?
+    }
+
+    /// Reads the monitor list. Only ever called on the main thread.
+    fn enumerate(app: &AppHandle, in_use: Option<usize>) -> Result<Vec<Display>> {
+        let monitors = app
             .available_monitors()
             .map_err(|err| anyhow!("could not enumerate displays: {err}"))?;
-        let primary = self
-            .app
+        let primary = app
             .primary_monitor()
             .ok()
             .flatten()
             .and_then(|monitor| monitor.name().cloned());
-        let in_use = *self.display.lock();
 
         Ok(monitors
             .iter()
@@ -374,69 +411,88 @@ impl Projector {
     /// Defaults to the first display that is not the primary one — during a
     /// service the projector is essentially never the laptop screen.
     pub fn open(&self, requested: Option<usize>) -> Result<ProjectorState> {
-        let monitors = self
-            .app
+        // One hop, and all of it on the window thread: choosing the monitor,
+        // moving an open window, and building a new one are each illegal off it
+        // on Windows. Two hops would also let the monitor list change between
+        // them and land the window somewhere the caller was not told about.
+        let index = self.on_main(move |app| Self::place(app, requested))??;
+
+        // Set here rather than inside the closure, so no lock is ever held
+        // across a hop to another thread.
+        *self.display.lock() = Some(index);
+        Ok(self.state())
+    }
+
+    /// Which monitor a request lands on. Only ever called on the main thread.
+    ///
+    /// Defaults to the first display that is not the primary one -- during a
+    /// service the projector is essentially never the laptop screen.
+    fn chosen(app: &AppHandle, requested: Option<usize>) -> Result<usize> {
+        let monitors = app
             .available_monitors()
             .map_err(|err| anyhow!("could not enumerate displays: {err}"))?;
         if monitors.is_empty() {
             return Err(anyhow!("no displays were found"));
         }
 
-        let primary = self
-            .app
+        let primary = app
             .primary_monitor()
             .ok()
             .flatten()
             .and_then(|monitor| monitor.name().cloned());
 
-        let index = requested
+        Ok(requested
             .filter(|index| *index < monitors.len())
             .or_else(|| {
-                monitors
-                    .iter()
-                    .position(|monitor| monitor.name().cloned() != primary)
+                monitors.iter().position(|monitor| monitor.name().cloned() != primary)
             })
-            .unwrap_or(0);
+            .unwrap_or(0))
+    }
 
+    /// Opens the projector, or moves it if already open. Main thread only.
+    ///
+    /// Returns the display it landed on.
+    fn place(app: &AppHandle, requested: Option<usize>) -> Result<usize> {
+        let index = Self::chosen(app, requested)?;
+        let monitors = app
+            .available_monitors()
+            .map_err(|err| anyhow!("could not enumerate displays: {err}"))?;
         let monitor = &monitors[index];
         let position = monitor.position();
         let size = monitor.size();
 
-        if let Some(window) = self.app.get_webview_window(WINDOW_LABEL) {
+        if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
             // Already open: move it rather than tearing down a live display.
             let _ = window.set_position(tauri::PhysicalPosition::new(position.x, position.y));
             let _ = window.set_size(tauri::PhysicalSize::new(size.width, size.height));
             let _ = window.set_focus();
-            *self.display.lock() = Some(index);
-            return Ok(self.state());
+            return Ok(index);
         }
 
-        WebviewWindowBuilder::new(
-            &self.app,
-            WINDOW_LABEL,
-            WebviewUrl::App("projector.html".into()),
-        )
-        .title("Pulpitry — Projector")
-        // Borderless and sized to the monitor rather than true fullscreen:
-        // fullscreen on macOS moves the window to its own Space, which takes
-        // it away from the operator and animates on every change.
-        .decorations(false)
-        .resizable(false)
-        .always_on_top(true)
-        .position(position.x as f64, position.y as f64)
-        .inner_size(size.width as f64, size.height as f64)
-        .background_color(tauri::window::Color(244, 241, 234, 255))
-        .build()
-        .map_err(|err| anyhow!("could not open the projector window: {err}"))?;
+        WebviewWindowBuilder::new(app, WINDOW_LABEL, WebviewUrl::App("projector.html".into()))
+            .title("Pulpitry — Projector")
+            // Borderless and sized to the monitor rather than true fullscreen:
+            // fullscreen on macOS moves the window to its own Space, which takes
+            // it away from the operator and animates on every change.
+            .decorations(false)
+            .resizable(false)
+            .always_on_top(true)
+            .position(position.x as f64, position.y as f64)
+            .inner_size(size.width as f64, size.height as f64)
+            .background_color(tauri::window::Color(244, 241, 234, 255))
+            .build()
+            .map_err(|err| anyhow!("could not open the projector window: {err}"))?;
 
-        *self.display.lock() = Some(index);
-        Ok(self.state())
+        Ok(index)
     }
 
     pub fn close(&self) -> ProjectorState {
-        if let Some(window) = self.app.get_webview_window(WINDOW_LABEL) {
-            let _ = window.close();
-        }
+        // Closing a window touches the same window system as opening one.
+        let _ = self.on_main(|app| {
+            if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+                let _ = window.close();
+            }
+        });
         *self.display.lock() = None;
         ProjectorState { open: false, display: None }
     }
