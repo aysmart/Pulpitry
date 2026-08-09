@@ -16,9 +16,17 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# The parts Castavox needs too. A path dependency while both are developed side
-# by side; see Castavox's docs/hosted-subscription.md for how it reaches CI.
-castavox-core = { path = "../../castavox-core" }
+# The parts the other product needs too, so there is one copy rather than two.
+#
+# A git dependency rather than a path: CI checks out this repository alone, and
+# a path pointing outside it resolves only on a machine where both happen to sit
+# side by side. Cargo.lock pins the exact commit, so builds stay reproducible
+# even though the branch moves.
+#
+# For local work on both at once, override it per-machine rather than here:
+#   cargo config: [patch."https://github.com/aysmart/castavox-core"]
+#                 castavox-core = { path = "../castavox-core" }
+castavox-core = { git = "https://github.com/aysmart/castavox-core", branch = "main" }
 
 # protocol-asset lets the projector read a chosen background image or video
 # through asset:, scoped at runtime to that one file.
