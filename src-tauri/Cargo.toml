@@ -16,6 +16,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# The parts Castavox needs too. A path dependency while both are developed side
+# by side; see Castavox's docs/hosted-subscription.md for how it reaches CI.
+castavox-core = { path = "../../castavox-core" }
+
 # protocol-asset lets the projector read a chosen background image or video
 # through asset:, scoped at runtime to that one file.
 tauri = { version = "2", features = ["protocol-asset"] }

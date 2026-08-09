@@ -129,7 +129,7 @@ pub struct Assistant {
 
 impl Assistant {
     pub fn new(app: AppHandle, library: Arc<Library>) -> Arc<Self> {
-        install_crypto_provider();
+        castavox_core::tls::install();
         let (queue, incoming) = sync_channel::<String>(4);
         let client = reqwest::blocking::Client::builder()
             .timeout(REQUEST_TIMEOUT)
@@ -332,18 +332,6 @@ fn request_body(config: &Config, context: &str) -> serde_json::Value {
             { "role": "user", "content": format!("Transcript:\n{context}") },
         ],
     })
-}
-
-/// Chooses the TLS backend once, before anything can make a request.
-///
-/// Naming the provider is the price of not compiling aws-lc-rs, which drags a
-/// C build chain onto every machine that builds this. Failure here means one
-/// was already installed, which is equally fine.
-pub(crate) fn install_crypto_provider() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        let _ = rustls::crypto::ring::default_provider().install_default();
-    });
 }
 
 fn ask(
@@ -553,7 +541,7 @@ mod tests {
         // Without a provider, rustls refuses at the first HTTPS call — which
         // would be mid-service, not at build time. Naming it is the trade for
         // not compiling aws-lc-rs, so it has to actually happen.
-        install_crypto_provider();
+        castavox_core::tls::install();
         assert!(
             rustls::crypto::CryptoProvider::get_default().is_some(),
             "no TLS backend installed; the model assist would fail on first use",
@@ -826,7 +814,7 @@ mod tests {
     /// other test happened to install the provider first, which is a race
     /// rather than a guarantee -- and on Linux it lost.
     fn client() -> reqwest::blocking::Client {
-        install_crypto_provider();
+        castavox_core::tls::install();
         reqwest::blocking::Client::new()
     }
 
