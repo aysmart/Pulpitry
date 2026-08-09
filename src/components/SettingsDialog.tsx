@@ -92,6 +92,11 @@ export function SettingsDialog({
   const [models, setModels] = useState<SpeechModel[]>([]);
   const [modelNote, setModelNote] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
+  // The `.en` builds cannot transcribe anything but English. Falls back to the
+  // file name so this is right before the model list has arrived.
+  const englishOnlyModel =
+    engine === "local" &&
+    (models.find((entry) => entry.file === model)?.englishOnly ?? model.includes(".en"));
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -354,10 +359,11 @@ export function SettingsDialog({
               </>
             ) : null}
 
-            {/* Both streaming engines send it to the recogniser. The local one
-                transcribes English whatever this says, so offering the choice
-                there would be a promise the engine does not keep. */}
-            {engine === "local" ? null : (
+            {/* Every engine uses it now, except an .en model, which cannot do
+                anything but English -- told to decode Yoruba it produces
+                English-shaped nonsense rather than Yoruba, so the choice is not
+                offered where it would be a promise nothing can keep. */}
+            {englishOnlyModel ? null : (
               <label className="flex flex-col gap-1.5">
                 <span className="text-[12px] text-pulpitry-muted">Spoken language</span>
                 <select

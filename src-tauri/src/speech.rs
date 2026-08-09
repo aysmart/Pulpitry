@@ -157,6 +157,7 @@ impl SpeechManager {
         if let Some(local) = self.local.lock().as_ref() {
             if let Ok(settings) = settings::load(&self.app) {
                 local.request(&settings.speech_model);
+                local.set_language(&settings.language);
             }
         }
     }
@@ -296,6 +297,7 @@ impl SpeechManager {
                     // Kept between sessions: loading a model is expensive, and
                     // the operator may have changed which one they want.
                     existing.request(&settings.speech_model);
+                    existing.set_language(&settings.language);
                     Arc::clone(existing)
                 }
                 None => {
@@ -303,6 +305,7 @@ impl SpeechManager {
                         data_dir.clone(),
                         settings.speech_model.clone(),
                     ));
+                    made.set_language(&settings.language);
                     *slot = Some(Arc::clone(&made));
                     made
                 }
