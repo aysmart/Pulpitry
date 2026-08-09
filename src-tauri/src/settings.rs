@@ -14,6 +14,9 @@ use tauri::{AppHandle, Manager};
 const KEYCHAIN_SERVICE: &str = "com.pulpitry.desktop";
 const KEYCHAIN_ACCOUNT: &str = "azure-speech-key";
 const KEYCHAIN_ASSIST_ACCOUNT: &str = "azure-assist-key";
+/// The device token a hosted subscription is activated into. A secret, so it
+/// lives here beside the keys rather than in the settings file.
+const KEYCHAIN_HOSTED_ACCOUNT: &str = "hosted-device-token";
 
 /// Azure AI Foundry's inference API is versioned by query string.
 pub const DEFAULT_ASSIST_API_VERSION: &str = "2024-05-01-preview";
@@ -40,12 +43,16 @@ pub struct Settings {
 
     /// Local embedding-based paraphrase matching. Offline and free, so it is on
     /// by default; the index costs a couple of minutes to build once.
-    /// Which recogniser turns audio into words: "azure" or "local".
+    /// Which recogniser turns audio into words: "azure", "local" or "hosted".
     ///
     /// Defaults to Azure, because that is what an existing install already
     /// uses and a silent change of engine would be a change of behaviour
     /// nobody asked for.
     pub speech_engine: String,
+    /// This machine, to a hosted subscription. Not a secret and not a
+    /// fingerprint: a random identifier made once, so that reactivating the
+    /// same laptop does not consume a second of the seats they paid for.
+    pub hosted_device_id: String,
     /// The whisper.cpp model, by file name. Empty until one is chosen.
     pub speech_model: String,
     pub semantic_enabled: bool,
@@ -132,6 +139,7 @@ impl Default for Settings {
             assist_model: String::new(),
             assist_api_version: DEFAULT_ASSIST_API_VERSION.into(),
             speech_engine: "azure".to_string(),
+            hosted_device_id: String::new(),
             speech_model: String::new(),
             semantic_enabled: true,
             // Measured against the full 31,102-verse index, and against the
@@ -156,6 +164,9 @@ pub struct SettingsView {
     pub settings: Settings,
     pub has_azure_key: bool,
     pub has_assist_key: bool,
+    /// Whether this machine has been activated on a hosted subscription, which
+    /// is what decides if the third engine is offered at all.
+    pub has_hosted_subscription: bool,
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf> {
@@ -254,6 +265,41 @@ pub fn clear_azure_key() -> Result<()> {
 
 pub fn has_azure_key() -> bool {
     matches!(load_azure_key(), Ok(Some(_)))
+}
+
+pub fn save_hosted_token(token: &str) -> Result<()> {
+    entry_for(KEYCHAIN_HOSTED_ACCOUNT)?
+        .set_password(token)
+        .context("could not save the subscription to the OS credential store")
+}
+
+pub fn load_hosted_token() -> Result<Option<String>> {
+    match entry_for(KEYCHAIN_HOSTED_ACCOUNT)?.get_password() {
+        Ok(token) => Ok(Some(token)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(err) => Err(anyhow::Error::new(err).context("could not read the subscription")),
+    }
+}
+
+pub fn clear_hosted_token() -> Result<()> {
+    match entry_for(KEYCHAIN_HOSTED_ACCOUNT)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(err) => Err(anyhow::Error::new(err).context("could not remove the subscription")),
+    }
+}
+
+pub fn has_hosted_token() -> bool {
+    matches!(load_hosted_token(), Ok(Some(_)))
+}
+
+/// This machine's identifier, made on first use and kept from then on.
+pub fn device_id(app: &AppHandle) -> Result<String> {
+    let mut settings = load(app)?;
+    if settings.hosted_device_id.trim().is_empty() {
+        settings.hosted_device_id = castavox_core::hosted::new_device_id();
+        save(app, &settings)?;
+    }
+    Ok(settings.hosted_device_id)
 }
 
 #[cfg(test)]

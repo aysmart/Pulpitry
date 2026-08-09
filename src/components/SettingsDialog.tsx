@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
+import { HostedSubscription } from "./HostedSubscription";
 import { NodeRuntimeNotice } from "./NodeRuntimeNotice";
 
 import {
@@ -84,6 +85,9 @@ export function SettingsDialog({
   const [semanticThreshold, setSemanticThreshold] = useState(settings.semanticThreshold);
 
   const [engine, setEngine] = useState(settings.speechEngine || "azure");
+  // Tracked rather than read straight from settings, because activating in this
+  // dialog must make the option selectable without reopening it.
+  const [hosted, setHosted] = useState(settings.hasHostedSubscription);
   const [model, setModel] = useState(settings.speechModel);
   const [models, setModels] = useState<SpeechModel[]>([]);
   const [modelNote, setModelNote] = useState<string | null>(null);
@@ -168,6 +172,9 @@ export function SettingsDialog({
         semanticThreshold,
         speechEngine: engine,
         speechModel: model,
+        // Made once by the backend and never edited here; sending back what we
+        // were given keeps this machine's identity to the subscription stable.
+        hostedDeviceId: settings.hostedDeviceId,
         // Carried through untouched: the look is edited in the Themes tab, and
         // a stale copy held open in this dialog would undo it on save.
         projector: settings.projector,
@@ -226,16 +233,37 @@ export function SettingsDialog({
                 onChange={(event) => setEngine(event.target.value)}
                 className={FIELD}
               >
-                <option value="azure">Azure Speech — needs an account</option>
+                <option value="azure">Azure Speech — your own account</option>
                 <option value="local">This machine — no account needed</option>
+                {/* Offered only once a subscription is on this machine: an
+                    engine that cannot start is not a choice. */}
+                {hosted ? (
+                  <option value="hosted">Castavox subscription — hours on our account</option>
+                ) : null}
               </select>
               <span className="text-[11.5px] leading-snug text-pulpitry-muted">
                 Azure streams: words appear as they are spoken and a verse can be found
                 mid-sentence. This machine transcribes a sentence once it ends, so a verse
                 arrives a second or two later — but it needs no account, no key and no network,
-                and it costs nothing per hour.
+                and it costs nothing per hour. A Castavox subscription streams like Azure
+                without your church having to open an Azure account at all.
               </span>
             </label>
+
+            {/* Always shown, not only when the hosted engine is selected: the
+                option cannot be chosen until a subscription is on this machine,
+                so hiding this behind that choice would hide the only way in. */}
+            <div className="flex flex-col gap-2 rounded border border-pulpitry-line bg-pulpitry-raised/40 px-3 py-2.5">
+              <span className="text-[12px] text-pulpitry-muted">Castavox subscription</span>
+              <HostedSubscription
+                onActivationChange={(activated) => {
+                  setHosted(activated);
+                  // A subscription removed here must not leave the engine
+                  // pointing at something that can no longer start.
+                  if (!activated) setEngine((current) => (current === "hosted" ? "azure" : current));
+                }}
+              />
+            </div>
 
             {engine === "local" ? (
               <label className="flex flex-col gap-1.5">

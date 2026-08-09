@@ -17,14 +17,17 @@ export interface Settings {
   translation: string;
 
   /**
-   * Which recogniser turns audio into words: "azure" or "local".
+   * Which recogniser turns audio into words: "azure", "local" or "hosted".
    *
    * Azure streams and needs an account; its free tier is about five hours a
    * month. The local engine runs whisper.cpp on this machine, needs nothing,
    * and is a beat behind because a model cannot transcribe a sentence until
-   * it ends.
+   * it ends. Hosted streams like Azure but on our account, metered against a
+   * plan, so a church needs no Azure account at all.
    */
   speechEngine: string;
+  /** This machine, to a hosted subscription. Not a secret. */
+  hostedDeviceId: string;
   /** The whisper.cpp model, by file name. Empty until one is chosen. */
   speechModel: string;
 
@@ -82,6 +85,8 @@ export const downloadSpeechModel = (file: string) =>
 export interface SettingsView extends Settings {
   hasAzureKey: boolean;
   hasAssistKey: boolean;
+  /** Whether this machine has been activated on a hosted subscription. */
+  hasHostedSubscription: boolean;
 }
 
 /** Mirrors the states the Rust supervisor reports. */
@@ -104,6 +109,36 @@ export const EVENT_FINAL = "transcript:final";
 export const EVENT_STATUS = "speech:status";
 
 export const listAudioInputs = () => invoke<AudioDevice[]>("list_audio_inputs");
+
+/** What a hosted plan has left this period. */
+export interface EntitlementView {
+  status: string;
+  /** "12 hr 30 min", worded in castavox-core so both products agree. */
+  speechRemaining: string;
+  speechSeconds: number;
+  usedFraction: number;
+  /** The highest warning threshold passed, or null while there is room. */
+  warnAt: number | null;
+  periodEndsAt: number;
+  expiresAt: number | null;
+  /** Speech seconds by product, which the pooled quota otherwise hides. */
+  byApp: Record<string, number>;
+}
+
+export interface HostedView {
+  activated: boolean;
+  /**
+   * Absent when the broker could not be reached, which is not the same as
+   * having nothing left. `notice` says which.
+   */
+  entitlement: EntitlementView | null;
+  notice: string | null;
+}
+
+export const hostedStatus = () => invoke<HostedView>("hosted_status");
+export const hostedActivate = (licence: string) =>
+  invoke<HostedView>("hosted_activate", { licence });
+export const hostedDeactivate = () => invoke<HostedView>("hosted_deactivate");
 
 export const getSettings = () => invoke<SettingsView>("get_settings");
 
