@@ -235,11 +235,11 @@ export function SettingsDialog({
               >
                 <option value="azure">Azure Speech — your own account</option>
                 <option value="local">This machine — no account needed</option>
-                {/* Offered only once a subscription is on this machine: an
-                    engine that cannot start is not a choice. */}
-                {hosted ? (
-                  <option value="hosted">Castavox subscription — hours on our account</option>
-                ) : null}
+                {/* Always offered, including before activation: choosing it is
+                    how somebody reaches the licence field below. */}
+                <option value="hosted">
+                  Castavox subscription{hosted ? "" : " — needs a licence key"}
+                </option>
               </select>
               <span className="text-[11.5px] leading-snug text-pulpitry-muted">
                 Azure streams: words appear as they are spoken and a verse can be found
@@ -250,20 +250,12 @@ export function SettingsDialog({
               </span>
             </label>
 
-            {/* Always shown, not only when the hosted engine is selected: the
-                option cannot be chosen until a subscription is on this machine,
-                so hiding this behind that choice would hide the only way in. */}
-            <div className="flex flex-col gap-2 rounded border border-pulpitry-line bg-pulpitry-raised/40 px-3 py-2.5">
-              <span className="text-[12px] text-pulpitry-muted">Castavox subscription</span>
-              <HostedSubscription
-                onActivationChange={(activated) => {
-                  setHosted(activated);
-                  // A subscription removed here must not leave the engine
-                  // pointing at something that can no longer start.
-                  if (!activated) setEngine((current) => (current === "hosted" ? "azure" : current));
-                }}
-              />
-            </div>
+            {/* Only what the chosen engine actually uses. An Azure key sitting
+                under "This machine" reads as something that must be filled in,
+                and the field that does matter is lost among three that do not. */}
+            {engine === "hosted" ? (
+              <HostedSubscription onActivationChange={setHosted} />
+            ) : null}
 
             {engine === "local" ? (
               <label className="flex flex-col gap-1.5">
@@ -316,46 +308,57 @@ export function SettingsDialog({
                 ) : null}
               </label>
             ) : (
+              /* Azure and a subscription both stream through the Node bridge,
+                 so both need a runtime. Only transcribing here does not. */
               <NodeRuntimeNotice />
             )}
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[12px] text-pulpitry-muted">
-                Azure Speech key
-                {settings.hasAzureKey ? (
-                  <span className="ml-2 text-pulpitry-teal">stored in your keychain</span>
-                ) : null}
-              </span>
-              <input
-                type="password"
-                value={key}
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(event) => setKey(event.target.value)}
-                placeholder={settings.hasAzureKey ? "•••••••• (leave blank to keep)" : "Paste your key"}
-                className={FIELD}
-              />
-            </label>
+            {engine === "azure" ? (
+              <>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-pulpitry-muted">
+                    Azure Speech key
+                    {settings.hasAzureKey ? (
+                      <span className="ml-2 text-pulpitry-teal">stored in your keychain</span>
+                    ) : null}
+                  </span>
+                  <input
+                    type="password"
+                    value={key}
+                    autoComplete="off"
+                    spellCheck={false}
+                    onChange={(event) => setKey(event.target.value)}
+                    placeholder={
+                      settings.hasAzureKey ? "•••••••• (leave blank to keep)" : "Paste your key"
+                    }
+                    className={FIELD}
+                  />
+                </label>
 
-            <div className="flex gap-3">
-              <label className="flex flex-1 flex-col gap-1.5">
-                <span className="text-[12px] text-pulpitry-muted">Region</span>
-                <input
-                  list="pulpitry-azure-regions"
-                  value={region}
-                  spellCheck={false}
-                  onChange={(event) => setRegion(event.target.value)}
-                  placeholder="e.g. uksouth"
-                  className={FIELD}
-                />
-                <datalist id="pulpitry-azure-regions">
-                  {REGIONS.map((name) => (
-                    <option key={name} value={name} />
-                  ))}
-                </datalist>
-              </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-pulpitry-muted">Region</span>
+                  <input
+                    list="pulpitry-azure-regions"
+                    value={region}
+                    spellCheck={false}
+                    onChange={(event) => setRegion(event.target.value)}
+                    placeholder="e.g. uksouth"
+                    className={FIELD}
+                  />
+                  <datalist id="pulpitry-azure-regions">
+                    {REGIONS.map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                </label>
+              </>
+            ) : null}
 
-              <label className="flex flex-1 flex-col gap-1.5">
+            {/* Both streaming engines send it to the recogniser. The local one
+                transcribes English whatever this says, so offering the choice
+                there would be a promise the engine does not keep. */}
+            {engine === "local" ? null : (
+              <label className="flex flex-col gap-1.5">
                 <span className="text-[12px] text-pulpitry-muted">Spoken language</span>
                 <select
                   value={language}
@@ -369,9 +372,9 @@ export function SettingsDialog({
                   ))}
                 </select>
               </label>
-            </div>
+            )}
 
-            {settings.hasAzureKey ? (
+            {engine === "azure" && settings.hasAzureKey ? (
               <button
                 type="button"
                 onClick={() => void forget("speech")}

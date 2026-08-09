@@ -140,20 +140,14 @@ pub async fn hosted_activate(app: AppHandle, licence: String) -> Result<HostedVi
 /// Local only: the seat is released when the broker is told, and it is not told
 /// here. That is deliberate — a church that wipes a laptop should not silently
 /// lose a seat it paid for, and releasing seats is an administrative act.
+///
+/// The chosen engine is left alone. Settings shows the licence field whenever
+/// the hosted engine is selected, so a machine that deactivates lands on the
+/// one screen that can put it right; changing the engine underneath the open
+/// dialog would only disagree with what it is showing.
 #[tauri::command]
-pub async fn hosted_deactivate(app: AppHandle) -> Result<HostedView, String> {
+pub async fn hosted_deactivate() -> Result<HostedView, String> {
     settings::clear_hosted_token().map_err(crate::to_message)?;
-
-    // Back to Azure, so a machine is never left selecting an engine it can no
-    // longer reach. Whisper would be the kinder default but it needs a model
-    // downloaded, and offering an engine that cannot start is not kindness.
-    if let Ok(mut current) = settings::load(&app) {
-        if current.speech_engine == "hosted" {
-            current.speech_engine = "azure".to_string();
-            let _ = settings::save(&app, &current);
-        }
-    }
-
     Ok(HostedView::default())
 }
 
