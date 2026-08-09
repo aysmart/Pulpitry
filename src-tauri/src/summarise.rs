@@ -70,7 +70,7 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
     // build panics on a background thread and takes the request with it. This
     // is not a test-only concern; it would have failed for every operator who
     // ever pressed Summarise.
-    crate::assist::install_crypto_provider();
+    castavox_core::tls::install();
 
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(120))

@@ -1,19 +1,17 @@
+// Six modules now live in castavox-core, shared with Castavox rather than
+// copied into it. Named here so the rest of this file reads unchanged.
+use castavox_core::{audio, embed, exports, node, transcripts, whisper};
+
 mod assist;
-mod audio;
 mod bible;
 mod catalog;
 mod detect;
-mod node;
-mod embed;
 mod projector;
 mod semantic;
 mod settings;
 mod speech;
-mod exports;
 mod log;
 mod summarise;
-mod transcripts;
-mod whisper;
 mod spoken;
 mod suggestion;
 
@@ -671,6 +669,9 @@ pub fn run() {
             if let Ok(dir) = app.path().app_data_dir() {
                 if let Some(path) = log::start(&dir) {
                     log::catch_panics();
+                    // The shared crate writes to whatever it is given; without
+                    // this its diagnostics would go to a stderr nobody reads.
+                    castavox_core::log::to(|message| log::line(message));
                     log::line(&format!("log: {}", path.display()));
                 }
             }
