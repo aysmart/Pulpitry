@@ -369,11 +369,13 @@ impl SpeechManager {
 
         // The key goes over the environment rather than argv, so it never shows
         // up in the process list.
+        // Named for the shared bridge rather than for either product; the same
+        // file reads these in Castavox. See castavox-core/bridge.
         let env = HashMap::from([
-            ("PULPITRY_AZURE_KEY".to_string(), key),
-            ("PULPITRY_AZURE_REGION".to_string(), settings.azure_region.clone()),
-            ("PULPITRY_LANGUAGE".to_string(), settings.language.clone()),
-            ("PULPITRY_SAMPLE_RATE".to_string(), audio::TARGET_SAMPLE_RATE.to_string()),
+            ("CASTAVOX_SPEECH_KEY".to_string(), key),
+            ("CASTAVOX_SPEECH_REGION".to_string(), settings.azure_region.clone()),
+            ("CASTAVOX_SPEECH_LANGUAGE".to_string(), settings.language.clone()),
+            ("CASTAVOX_SPEECH_SAMPLE_RATE".to_string(), audio::TARGET_SAMPLE_RATE.to_string()),
         ]);
 
         // Checked before anything else is set up, so a machine without Node

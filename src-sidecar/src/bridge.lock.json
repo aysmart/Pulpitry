@@ -1,0 +1,7 @@
+{
+  "source": "castavox-core/bridge/index.js",
+  "sha256": "56e17cf50184aa74062dc570b4fe91a30c8b4ecc45f6b9280246b63fa1221cb7",
+  "revision": "13b0d94",
+  "syncedAt": "2026-08-09",
+  "note": "Generated. Edit the canonical file in castavox-core and re-run bridge/sync.mjs."
+}

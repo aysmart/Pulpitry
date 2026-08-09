@@ -1,14 +1,27 @@
 /**
- * Pulpitry speech sidecar.
+ * The Azure Speech bridge, shared by Castavox and Pulpitry.
  *
  * Reads raw PCM on stdin (16 kHz, 16-bit little-endian, mono — written by the
- * Rust core's cpal capture thread), streams it to Azure Speech, and writes
- * newline-delimited JSON transcript events to stdout.
+ * Rust capture thread), streams it to Azure Speech, and writes newline-delimited
+ * JSON transcript events to stdout.
  *
- * Why stdin rather than the SDK's own microphone input: the JS SDK implements
- * mic capture against `navigator.mediaDevices`, which does not exist in Node,
- * so `AudioConfig.fromDefaultMicrophoneInput()` cannot work here. Capture lives
- * in Rust instead, which also gives the operator UI real device enumeration.
+ * # Canonical source
+ *
+ * This file lives in castavox-core. The copies at
+ * Pulpitry/src-sidecar/src/index.js and Castavox/sidecar/speech-node/src/index.js
+ * are generated from it by `npm run sync-bridge`, and each app's build refuses
+ * to bundle a copy that has been edited by hand. Change this file, sync both.
+ *
+ * It is shared because the two copies had already become the same file to the
+ * byte, which meant every fix had to be remembered twice and a forgotten one
+ * would be found by a church rather than by us.
+ *
+ * # Why stdin rather than the SDK's own microphone input
+ *
+ * The JS SDK implements mic capture against `navigator.mediaDevices`, which does
+ * not exist in Node, so `AudioConfig.fromDefaultMicrophoneInput()` cannot work
+ * here. Capture lives in Rust instead, which also gives the operator UI real
+ * device enumeration.
  *
  * stdout carries protocol messages only. Everything else goes to stderr.
  *
@@ -27,10 +40,10 @@ console.log = (...args) => console.error(...args);
 
 const sdk = require("microsoft-cognitiveservices-speech-sdk");
 
-const KEY = process.env.PULPITRY_AZURE_KEY || "";
-const REGION = process.env.PULPITRY_AZURE_REGION || "";
-const LANGUAGE = process.env.PULPITRY_LANGUAGE || "en-US";
-const SAMPLE_RATE = Number(process.env.PULPITRY_SAMPLE_RATE) || 16000;
+const KEY = process.env.CASTAVOX_SPEECH_KEY || "";
+const REGION = process.env.CASTAVOX_SPEECH_REGION || "";
+const LANGUAGE = process.env.CASTAVOX_SPEECH_LANGUAGE || "en-US";
+const SAMPLE_RATE = Number(process.env.CASTAVOX_SPEECH_SAMPLE_RATE) || 16000;
 
 const RESTART_DELAY_MS = 1200;
 const AUDIO_FORMAT = sdk.AudioStreamFormat.getWaveFormatPCM(SAMPLE_RATE, 16, 1);
