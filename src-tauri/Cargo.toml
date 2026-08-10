@@ -26,7 +26,7 @@ tauri-build = { version = "2", features = [] }
 # For local work on both at once, override it per-machine rather than here:
 #   cargo config: [patch."https://github.com/aysmart/castavox-core"]
 #                 castavox-core = { path = "../castavox-core" }
-castavox-core = { git = "https://github.com/aysmart/castavox-core", branch = "hosted" }
+castavox-core = { git = "https://github.com/aysmart/castavox-core", branch = "main" }
 
 # protocol-asset lets the projector read a chosen background image or video
 # through asset:, scoped at runtime to that one file.
