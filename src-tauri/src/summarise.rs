@@ -120,21 +120,30 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
     };
 
     if let Some(status) = status {
-        // 404 from Foundry almost never means the deployment is missing. It
-        // means the route was wrong -- most often an API version predating the
-        // /models route, which fails in exactly the same way as a typo and
-        // gives the operator nothing to go on.
-        let hint = if status.as_u16() == 404 {
-            "\n\nA 404 here usually means the API version is too old for this \
-             endpoint rather than that the deployment is missing. Clearing the \
-             API version field restores the default, which is known to work."
-        } else {
-            ""
-        };
-        bail!(
-            "Azure AI Foundry returned {status}: {}{hint}",
-            payload.chars().take(300).collect::<String>()
+        // The detail goes to the log, not to the screen. What comes back can be
+        // an HTML error page, and pasting a few hundred characters of somebody
+        // else's markup in front of an operator tells them nothing they can act
+        // on and buries the sentence that would have.
+        crate::log_line!(
+            "[summarise] {url} returned {status}: {}",
+            payload.chars().take(600).collect::<String>().replace('\n', " ")
         );
+
+        // What is worth saying is the one thing they can do about it, and that
+        // depends on whose deployment it is.
+        if hosted {
+            bail!("The assistant could not be reached just now. Your transcript is safe -- try again in a moment.");
+        }
+        // A 404 from Foundry almost never means the deployment is missing. It
+        // means the route was wrong -- most often an API version predating the
+        // /models route, which fails in exactly the same way as a typo.
+        if status.as_u16() == 404 {
+            bail!("The model endpoint answered but the address was not recognised. Clearing the API version field in Settings restores the default, which is known to work.");
+        }
+        if status.as_u16() == 401 || status.as_u16() == 403 {
+            bail!("The model refused the key. Check the key and endpoint under Settings -> Model assistance.");
+        }
+        bail!("The model could not answer that just now. Try again in a moment.");
     }
 
     let parsed: serde_json::Value =

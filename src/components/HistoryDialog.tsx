@@ -491,11 +491,19 @@ export function HistoryDialog({
           </div>
         </div>
 
+        {/* A fixed height here meant a long message drew straight over the
+            transcript behind it. It wraps now, and is bounded: anything longer
+            than three lines is not a sentence an operator was going to read. */}
         <footer
           aria-live="polite"
-          className="flex h-8 shrink-0 items-center border-t border-pulpitry-line px-5 text-[11.5px]"
+          className="flex min-h-8 shrink-0 items-start border-t border-pulpitry-line px-5 py-1.5 text-[11.5px]"
         >
-          <span className={error ? "text-pulpitry-gold" : "text-pulpitry-muted"}>
+          <span
+            title={error ?? notice ?? undefined}
+            className={`line-clamp-3 leading-snug ${
+              error ? "text-pulpitry-gold" : "text-pulpitry-muted"
+            }`}
+          >
             {error ?? notice ?? ""}
           </span>
         </footer>
