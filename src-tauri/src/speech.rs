@@ -592,14 +592,24 @@ impl SpeechManager {
         Self::end(session);
     }
 
+    /// Stops a session, letting the bridge close its own books first.
+    ///
+    /// Dropped rather than killed. Dropping closes the bridge's stdin, which it
+    /// treats as "stop": on a hosted subscription it reports the last of the
+    /// audio and closes its metered session before exiting, under its own
+    /// failsafe, within a few seconds.
+    ///
+    /// `kill()` is SIGKILL, and TerminateProcess on Windows. Neither can be
+    /// caught, so the bridge never got to close anything: the session stayed
+    /// open on the server and the audio since the last heartbeat -- up to five
+    /// minutes of it -- was never reported. Found in the usage table rather
+    /// than by anything failing, because nothing did.
     fn end(session: Option<Session>) {
         let Some(session) = session else { return };
         session.audio_stop.store(true, Ordering::SeqCst);
-        // Bind first so the lock guard is released before the child is killed.
+        // Bind first so the lock guard is released before the child is dropped.
         let child = session.child.lock().take();
-        if let Some(child) = child {
-            let _ = child.kill();
-        }
+        drop(child);
     }
 }
 
