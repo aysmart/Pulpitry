@@ -66,7 +66,13 @@ function ensureDependencies() {
 function verifyBridge() {
   const lock = JSON.parse(readFileSync(resolve(sidecarDir, "src/bridge.lock.json"), "utf8"));
   const found = createHash("sha256")
-    .update(readFileSync(resolve(sidecarDir, "src/index.js"), "utf8"), "utf8")
+    // Line endings normalised first: Git for Windows converts LF to CRLF on
+    // checkout, so hashing the raw bytes fails every Windows build while macOS
+    // and Linux pass, and reports it as the bridge having been tampered with.
+    // What is being caught here is a copy edited in place rather than in
+    // castavox-core; a newline convention is not that. Must match `hashOf` in
+    // castavox-core/bridge/sync.mjs, which writes the lock.
+    .update(readFileSync(resolve(sidecarDir, "src/index.js"), "utf8").replace(/\r\n/g, "\n"), "utf8")
     .digest("hex");
   if (found === lock.sha256) return;
 
