@@ -64,6 +64,11 @@ struct Session {
     generation: u64,
     child: Arc<Mutex<Option<CommandChild>>>,
     audio_stop: Arc<AtomicBool>,
+    /// Set on a subscription: what to close the metered session with.
+    device_token: Option<String>,
+    /// Which metered session the bridge opened, once it has said. Only ever set
+    /// on a subscription, and only used if the bridge does not close it itself.
+    metered: Arc<Mutex<Option<String>>>,
 }
 
 pub struct SpeechManager {
@@ -372,6 +377,10 @@ impl SpeechManager {
             ("CASTAVOX_SPEECH_SAMPLE_RATE".to_string(), audio::TARGET_SAMPLE_RATE.to_string()),
         ]);
 
+        // Kept for the backstop in `end`, which closes the metered session if
+        // the bridge never got to.
+        let mut device_token = None;
+
         if settings.speech_engine == "hosted" {
             // On a hosted subscription the bridge opens its own metered session
             // and renews its own credential; what it needs from here is only
@@ -386,7 +395,8 @@ impl SpeechManager {
                 "CASTAVOX_BROKER_URL".to_string(),
                 castavox_core::hosted::Broker::new().base_url().to_string(),
             );
-            env.insert("CASTAVOX_DEVICE_TOKEN".to_string(), token);
+            env.insert("CASTAVOX_DEVICE_TOKEN".to_string(), token.clone());
+            device_token = Some(token);
         } else {
             let key = settings::load_azure_key()?
                 .filter(|k| !k.trim().is_empty())
@@ -443,7 +453,13 @@ impl SpeechManager {
         };
 
         spawn_stdin_writer(Arc::clone(&child), rx, Arc::clone(&audio_stop));
-        *self.session.lock() = Some(Session { generation, child, audio_stop });
+        *self.session.lock() = Some(Session {
+            generation,
+            child,
+            audio_stop,
+            device_token,
+            metered: Arc::new(Mutex::new(None)),
+        });
 
         Ok((events, device))
     }
@@ -541,6 +557,17 @@ impl SpeechManager {
                     },
                 );
             }
+            "session" => {
+                // Which metered session this run owns. Kept for the backstop in
+                // `end` and used for nothing else: while the bridge is alive it
+                // is the one metering and closing it.
+                let id = message.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+                if !id.is_empty() {
+                    if let Some(session) = self.session.lock().as_ref() {
+                        *session.metered.lock() = Some(id.to_string());
+                    }
+                }
+            }
             "listening" => {
                 let device = self.status.lock().device.clone();
                 self.set_status("listening", None, device);
@@ -610,7 +637,57 @@ impl SpeechManager {
         // Bind first so the lock guard is released before the child is dropped.
         let child = session.child.lock().take();
         drop(child);
+
+        close_metered(session.device_token, session.metered.lock().take());
     }
+}
+
+/// How long the bridge is left alone to close its own session before this does.
+///
+/// Its failsafe is four seconds and it exits on its own well inside that; this
+/// waits past the far end of it. The number only has to be longer, not exact:
+/// closing twice is safe and closing late costs nothing.
+const BRIDGE_CLOSE_GRACE: Duration = Duration::from_secs(6);
+
+/// Closes the metered session if the bridge did not.
+///
+/// # Why this exists as well as the bridge's own close
+///
+/// The bridge closes its session on the way out, and that is the path worth
+/// having: it is the only thing that knows how many seconds went unreported
+/// since the last heartbeat. But it cannot close anything if it is killed or
+/// crashes, and a session nobody closes counts against the concurrency limit
+/// until it is cleared by hand — which has had to happen.
+///
+/// So this closes it too, and records **no seconds**: the tail is genuinely
+/// unknown from here, and inventing a figure would bill a church for a guess.
+/// The route is idempotent, so the ordinary case — where the bridge got there
+/// first, with the real number — is untouched by this arriving after it.
+///
+/// # And why it waits
+///
+/// Unlike Castavox, this does not wait for the child to exit; it drops it and
+/// moves on, which is what lets a stop feel instant. That means the bridge is
+/// very likely still closing its session as this runs, and arriving first with
+/// a zero would take the place of its real figure. So it hangs back until the
+/// bridge has certainly finished, on a thread, where nobody is waiting for it.
+fn close_metered(device_token: Option<String>, session_id: Option<String>) {
+    let (Some(token), Some(id)) = (device_token, session_id) else { return };
+
+    std::thread::Builder::new()
+        .name("pulpitry-session-close".into())
+        .spawn(move || {
+            std::thread::sleep(BRIDGE_CLOSE_GRACE);
+            match castavox_core::hosted::Broker::new().end_session(&token, &id, 0) {
+                // Said to nobody: the operator asked to stop and it stopped. A
+                // session left open is ours to notice, and /insight lists them.
+                Ok(()) => {}
+                Err(error) => {
+                    crate::log_line!("[speech] could not close metered session {id}: {error}")
+                }
+            }
+        })
+        .ok();
 }
 
 /// Misconfiguration cannot be retried away; connectivity failures can.
