@@ -71,6 +71,15 @@ impl From<hosted::Entitlement> for EntitlementView {
     }
 }
 
+/// Where the broker lives, worked out once.
+///
+/// `Broker::new()` reads an environment variable each time, and the assistant
+/// asks for this on a path that runs while somebody is speaking.
+pub fn broker_base() -> String {
+    static BASE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    BASE.get_or_init(|| Broker::new().base_url().to_string()).clone()
+}
+
 /// Reads the subscription's state, without asking the operator to do anything.
 ///
 /// Called when settings open. A machine that is activated but offline reports

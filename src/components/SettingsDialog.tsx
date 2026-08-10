@@ -20,11 +20,31 @@ import {
 
 /** Azure Speech regions, by the identifier the SDK expects. */
 const REGIONS = [
-  "australiaeast", "brazilsouth", "canadacentral", "centralindia", "centralus",
-  "eastasia", "eastus", "eastus2", "francecentral", "germanywestcentral",
-  "japaneast", "koreacentral", "northeurope", "norwayeast", "southafricanorth",
-  "southcentralus", "southeastasia", "swedencentral", "switzerlandnorth",
-  "uaenorth", "uksouth", "westeurope", "westus", "westus2", "westus3",
+  "australiaeast",
+  "brazilsouth",
+  "canadacentral",
+  "centralindia",
+  "centralus",
+  "eastasia",
+  "eastus",
+  "eastus2",
+  "francecentral",
+  "germanywestcentral",
+  "japaneast",
+  "koreacentral",
+  "northeurope",
+  "norwayeast",
+  "southafricanorth",
+  "southcentralus",
+  "southeastasia",
+  "swedencentral",
+  "switzerlandnorth",
+  "uaenorth",
+  "uksouth",
+  "westeurope",
+  "westus",
+  "westus2",
+  "westus3",
 ];
 
 const LANGUAGES = [
@@ -50,11 +70,21 @@ function describeSize(bytes: number): string {
 const FIELD =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-2 text-[13px] text-pulpitry-text outline-none focus-visible:focus-ring";
 
-function Section({ title, note, children }: { title: string; note: string; children: React.ReactNode }) {
+function Section({
+  title,
+  note,
+  children,
+}: {
+  title: string;
+  note: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h3 className="text-[12px] tracking-[0.12em] text-pulpitry-muted uppercase">{title}</h3>
+        <h3 className="text-[12px] tracking-[0.12em] text-pulpitry-muted uppercase">
+          {title}
+        </h3>
         <p className="mt-0.5 text-[11.5px] text-pulpitry-muted">{note}</p>
       </div>
       {children}
@@ -78,11 +108,17 @@ export function SettingsDialog({
   const [assistEnabled, setAssistEnabled] = useState(settings.assistEnabled);
   const [assistEndpoint, setAssistEndpoint] = useState(settings.assistEndpoint);
   const [assistModel, setAssistModel] = useState(settings.assistModel);
-  const [assistApiVersion, setAssistApiVersion] = useState(settings.assistApiVersion);
+  const [assistApiVersion, setAssistApiVersion] = useState(
+    settings.assistApiVersion,
+  );
   const [assistKey, setAssistKey] = useState("");
 
-  const [semanticEnabled, setSemanticEnabled] = useState(settings.semanticEnabled);
-  const [semanticThreshold, setSemanticThreshold] = useState(settings.semanticThreshold);
+  const [semanticEnabled, setSemanticEnabled] = useState(
+    settings.semanticEnabled,
+  );
+  const [semanticThreshold, setSemanticThreshold] = useState(
+    settings.semanticThreshold,
+  );
 
   const [engine, setEngine] = useState(settings.speechEngine || "azure");
   // Tracked rather than read straight from settings, because activating in this
@@ -96,7 +132,8 @@ export function SettingsDialog({
   // file name so this is right before the model list has arrived.
   const englishOnlyModel =
     engine === "local" &&
-    (models.find((entry) => entry.file === model)?.englishOnly ?? model.includes(".en"));
+    (models.find((entry) => entry.file === model)?.englishOnly ??
+      model.includes(".en"));
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +167,9 @@ export function SettingsDialog({
     const unlisten = listen<ModelProgress>("speech-model-progress", (event) => {
       const p = event.payload;
       if (p.state === "downloading" && p.total) {
-        setModelNote(`Downloading ${p.file} — ${Math.round((p.received! * 100) / p.total)}%`);
+        setModelNote(
+          `Downloading ${p.file} — ${Math.round((p.received! * 100) / p.total)}%`,
+        );
         return;
       }
       setFetching(false);
@@ -138,7 +177,9 @@ export function SettingsDialog({
         setModelNote(`${p.file} is ready.`);
         setModel(p.file);
         // Re-listed so it shows as downloaded and the choice visibly took.
-        speechModels().then(setModels).catch(() => {});
+        speechModels()
+          .then(setModels)
+          .catch(() => {});
       } else {
         setModelNote(`Could not download ${p.file}. ${p.error ?? ""}`);
       }
@@ -247,11 +288,12 @@ export function SettingsDialog({
                 </option>
               </select>
               <span className="text-[11.5px] leading-snug text-pulpitry-muted">
-                Azure streams: words appear as they are spoken and a verse can be found
-                mid-sentence. This machine transcribes a sentence once it ends, so a verse
-                arrives a second or two later — but it needs no account, no key and no network,
-                and it costs nothing per hour. A Castavox subscription streams like Azure
-                without your church having to open an Azure account at all.
+                Azure streams: words appear as they are spoken and a verse can
+                be found mid-sentence. This machine transcribes a sentence once
+                it ends, so a verse arrives a second or two later — but it needs
+                no account, no key and no network, and it costs nothing per
+                hour. A Castavox subscription streams like Azure without your
+                church having to open an Azure account at all.
               </span>
             </label>
 
@@ -276,7 +318,9 @@ export function SettingsDialog({
                          as unset when a choice is already stored. */
                       <option value={model}>{model}</option>
                     ) : null}
-                    {models.length === 0 && !model ? <option value="">—</option> : null}
+                    {models.length === 0 && !model ? (
+                      <option value="">—</option>
+                    ) : null}
                     {models.map((m) => (
                       <option key={m.file} value={m.file}>
                         {/* Size first: on the machine most churches own, that is
@@ -284,7 +328,9 @@ export function SettingsDialog({
                         {m.label} — {describeSize(m.bytes)} ·{" "}
                         {[
                           m.englishOnly ? "English only" : "any language",
-                          m.quantised ? "smaller, slightly less accurate" : null,
+                          m.quantised
+                            ? "smaller, slightly less accurate"
+                            : null,
                           m.installed ? "downloaded" : null,
                         ]
                           .filter(Boolean)
@@ -309,7 +355,9 @@ export function SettingsDialog({
                   </button>
                 </div>
                 {modelNote ? (
-                  <span className="text-[11.5px] leading-snug text-pulpitry-muted">{modelNote}</span>
+                  <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                    {modelNote}
+                  </span>
                 ) : null}
               </label>
             ) : (
@@ -324,7 +372,9 @@ export function SettingsDialog({
                   <span className="text-[12px] text-pulpitry-muted">
                     Azure Speech key
                     {settings.hasAzureKey ? (
-                      <span className="ml-2 text-pulpitry-teal">stored in your keychain</span>
+                      <span className="ml-2 text-pulpitry-teal">
+                        stored in your keychain
+                      </span>
                     ) : null}
                   </span>
                   <input
@@ -334,14 +384,18 @@ export function SettingsDialog({
                     spellCheck={false}
                     onChange={(event) => setKey(event.target.value)}
                     placeholder={
-                      settings.hasAzureKey ? "•••••••• (leave blank to keep)" : "Paste your key"
+                      settings.hasAzureKey
+                        ? "•••••••• (leave blank to keep)"
+                        : "Paste your key"
                     }
                     className={FIELD}
                   />
                 </label>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-[12px] text-pulpitry-muted">Region</span>
+                  <span className="text-[12px] text-pulpitry-muted">
+                    Region
+                  </span>
                   <input
                     list="pulpitry-azure-regions"
                     value={region}
@@ -365,7 +419,9 @@ export function SettingsDialog({
                 offered where it would be a promise nothing can keep. */}
             {englishOnlyModel ? null : (
               <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] text-pulpitry-muted">Spoken language</span>
+                <span className="text-[12px] text-pulpitry-muted">
+                  Spoken language
+                </span>
                 <select
                   value={language}
                   onChange={(event) => setLanguage(event.target.value)}
@@ -390,7 +446,6 @@ export function SettingsDialog({
               </button>
             ) : null}
           </Section>
-
 
           <div className="border-t border-pulpitry-line" />
 
@@ -424,97 +479,145 @@ export function SettingsDialog({
                 step={0.01}
                 value={semanticThreshold}
                 disabled={!semanticEnabled}
-                onChange={(event) => setSemanticThreshold(Number(event.target.value))}
+                onChange={(event) =>
+                  setSemanticThreshold(Number(event.target.value))
+                }
                 className="accent-pulpitry-gold disabled:opacity-40 focus-visible:focus-ring"
               />
               <span className="text-[11px] text-pulpitry-muted">
-                Lower surfaces more, including looser links. Higher stays quiet unless the
-                wording is close. Unrelated speech typically scores below 30%.
+                Lower surfaces more, including looser links. Higher stays quiet
+                unless the wording is close. Unrelated speech typically scores
+                below 30%.
               </span>
             </label>
           </Section>
 
-          <div className="border-t border-pulpitry-line" />
-
-          <Section
-            title="Model assistance"
-            note="Optional. Suggests passages the speaker paraphrases rather than quotes. The model proposes references only — every verse shown is read from your local library, so it cannot invent scripture."
-          >
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={assistEnabled}
-                onChange={(event) => setAssistEnabled(event.target.checked)}
-                className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-              />
-              <span className="text-[13px] text-pulpitry-text">
-                Suggest paraphrased scripture using an Azure AI Foundry model
-              </span>
-            </label>
-
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[12px] text-pulpitry-muted">Endpoint</span>
-              <input
-                value={assistEndpoint}
-                spellCheck={false}
-                onChange={(event) => setAssistEndpoint(event.target.value)}
-                placeholder="https://your-resource.services.ai.azure.com/models"
-                className={FIELD}
-              />
-            </label>
-
-            <div className="flex gap-3">
-              <label className="flex flex-[2] flex-col gap-1.5">
-                <span className="text-[12px] text-pulpitry-muted">Model or deployment</span>
-                <input
-                  value={assistModel}
-                  spellCheck={false}
-                  onChange={(event) => setAssistModel(event.target.value)}
-                  placeholder="e.g. gpt-4o-mini"
-                  className={FIELD}
-                />
-              </label>
-              <label className="flex flex-1 flex-col gap-1.5">
-                <span className="text-[12px] text-pulpitry-muted">API version</span>
-                <input
-                  value={assistApiVersion}
-                  spellCheck={false}
-                  onChange={(event) => setAssistApiVersion(event.target.value)}
-                  className={FIELD}
-                />
-              </label>
-            </div>
-
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[12px] text-pulpitry-muted">
-                Model key
-                {settings.hasAssistKey ? (
-                  <span className="ml-2 text-pulpitry-teal">stored in your keychain</span>
-                ) : null}
-              </span>
-              <input
-                type="password"
-                value={assistKey}
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(event) => setAssistKey(event.target.value)}
-                placeholder={settings.hasAssistKey ? "•••••••• (leave blank to keep)" : "Paste your key"}
-                className={FIELD}
-              />
-            </label>
-
-            {settings.hasAssistKey ? (
-              <button
-                type="button"
-                onClick={() => void forget("assist")}
-                className="self-start rounded px-1 py-0.5 text-[11.5px] text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
+          {/* Nothing to configure on a subscription: the assistant runs on our
+              account, metered against the same plan as the hours. Leaving the
+              fields visible would ask a church to buy a second thing it has
+              already been given. */}
+          {engine === "hosted" ? (
+            <>
+              <div className="border-t border-pulpitry-line" />
+              <Section
+                title="Model assistance"
+                note="Included in your subscription. Suggests passages the speaker paraphrases rather than quotes, and writes the summary afterwards. The model proposes references only — every verse shown is read from your local library, so it cannot invent scripture."
               >
-                Forget model key
-              </button>
-            ) : null}
-          </Section>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={assistEnabled}
+                    onChange={(event) => setAssistEnabled(event.target.checked)}
+                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                  />
+                  <span className="text-[13px] text-pulpitry-text">
+                    Suggest paraphrased scripture
+                  </span>
+                </label>
+              </Section>
+            </>
+          ) : (
+            <>
+              <div className="border-t border-pulpitry-line" />
 
-          {error ? <p className="text-[12px] text-pulpitry-gold">{error}</p> : null}
+              <Section
+                title="Model assistance"
+                note="Optional. Suggests passages the speaker paraphrases rather than quotes. The model proposes references only — every verse shown is read from your local library, so it cannot invent scripture."
+              >
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={assistEnabled}
+                    onChange={(event) => setAssistEnabled(event.target.checked)}
+                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                  />
+                  <span className="text-[13px] text-pulpitry-text">
+                    Suggest paraphrased scripture using an Azure AI Foundry
+                    model
+                  </span>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-pulpitry-muted">
+                    Endpoint
+                  </span>
+                  <input
+                    value={assistEndpoint}
+                    spellCheck={false}
+                    onChange={(event) => setAssistEndpoint(event.target.value)}
+                    placeholder="https://your-resource.services.ai.azure.com/models"
+                    className={FIELD}
+                  />
+                </label>
+
+                <div className="flex gap-3">
+                  <label className="flex flex-[2] flex-col gap-1.5">
+                    <span className="text-[12px] text-pulpitry-muted">
+                      Model or deployment
+                    </span>
+                    <input
+                      value={assistModel}
+                      spellCheck={false}
+                      onChange={(event) => setAssistModel(event.target.value)}
+                      placeholder="e.g. gpt-4o-mini"
+                      className={FIELD}
+                    />
+                  </label>
+                  <label className="flex flex-1 flex-col gap-1.5">
+                    <span className="text-[12px] text-pulpitry-muted">
+                      API version
+                    </span>
+                    <input
+                      value={assistApiVersion}
+                      spellCheck={false}
+                      onChange={(event) =>
+                        setAssistApiVersion(event.target.value)
+                      }
+                      className={FIELD}
+                    />
+                  </label>
+                </div>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-pulpitry-muted">
+                    Model key
+                    {settings.hasAssistKey ? (
+                      <span className="ml-2 text-pulpitry-teal">
+                        stored in your keychain
+                      </span>
+                    ) : null}
+                  </span>
+                  <input
+                    type="password"
+                    value={assistKey}
+                    autoComplete="off"
+                    spellCheck={false}
+                    onChange={(event) => setAssistKey(event.target.value)}
+                    placeholder={
+                      settings.hasAssistKey
+                        ? "•••••••• (leave blank to keep)"
+                        : "Paste your key"
+                    }
+                    className={FIELD}
+                  />
+                </label>
+
+                {settings.hasAssistKey ? (
+                  <button
+                    type="button"
+                    onClick={() => void forget("assist")}
+                    className="self-start rounded px-1 py-0.5 text-[11.5px] text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
+                  >
+                    Forget model key
+                  </button>
+                ) : null}
+              </Section>
+            </>
+          )}
+
+          {error ? (
+            <p className="text-[12px] text-pulpitry-gold">{error}</p>
+          ) : null}
         </div>
 
         <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-pulpitry-line px-5 py-3.5">

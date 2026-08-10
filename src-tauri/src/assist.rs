@@ -101,15 +101,36 @@ struct Config {
     api_version: String,
     key: String,
     translation: String,
+    /// Set when the operator is on a Castavox subscription, in which case the
+    /// request goes to the broker and the fields above are not used. The church
+    /// buys no model deployment of its own and configures nothing.
+    device_token: Option<String>,
 }
 
 impl Config {
     fn usable(&self) -> bool {
-        self.enabled
-            && !self.endpoint.trim().is_empty()
-            && !self.model.trim().is_empty()
-            && !self.key.trim().is_empty()
-            && !self.translation.trim().is_empty()
+        if !self.enabled || self.translation.trim().is_empty() {
+            return false;
+        }
+        // On a subscription the deployment is ours, so there is nothing of
+        // theirs to check beyond holding a token.
+        match &self.device_token {
+            Some(token) => !token.trim().is_empty(),
+            None => {
+                !self.endpoint.trim().is_empty()
+                    && !self.model.trim().is_empty()
+                    && !self.key.trim().is_empty()
+            }
+        }
+    }
+
+    /// The church's own deployment, as castavox-core describes one.
+    fn deployment(&self) -> castavox_core::assistant::Deployment {
+        castavox_core::assistant::Deployment {
+            endpoint: self.endpoint.clone(),
+            model: self.model.clone(),
+            api_version: self.api_version.clone(),
+        }
     }
 }
 
@@ -195,6 +216,13 @@ impl Assistant {
     /// store. Called at startup and whenever settings are saved.
     pub fn configure(&self, settings: &Settings) {
         let key = crate::settings::load_assist_key().ok().flatten().unwrap_or_default();
+        // The subscription covers the assistant as well as the hours, so the
+        // engine choice decides whose account answers.
+        let device_token = (settings.speech_engine == "hosted")
+            .then(|| crate::settings::load_hosted_token().ok().flatten())
+            .flatten()
+            .filter(|token| !token.trim().is_empty());
+
         *self.config.lock() = Config {
             enabled: settings.assist_enabled,
             endpoint: settings.assist_endpoint.clone(),
@@ -202,6 +230,7 @@ impl Assistant {
             api_version: settings.assist_api_version.clone(),
             key,
             translation: settings.translation.clone(),
+            device_token,
         };
         self.reported_failure.store(false, Ordering::SeqCst);
     }
@@ -339,36 +368,23 @@ fn ask(
     config: &Config,
     context: &str,
 ) -> Result<Reading> {
-    {
-        let url = endpoint_url(&config.endpoint, &config.api_version);
-        let body = request_body(config, context);
+    let body = request_body(config, context);
 
-        let response = client
-            .post(&url)
-            .header("api-key", &config.key)
-            .header("content-type", "application/json")
-            .json(&body)
-            .send()
-            .context("could not reach the Azure AI Foundry endpoint")?;
+    // The transport is shared with Castavox and with the summariser, and it is
+    // what knows the difference between a church's own deployment and ours.
+    let deployment = config.deployment();
+    let route = match config.device_token.as_deref() {
+        Some(token) => castavox_core::assistant::Route::Hosted {
+            base: &crate::hosted::broker_base(),
+            device_token: token,
+        },
+        None => castavox_core::assistant::Route::Own { deployment: &deployment, key: &config.key },
+    };
 
-        let status = response.status();
-        let payload = response.text().unwrap_or_default();
-        if !status.is_success() {
-            bail!("Azure AI Foundry returned {status}: {}", payload.chars().take(300).collect::<String>());
-        }
-
-        let parsed: serde_json::Value =
-            serde_json::from_str(&payload).context("the model response was not JSON")?;
-        let content = parsed
-            .get("choices")
-            .and_then(|choices| choices.get(0))
-            .and_then(|choice| choice.get("message"))
-            .and_then(|message| message.get("content"))
-            .and_then(|content| content.as_str())
-            .unwrap_or_default();
-
-        Ok(parse_reading(content))
-    }
+    // Not strict JSON: the reply is read forgivingly either way, and asking for
+    // it costs a rejected request on the deployments that will not take it.
+    let content = castavox_core::assistant::complete(client, &route, body, false)?;
+    Ok(parse_reading(&content))
 }
 
 /// Azure AI Foundry's inference route, tolerating either the resource root or a
@@ -802,6 +818,9 @@ mod tests {
             api_version: "2024-05-01-preview".into(),
             key: "secret-key".into(),
             translation: "KJV".into(),
+            // These exercise a church's own deployment; the hosted route is
+            // covered in castavox-core, where the transport lives.
+            device_token: None,
         }
     }
 
