@@ -50,7 +50,14 @@ pub struct Description {
 }
 
 /// Whether a model is configured well enough to ask.
+///
+/// On a Castavox subscription there is nothing to configure: the deployment is
+/// ours and is metered against the same plan as the hours. Anywhere else it is
+/// the church's own endpoint, model and key.
 pub fn available(settings: &Settings, has_key: bool) -> bool {
+    if settings.speech_engine == "hosted" {
+        return crate::settings::has_hosted_token();
+    }
     has_key
         && !settings.assist_endpoint.trim().is_empty()
         && !settings.assist_model.trim().is_empty()
@@ -77,7 +84,13 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
         .build()
         .context("could not prepare the request")?;
 
-    let url = crate::assist::endpoint_url(&settings.assist_endpoint, &settings.assist_api_version);
+    // Ours or theirs, decided by the engine the operator chose.
+    let hosted = settings.speech_engine == "hosted";
+    let url = if hosted {
+        format!("{}/api/v1/assist", crate::hosted::broker_base())
+    } else {
+        crate::assist::endpoint_url(&settings.assist_endpoint, &settings.assist_api_version)
+    };
     let excerpt = excerpt(transcript);
 
     /*
@@ -151,16 +164,23 @@ fn post(
     key: &str,
     body: &serde_json::Value,
 ) -> Reply {
-    let sent = client
-        .post(url)
-        .header("api-key", key)
+    // A device token is a bearer credential and nothing else; sending it as an
+    // api-key would leak it to a header our broker does not read.
+    let hosted = url.contains("/api/v1/assist");
+    let sent = if hosted {
+        client.post(url).bearer_auth(key)
+    } else {
+        client
+            .post(url)
+            .header("api-key", key)
         // Bearer as well as api-key: Foundry's model router accepts the former
         // and some gateways in front of it only speak that. Sending both costs
         // a header and saves a class of confusing 401.
-        .header("authorization", format!("Bearer {key}"))
-        .header("content-type", "application/json")
-        .json(body)
-        .send();
+            .header("authorization", format!("Bearer {key}"))
+    }
+    .header("content-type", "application/json")
+    .json(body)
+    .send();
 
     match sent {
         Err(error) => Reply::Unreachable(

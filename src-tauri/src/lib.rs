@@ -375,12 +375,27 @@ async fn summarise_session(
     id: i64,
 ) -> CommandResult<Description> {
     let settings = settings::load(&app).map_err(to_message)?;
-    let key = settings::load_assist_key()
-        .map_err(to_message)?
-        .filter(|key| !key.trim().is_empty())
-        .ok_or_else(|| {
-            "Summaries need the assistant. Add a model key and endpoint in Settings.".to_string()
-        })?;
+
+    // On a subscription the credential is the device token and the deployment
+    // is ours; anywhere else it is the church's own model key. Asking for the
+    // wrong one is how a church on a plan gets told to buy a second thing.
+    let hosted = settings.speech_engine == "hosted";
+    let key = if hosted {
+        settings::load_hosted_token()
+            .map_err(to_message)?
+            .filter(|token| !token.trim().is_empty())
+            .ok_or_else(|| {
+                "Activate your Castavox subscription in Settings to write summaries.".to_string()
+            })?
+    } else {
+        settings::load_assist_key()
+            .map_err(to_message)?
+            .filter(|key| !key.trim().is_empty())
+            .ok_or_else(|| {
+                "Summaries need the assistant. Add a model key and endpoint in Settings.".to_string()
+            })?
+    };
+
     if !summarise::available(&settings, true) {
         return Err(
             "Summaries need the assistant. Set the endpoint and deployment in Settings.".into()

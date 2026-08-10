@@ -64,7 +64,14 @@ const FORMATS: { id: SummaryFormat; label: string }[] = [
   { id: "markdown", label: "Markdown" },
 ];
 
-export function HistoryDialog({ onClose }: { onClose: () => void }) {
+export function HistoryDialog({
+  onClose,
+  engine,
+}: {
+  onClose: () => void;
+  /** Which engine is selected, because it decides what to advise. */
+  engine: string;
+}) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -371,9 +378,10 @@ export function HistoryDialog({ onClose }: { onClose: () => void }) {
 
                   {!canSummarise && !selected.summary ? (
                     <p className="mt-2 text-[12.5px] leading-relaxed text-pulpitry-muted">
-                      Summaries are written by the assistant. Add a model endpoint and key under
-                      Settings → Assistant, and this will offer to title and summarise each
-                      service.
+                      {engine === "hosted"
+                        ? // Nothing to buy: the assistant comes with the plan.
+                          "Summaries are written by the assistant, which is included in your Castavox subscription. Activate this machine under Settings → Transcription and this will offer to title and summarise each service."
+                        : "Summaries are written by the assistant. Add a model endpoint and key under Settings → Model assistance, and this will offer to title and summarise each service."}
                     </p>
                   ) : selected.summary ? (
                     <>

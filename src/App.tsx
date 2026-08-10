@@ -405,7 +405,12 @@ export default function App() {
         )}
       </footer>
 
-      {historyOpen ? <HistoryDialog onClose={() => setHistoryOpen(false)} /> : null}
+      {historyOpen ? (
+        <HistoryDialog
+          onClose={() => setHistoryOpen(false)}
+          engine={settings?.speechEngine ?? "azure"}
+        />
+      ) : null}
 
       {settingsOpen && settings ? (
         <SettingsDialog
