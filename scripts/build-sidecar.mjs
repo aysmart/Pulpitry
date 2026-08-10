@@ -15,7 +15,8 @@
  * that, and Rust locates a runtime at start-up (see src-tauri/src/node.rs).
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -54,6 +55,34 @@ function ensureDependencies() {
   run("npm", ["install", "--no-audit", "--no-fund"], { cwd: sidecarDir });
 }
 
+/**
+ * Refuses to bundle a bridge that has been edited in place.
+ *
+ * src/index.js is a copy of castavox-core/bridge/index.js, and Castavox ships
+ * the same file. An edit made here is an edit Castavox never receives, which is
+ * how one product gets a fix and the other keeps the bug — found, eventually,
+ * by a church rather than by us.
+ */
+function verifyBridge() {
+  const lock = JSON.parse(readFileSync(resolve(sidecarDir, "src/bridge.lock.json"), "utf8"));
+  const found = createHash("sha256")
+    .update(readFileSync(resolve(sidecarDir, "src/index.js"), "utf8"), "utf8")
+    .digest("hex");
+  if (found === lock.sha256) return;
+
+  throw new Error(
+    [
+      "src/index.js is not the bridge it was copied from.",
+      `  expected ${lock.sha256}`,
+      `  found    ${found}`,
+      "",
+      "The bridge is shared with Castavox. Make the change in",
+      "castavox-core/bridge/index.js and run `node bridge/sync.mjs` there,",
+      "which updates both products together.",
+    ].join("\n"),
+  );
+}
+
 async function bundleSidecar() {
   console.log("bundling sidecar...");
   mkdirSync(outputDir, { recursive: true });
@@ -75,6 +104,7 @@ async function bundleSidecar() {
 }
 
 async function main() {
+  verifyBridge();
   ensureDependencies();
   await bundleSidecar();
   const size = (statSync(outputPath).size / 1024 / 1024).toFixed(1);

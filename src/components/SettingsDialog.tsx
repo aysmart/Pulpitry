@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
+import { HostedSubscription } from "./HostedSubscription";
 import { NodeRuntimeNotice } from "./NodeRuntimeNotice";
 
 import {
@@ -84,10 +85,18 @@ export function SettingsDialog({
   const [semanticThreshold, setSemanticThreshold] = useState(settings.semanticThreshold);
 
   const [engine, setEngine] = useState(settings.speechEngine || "azure");
+  // Tracked rather than read straight from settings, because activating in this
+  // dialog must make the option selectable without reopening it.
+  const [hosted, setHosted] = useState(settings.hasHostedSubscription);
   const [model, setModel] = useState(settings.speechModel);
   const [models, setModels] = useState<SpeechModel[]>([]);
   const [modelNote, setModelNote] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
+  // The `.en` builds cannot transcribe anything but English. Falls back to the
+  // file name so this is right before the model list has arrived.
+  const englishOnlyModel =
+    engine === "local" &&
+    (models.find((entry) => entry.file === model)?.englishOnly ?? model.includes(".en"));
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -168,6 +177,9 @@ export function SettingsDialog({
         semanticThreshold,
         speechEngine: engine,
         speechModel: model,
+        // Made once by the backend and never edited here; sending back what we
+        // were given keeps this machine's identity to the subscription stable.
+        hostedDeviceId: settings.hostedDeviceId,
         // Carried through untouched: the look is edited in the Themes tab, and
         // a stale copy held open in this dialog would undo it on save.
         projector: settings.projector,
@@ -226,16 +238,29 @@ export function SettingsDialog({
                 onChange={(event) => setEngine(event.target.value)}
                 className={FIELD}
               >
-                <option value="azure">Azure Speech — needs an account</option>
+                <option value="azure">Azure Speech — your own account</option>
                 <option value="local">This machine — no account needed</option>
+                {/* Always offered, including before activation: choosing it is
+                    how somebody reaches the licence field below. */}
+                <option value="hosted">
+                  Castavox subscription{hosted ? "" : " — needs a licence key"}
+                </option>
               </select>
               <span className="text-[11.5px] leading-snug text-pulpitry-muted">
                 Azure streams: words appear as they are spoken and a verse can be found
                 mid-sentence. This machine transcribes a sentence once it ends, so a verse
                 arrives a second or two later — but it needs no account, no key and no network,
-                and it costs nothing per hour.
+                and it costs nothing per hour. A Castavox subscription streams like Azure
+                without your church having to open an Azure account at all.
               </span>
             </label>
+
+            {/* Only what the chosen engine actually uses. An Azure key sitting
+                under "This machine" reads as something that must be filled in,
+                and the field that does matter is lost among three that do not. */}
+            {engine === "hosted" ? (
+              <HostedSubscription onActivationChange={setHosted} />
+            ) : null}
 
             {engine === "local" ? (
               <label className="flex flex-col gap-1.5">
@@ -288,46 +313,58 @@ export function SettingsDialog({
                 ) : null}
               </label>
             ) : (
+              /* Azure and a subscription both stream through the Node bridge,
+                 so both need a runtime. Only transcribing here does not. */
               <NodeRuntimeNotice />
             )}
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[12px] text-pulpitry-muted">
-                Azure Speech key
-                {settings.hasAzureKey ? (
-                  <span className="ml-2 text-pulpitry-teal">stored in your keychain</span>
-                ) : null}
-              </span>
-              <input
-                type="password"
-                value={key}
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(event) => setKey(event.target.value)}
-                placeholder={settings.hasAzureKey ? "•••••••• (leave blank to keep)" : "Paste your key"}
-                className={FIELD}
-              />
-            </label>
+            {engine === "azure" ? (
+              <>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-pulpitry-muted">
+                    Azure Speech key
+                    {settings.hasAzureKey ? (
+                      <span className="ml-2 text-pulpitry-teal">stored in your keychain</span>
+                    ) : null}
+                  </span>
+                  <input
+                    type="password"
+                    value={key}
+                    autoComplete="off"
+                    spellCheck={false}
+                    onChange={(event) => setKey(event.target.value)}
+                    placeholder={
+                      settings.hasAzureKey ? "•••••••• (leave blank to keep)" : "Paste your key"
+                    }
+                    className={FIELD}
+                  />
+                </label>
 
-            <div className="flex gap-3">
-              <label className="flex flex-1 flex-col gap-1.5">
-                <span className="text-[12px] text-pulpitry-muted">Region</span>
-                <input
-                  list="pulpitry-azure-regions"
-                  value={region}
-                  spellCheck={false}
-                  onChange={(event) => setRegion(event.target.value)}
-                  placeholder="e.g. uksouth"
-                  className={FIELD}
-                />
-                <datalist id="pulpitry-azure-regions">
-                  {REGIONS.map((name) => (
-                    <option key={name} value={name} />
-                  ))}
-                </datalist>
-              </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-pulpitry-muted">Region</span>
+                  <input
+                    list="pulpitry-azure-regions"
+                    value={region}
+                    spellCheck={false}
+                    onChange={(event) => setRegion(event.target.value)}
+                    placeholder="e.g. uksouth"
+                    className={FIELD}
+                  />
+                  <datalist id="pulpitry-azure-regions">
+                    {REGIONS.map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                </label>
+              </>
+            ) : null}
 
-              <label className="flex flex-1 flex-col gap-1.5">
+            {/* Every engine uses it now, except an .en model, which cannot do
+                anything but English -- told to decode Yoruba it produces
+                English-shaped nonsense rather than Yoruba, so the choice is not
+                offered where it would be a promise nothing can keep. */}
+            {englishOnlyModel ? null : (
+              <label className="flex flex-col gap-1.5">
                 <span className="text-[12px] text-pulpitry-muted">Spoken language</span>
                 <select
                   value={language}
@@ -341,9 +378,9 @@ export function SettingsDialog({
                   ))}
                 </select>
               </label>
-            </div>
+            )}
 
-            {settings.hasAzureKey ? (
+            {engine === "azure" && settings.hasAzureKey ? (
               <button
                 type="button"
                 onClick={() => void forget("speech")}

@@ -17,3 +17,4 @@ assets/generated/
 # Embedding model, fetched and converted by scripts/build-embedder.mjs.
 # 45 MB of weights does not belong in git.
 src-tauri/resources/embedder/
+src-tauri/.cargo/

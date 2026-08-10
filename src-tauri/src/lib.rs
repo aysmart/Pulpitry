@@ -6,6 +6,7 @@ mod assist;
 mod bible;
 mod catalog;
 mod detect;
+mod hosted;
 mod projector;
 mod semantic;
 mod settings;
@@ -57,6 +58,7 @@ fn view(settings: Settings) -> SettingsView {
         settings,
         has_azure_key: settings::has_azure_key(),
         has_assist_key: settings::has_assist_key(),
+        has_hosted_subscription: settings::has_hosted_token(),
     }
 }
 
@@ -807,6 +809,9 @@ pub fn run() {
             start_transcription,
             stop_transcription,
             speech_status,
+            hosted::hosted_status,
+            hosted::hosted_activate,
+            hosted::hosted_deactivate,
             speech_models,
             download_speech_model,
             node_status,

@@ -157,6 +157,7 @@ impl SpeechManager {
         if let Some(local) = self.local.lock().as_ref() {
             if let Ok(settings) = settings::load(&self.app) {
                 local.request(&settings.speech_model);
+                local.set_language(&settings.language);
             }
         }
     }
@@ -296,6 +297,7 @@ impl SpeechManager {
                     // Kept between sessions: loading a model is expensive, and
                     // the operator may have changed which one they want.
                     existing.request(&settings.speech_model);
+                    existing.set_language(&settings.language);
                     Arc::clone(existing)
                 }
                 None => {
@@ -303,6 +305,7 @@ impl SpeechManager {
                         data_dir.clone(),
                         settings.speech_model.clone(),
                     ));
+                    made.set_language(&settings.language);
                     *slot = Some(Arc::clone(&made));
                     made
                 }
@@ -360,21 +363,40 @@ impl SpeechManager {
         generation: u64,
     ) -> Result<(tauri::async_runtime::Receiver<CommandEvent>, String)> {
         let settings = settings::load(&self.app)?;
-        let key = settings::load_azure_key()?
-            .filter(|k| !k.trim().is_empty())
-            .ok_or_else(|| anyhow!("FATAL: Add your Azure Speech key in Settings to start transcribing."))?;
-        if settings.azure_region.trim().is_empty() {
-            return Err(anyhow!("FATAL: Set your Azure Speech region in Settings to start transcribing."));
-        }
 
-        // The key goes over the environment rather than argv, so it never shows
-        // up in the process list.
-        let env = HashMap::from([
-            ("PULPITRY_AZURE_KEY".to_string(), key),
-            ("PULPITRY_AZURE_REGION".to_string(), settings.azure_region.clone()),
-            ("PULPITRY_LANGUAGE".to_string(), settings.language.clone()),
-            ("PULPITRY_SAMPLE_RATE".to_string(), audio::TARGET_SAMPLE_RATE.to_string()),
+        // Credentials go over the environment rather than argv, so they never
+        // show up in the process list. The names are the shared bridge's; the
+        // same file reads them in Castavox. See castavox-core/bridge.
+        let mut env = HashMap::from([
+            ("CASTAVOX_SPEECH_LANGUAGE".to_string(), settings.language.clone()),
+            ("CASTAVOX_SPEECH_SAMPLE_RATE".to_string(), audio::TARGET_SAMPLE_RATE.to_string()),
         ]);
+
+        if settings.speech_engine == "hosted" {
+            // On a hosted subscription the bridge opens its own metered session
+            // and renews its own credential; what it needs from here is only
+            // where to ask and who it is. Our Azure key is on the server and
+            // has never been in this process.
+            let token = settings::load_hosted_token()?
+                .filter(|token| !token.trim().is_empty())
+                .ok_or_else(|| {
+                    anyhow!("FATAL: Activate your Castavox subscription in Settings to start transcribing.")
+                })?;
+            env.insert(
+                "CASTAVOX_BROKER_URL".to_string(),
+                castavox_core::hosted::Broker::new().base_url().to_string(),
+            );
+            env.insert("CASTAVOX_DEVICE_TOKEN".to_string(), token);
+        } else {
+            let key = settings::load_azure_key()?
+                .filter(|k| !k.trim().is_empty())
+                .ok_or_else(|| anyhow!("FATAL: Add your Azure Speech key in Settings to start transcribing."))?;
+            if settings.azure_region.trim().is_empty() {
+                return Err(anyhow!("FATAL: Set your Azure Speech region in Settings to start transcribing."));
+            }
+            env.insert("CASTAVOX_SPEECH_KEY".to_string(), key);
+            env.insert("CASTAVOX_SPEECH_REGION".to_string(), settings.azure_region.clone());
+        }
 
         // Checked before anything else is set up, so a machine without Node
         // says so plainly rather than failing somewhere further in.

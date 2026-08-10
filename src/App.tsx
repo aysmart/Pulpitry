@@ -38,6 +38,25 @@ import { useSpokenReferences } from "./lib/useSpokenReferences";
 import { useSuggestions } from "./lib/useSuggestions";
 import { useTranscript } from "./lib/useTranscript";
 
+/**
+ * Whether the chosen engine has what it needs to start.
+ *
+ * Each wants something different: Azure a key and a region, this machine a
+ * model that has been downloaded, a subscription an activated licence. Nothing
+ * here checks that they are *correct* -- only that the operator has been asked.
+ */
+function ready(settings: SettingsView | null): boolean {
+  if (!settings) return false;
+  switch (settings.speechEngine) {
+    case "local":
+      return settings.speechModel.trim().length > 0;
+    case "hosted":
+      return settings.hasHostedSubscription;
+    default:
+      return settings.hasAzureKey && settings.azureRegion.trim().length > 0;
+  }
+}
+
 export default function App() {
   const { lines, interim, status, clear } = useTranscript();
   const {
@@ -185,9 +204,14 @@ export default function App() {
       if (active) {
         await stopTranscription();
       } else {
-        // Nothing can start without credentials, so send the operator straight
-        // to the place that fixes it rather than reporting a failure.
-        if (!settings?.hasAzureKey || !settings.azureRegion.trim()) {
+        // Nothing can start without whatever the chosen engine needs, so send
+        // the operator straight to the place that fixes it rather than
+        // reporting a failure.
+        //
+        // What counts as ready depends on the engine, and asking for an Azure
+        // key regardless -- as this did -- sent anyone transcribing on this
+        // machine to Settings to enter a key they had rightly never bought.
+        if (!ready(settings)) {
           setSettingsOpen(true);
           return;
         }
