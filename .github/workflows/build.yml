@@ -56,15 +56,27 @@ jobs:
           windows='{"name":"Windows","os":"windows-latest","target":"x86_64-pc-windows-msvc"}'
           linux='{"name":"Linux (x86_64)","os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}'
           arm='{"name":"macOS (Apple silicon)","os":"macos-14","target":"aarch64-apple-darwin"}'
-          intel='{"name":"macOS (Intel)","os":"macos-13","target":"x86_64-apple-darwin"}'
+
+          # Intel is not built. It was, and it was never published: the download
+          # page offers Apple silicon only, and the publish step deleted the
+          # Intel disk image again on the way past.
+          #
+          # It was not merely wasteful. macos-13 runners are scarce, so the job
+          # sat queued long after the others had finished -- and the release job
+          # needs every one of them, so a queue nobody was watching held the
+          # whole publish. We paid for a build in order to throw it away and
+          # waited on it to ship.
+          #
+          # If Intel is ever wanted, it comes back here and in the publish step
+          # together, or this happens again.
 
           choose() {
             case "$1" in
               windows) echo "$windows" ;;
               linux)   echo "$linux" ;;
-              macos)   echo "$arm,$intel" ;;
+              macos)   echo "$arm" ;;
               desktop) echo "$windows,$linux" ;;
-              all)     echo "$windows,$linux,$arm,$intel" ;;
+              all)     echo "$windows,$linux,$arm" ;;
               none|*)  echo "" ;;
             esac
           }
@@ -233,16 +245,6 @@ jobs:
           if [ -n "$dmg" ]; then
             mv "$dmg" "out/Pulpitry-${version}-macos-arm64.dmg"
           fi
-
-          # Intel is built but has never been published, and the download page
-          # offers Apple silicon only. Dropped here rather than shipped as a
-          # file nothing links to and nobody has tested.
-          #
-          # find rather than `rm -f out/*x64.dmg`: an unmatched glob is passed
-          # through literally by bash and is an error in zsh, so the same line
-          # behaves differently depending on where it is run — which is how a
-          # release quietly ships a file it meant to drop.
-          find out -type f \( -name "*_x64.dmg" -o -name "*x86_64.dmg" \) -delete
 
           ls -1 out
 
