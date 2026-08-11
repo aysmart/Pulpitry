@@ -86,122 +86,83 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
 
     // Ours or theirs, decided by the engine the operator chose.
     let hosted = settings.speech_engine == "hosted";
-    let url = if hosted {
-        format!("{}/api/v1/assist", crate::hosted::broker_base())
-    } else {
-        crate::assist::endpoint_url(&settings.assist_endpoint, &settings.assist_api_version)
+    let deployment = castavox_core::assistant::Deployment {
+        endpoint: settings.assist_endpoint.clone(),
+        model: settings.assist_model.clone(),
+        api_version: settings.assist_api_version.clone(),
     };
+    let base;
+    let route = if hosted {
+        base = crate::hosted::broker_base();
+        castavox_core::assistant::Route::Hosted { base: &base, device_token: key }
+    } else {
+        castavox_core::assistant::Route::Own { deployment: &deployment, key }
+    };
+
     let excerpt = excerpt(transcript);
 
     /*
-     * Ask for guaranteed JSON, and settle for asking nicely.
+     * Strict JSON, asked for and retried without.
      *
      * One endpoint serves models from several families. The OpenAI ones honour
      * response_format and return JSON that always parses; a Llama or Mistral
      * deployment rejects the entire request rather than ignoring the parameter.
+     * The transport tries the strict request and asks again without it when the
+     * deployment says it cannot -- feature detection rather than a list of
+     * model names, which would be wrong the week after it was written.
      *
-     * So this is feature detection rather than a list of model names, which
-     * would be wrong the week after it was written: send the strict request,
-     * and if the deployment says it cannot do that, send it again without.
-     * The retry costs nothing when it happens -- a rejected request generates
-     * no tokens -- and nothing at all for the models that accept it.
+     * That retry, the two ways of authenticating and the reading of the reply
+     * were all written out here as well, identically, in Castavox. They are in
+     * castavox-core now, where a fix reaches both.
      */
-    let (payload, status) = match post(&client, &url, key, &body(settings, &excerpt, true)) {
-        Reply::Refused { payload, .. } if rejects_strict_json(&payload) => {
-            match post(&client, &url, key, &body(settings, &excerpt, false)) {
-                Reply::Ok { payload } => (payload, None),
-                Reply::Refused { payload, status } => (payload, Some(status)),
-                Reply::Unreachable(error) => return Err(error),
-            }
-        }
-        Reply::Ok { payload } => (payload, None),
-        Reply::Refused { payload, status } => (payload, Some(status)),
-        Reply::Unreachable(error) => return Err(error),
-    };
+    let content = castavox_core::assistant::complete(
+        &client,
+        &route,
+        body(settings, &excerpt, false),
+        true,
+    )
+    .map_err(|failure| advise(&failure, hosted))?;
 
-    if let Some(status) = status {
-        // The detail goes to the log, not to the screen. What comes back can be
-        // an HTML error page, and pasting a few hundred characters of somebody
-        // else's markup in front of an operator tells them nothing they can act
-        // on and buries the sentence that would have.
-        crate::log_line!(
-            "[summarise] {url} returned {status}: {}",
-            payload.chars().take(600).collect::<String>().replace('\n', " ")
-        );
-
-        // What is worth saying is the one thing they can do about it, and that
-        // depends on whose deployment it is.
-        if hosted {
-            bail!("The assistant could not be reached just now. Your transcript is safe -- try again in a moment.");
-        }
-        // A 404 from Foundry almost never means the deployment is missing. It
-        // means the route was wrong -- most often an API version predating the
-        // /models route, which fails in exactly the same way as a typo.
-        if status.as_u16() == 404 {
-            bail!("The model endpoint answered but the address was not recognised. Clearing the API version field in Settings restores the default, which is known to work.");
-        }
-        if status.as_u16() == 401 || status.as_u16() == 403 {
-            bail!("The model refused the key. Check the key and endpoint under Settings -> Model assistance.");
-        }
-        bail!("The model could not answer that just now. Try again in a moment.");
+    if content.trim().is_empty() {
+        bail!("The model returned nothing to read. Try again in a moment.");
     }
-
-    let parsed: serde_json::Value =
-        serde_json::from_str(&payload).context("the model response was not JSON")?;
-    let content = parsed
-        .get("choices")
-        .and_then(|c| c.get(0))
-        .and_then(|c| c.get("message"))
-        .and_then(|m| m.get("content"))
-        .and_then(|c| c.as_str())
-        .ok_or_else(|| anyhow!("the model returned nothing to read"))?;
-
-    read(content)
+    read(&content)
 }
 
-/// What came back, told apart by whether it is worth retrying.
-enum Reply {
-    Ok { payload: String },
-    Refused { status: reqwest::StatusCode, payload: String },
-    /// The network, TLS, or a timeout -- nothing a different body would fix.
-    Unreachable(anyhow::Error),
-}
+/// Turns a failure into the one sentence the operator can act on.
+///
+/// The detail goes to the log and never to the screen. What comes back can be a
+/// page of somebody else's HTML, and a few hundred characters of it in front of
+/// an operator tells them nothing and buries the sentence that would have
+/// helped.
+fn advise(failure: &castavox_core::assistant::Failure, hosted: bool) -> anyhow::Error {
+    use castavox_core::assistant::Failure;
 
-fn post(
-    client: &reqwest::blocking::Client,
-    url: &str,
-    key: &str,
-    body: &serde_json::Value,
-) -> Reply {
-    // A device token is a bearer credential and nothing else; sending it as an
-    // api-key would leak it to a header our broker does not read.
-    let hosted = url.contains("/api/v1/assist");
-    let sent = if hosted {
-        client.post(url).bearer_auth(key)
-    } else {
-        client
-            .post(url)
-            .header("api-key", key)
-        // Bearer as well as api-key: Foundry's model router accepts the former
-        // and some gateways in front of it only speak that. Sending both costs
-        // a header and saves a class of confusing 401.
-            .header("authorization", format!("Bearer {key}"))
-    }
-    .header("content-type", "application/json")
-    .json(body)
-    .send();
+    crate::log_line!("[summarise] {failure}");
 
-    match sent {
-        Err(error) => Reply::Unreachable(
-            anyhow::Error::new(error).context("could not reach the model endpoint"),
+    match failure {
+        Failure::Unreachable(_) => anyhow!(
+            "The assistant could not be reached. Check the internet connection and try again."
         ),
-        Ok(response) => {
-            let status = response.status();
-            let payload = response.text().unwrap_or_default();
-            if status.is_success() {
-                Reply::Ok { payload }
-            } else {
-                Reply::Refused { status, payload }
+        Failure::Unexpected(_) => {
+            anyhow!("The model could not answer that just now. Try again in a moment.")
+        }
+        Failure::Refused { status, .. } => {
+            // What is worth saying is the one thing they can do about it, and
+            // that depends on whose deployment it is. A church on a
+            // subscription has no endpoint and no key to check.
+            if hosted {
+                return anyhow!(
+                    "The assistant could not be reached just now. Your transcript is safe -- try again in a moment."
+                );
+            }
+            // A 404 from Foundry almost never means the deployment is missing.
+            // It means the route was wrong -- most often an API version
+            // predating the /models route, which fails exactly like a typo.
+            match status.as_u16() {
+                404 => anyhow!("The model endpoint answered but the address was not recognised. Clearing the API version field in Settings restores the default, which is known to work."),
+                401 | 403 => anyhow!("The model refused the key. Check the key and endpoint under Settings -> Model assistance."),
+                _ => anyhow!("The model could not answer that just now. Try again in a moment."),
             }
         }
     }
@@ -230,20 +191,6 @@ fn body(settings: &Settings, excerpt: &str, strict_json: bool) -> serde_json::Va
         body["response_format"] = serde_json::json!({ "type": "json_object" });
     }
     body
-}
-
-/// Whether a refusal was about `response_format` rather than about us.
-///
-/// Matched on the message because there is no code for it: the families that
-/// cannot do this disagree about the status, the error type and the wording,
-/// and all that is reliably shared is that they name the parameter they are
-/// complaining about. A false positive costs one retry; a false negative costs
-/// the operator their summary, so this errs towards retrying.
-fn rejects_strict_json(payload: &str) -> bool {
-    let lower = payload.to_ascii_lowercase();
-    lower.contains("response_format")
-        || lower.contains("json_object")
-        || lower.contains("json mode")
 }
 
 const SYSTEM: &str = "\
@@ -387,25 +334,6 @@ fn read(content: &str) -> Result<Description> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_refusal_about_json_mode_is_told_from_a_real_failure() {
-        // The families that cannot do this each phrase it differently, and the
-        // point of matching loosely is that a new one should still be caught.
-        assert!(rejects_strict_json(
-            r#"{"error":{"message":"Extra inputs are not permitted: response_format"}}"#
-        ));
-        assert!(rejects_strict_json(
-            r#"{"error":{"message":"'json_object' is not supported by this model"}}"#
-        ));
-        assert!(rejects_strict_json(r#"{"error":{"message":"JSON mode is unavailable"}}"#));
-
-        // These must not trigger a retry: the second attempt would fail the
-        // same way and the operator would wait twice as long to be told.
-        assert!(!rejects_strict_json(r#"{"error":{"code":"401","message":"Access denied"}}"#));
-        assert!(!rejects_strict_json(r#"{"error":{"code":"404","message":"Resource not found"}}"#));
-        assert!(!rejects_strict_json(r#"{"error":{"message":"Rate limit exceeded"}}"#));
-    }
 
     #[test]
     fn the_strict_parameter_is_the_only_difference_between_the_two_bodies() {
