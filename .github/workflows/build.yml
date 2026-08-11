@@ -222,6 +222,9 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      # For docs/release-notes only; the installers come from the artifacts.
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: installers
@@ -248,6 +251,39 @@ jobs:
 
           ls -1 out
 
+      # Notes are written where the change was made, not in this file.
+      #
+      # A workflow cannot know what a release means to somebody installing it,
+      # and boilerplate about code signing is not release notes. So each version
+      # gets docs/release-notes/<version>.md, and this uses it when it exists --
+      # falling back to the installation notes alone rather than publishing
+      # nothing, because a release with thin notes is better than none.
+      - name: Gather the release notes 📝
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          # The title says 0.3.1, not v0.3.1: the tag is how we refer to it,
+          # not how somebody choosing a download does.
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          written="docs/release-notes/${version}.md"
+
+          if [ -f "$written" ]; then
+            cp "$written" notes.md
+            echo "Using $written"
+          else
+            echo "No $written; publishing the installation notes alone." >&2
+            cat > notes.md <<'FALLBACK'
+          Installers for macOS (Apple silicon), Windows, and Linux
+          (.deb, .rpm and .AppImage, x86_64).
+
+          These builds are **not code signed**. macOS will refuse to open the
+          app until it is opened once from the right-click menu, and Windows
+          SmartScreen will warn.
+          FALLBACK
+          fi
+
       - name: Publish 🚀
         uses: softprops/action-gh-release@v2
         with:
@@ -256,17 +292,8 @@ jobs:
           # pulpitry-v0.3.0 there, from v0.3.0 here: one downloads repository
           # holds both products' releases, so the tags have to say which.
           tag_name: pulpitry-${{ github.ref_name }}
-          name: Pulpitry ${{ github.ref_name }}
+          name: Pulpitry ${{ steps.notes.outputs.version }}
           files: out/*
           fail_on_unmatched_files: true
           prerelease: true
-          # Said plainly rather than left for someone to discover on first run.
-          body: |
-            Installers for macOS (Apple silicon), Windows, and Linux
-            (.deb, .rpm and .AppImage, x86_64).
-
-            These builds are **not code signed**. macOS will refuse to open the
-            app until it is opened once from the right-click menu, and Windows
-            SmartScreen will warn. Signing needs an Apple Developer ID and a
-            Windows code signing certificate added as repository secrets. Linux
-            is unaffected — that platform does not gate on a signature.
+          body_path: notes.md
