@@ -190,28 +190,78 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
             src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
 
+  # Publishing, which happens somewhere else on purpose.
+  #
+  # This repository is private between releases: it is made public for the few
+  # minutes a build needs and put back afterwards. A release attached *here*
+  # would go private with it — which is what this job used to do, and why every
+  # release so far has been assembled by hand instead: download a gigabyte of
+  # artifacts, rename them, upload them to castavox-downloads. That hour was an
+  # hour this repository spent public.
+  #
+  # So it publishes to castavox-downloads, which is public and stays public, and
+  # which the website links straight at.
+  #
+  # Needs DOWNLOADS_TOKEN: a token with contents:write on castavox-downloads.
+  # The built-in GITHUB_TOKEN cannot reach another repository, by design.
   release:
-    name: Publish a release
+    name: Publish to castavox-downloads
     needs: package
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: installers
 
-      - name: Attach the installers to the tag
+      # Tauri's own names are kept, with one exception.
+      #
+      # The disk image is `Pulpitry_0.3.0_aarch64.dmg` out of the build, and
+      # every published release has carried it as `Pulpitry-0.3.0-macos-arm64.dmg`
+      # — which says the thing somebody choosing a download needs to know. The
+      # rest are already clear enough, and renaming them would break links that
+      # already work.
+      - name: Name the disk image the way the site expects 🏷️
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p out
+          find installers -type f -exec cp {} out/ \;
+
+          dmg=$(find out -name "*aarch64.dmg" | head -1)
+          if [ -n "$dmg" ]; then
+            mv "$dmg" "out/Pulpitry-${version}-macos-arm64.dmg"
+          fi
+
+          # Intel is built but has never been published, and the download page
+          # offers Apple silicon only. Dropped here rather than shipped as a
+          # file nothing links to and nobody has tested.
+          #
+          # find rather than `rm -f out/*x64.dmg`: an unmatched glob is passed
+          # through literally by bash and is an error in zsh, so the same line
+          # behaves differently depending on where it is run — which is how a
+          # release quietly ships a file it meant to drop.
+          find out -type f \( -name "*_x64.dmg" -o -name "*x86_64.dmg" \) -delete
+
+          ls -1 out
+
+      - name: Publish 🚀
         uses: softprops/action-gh-release@v2
         with:
-          files: installers/**/*
+          repository: aysmart/castavox-downloads
+          token: ${{ secrets.DOWNLOADS_TOKEN }}
+          # pulpitry-v0.3.0 there, from v0.3.0 here: one downloads repository
+          # holds both products' releases, so the tags have to say which.
+          tag_name: pulpitry-${{ github.ref_name }}
+          name: Pulpitry ${{ github.ref_name }}
+          files: out/*
           fail_on_unmatched_files: true
+          prerelease: true
           # Said plainly rather than left for someone to discover on first run.
           body: |
-            Installers for macOS (Apple silicon and Intel), Windows, and Linux
-            (.deb, .rpm and .AppImage, x86_64). A tag builds all four, which is
-            why tags are the trigger that includes macOS.
+            Installers for macOS (Apple silicon), Windows, and Linux
+            (.deb, .rpm and .AppImage, x86_64).
 
             These builds are **not code signed**. macOS will refuse to open the
             app until it is opened once from the right-click menu, and Windows
