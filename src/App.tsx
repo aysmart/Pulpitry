@@ -21,9 +21,14 @@ import {
   closeProjector,
   listDisplays,
   openProjector,
+  openStage,
+  closeStage,
+  stageState,
+  tellStage,
   projectorState,
   type Display,
   type ProjectorState,
+  type StageState,
 } from "./lib/projector";
 import { exportTranscript } from "./lib/exportTranscript";
 import { DEFAULT_THEME } from "./lib/theme";
@@ -99,6 +104,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [displays, setDisplays] = useState<Display[]>([]);
   const [projector, setProjector] = useState<ProjectorState>({ open: false, display: null });
+  const [stage, setStage] = useState<StageState>({ open: false, display: null });
 
   // The running order. Kept in the library rather than in state, so closing
   // the app mid-service does not cost the plan.
@@ -170,9 +176,14 @@ export default function App() {
   // list whenever the operator goes looking rather than only at launch.
   const refreshDisplays = useCallback(async () => {
     try {
-      const [found, state] = await Promise.all([listDisplays(), projectorState()]);
+      const [found, state, onStage] = await Promise.all([
+        listDisplays(),
+        projectorState(),
+        stageState(),
+      ]);
       setDisplays(found);
       setProjector(state);
+      setStage(onStage);
     } catch (err) {
       setError(describeError(err));
     }
@@ -181,6 +192,27 @@ export default function App() {
   useEffect(() => {
     void refreshDisplays();
   }, [refreshDisplays]);
+
+  /*
+   * The stage display, kept independent of the projector.
+   *
+   * A church may want one, the other, or both, and the stage may well belong
+   * on a screen the projector is not using. Tying them together would be
+   * deciding for them.
+   */
+  const toggleStage = useCallback(
+    async (display?: number) => {
+      setError(null);
+      try {
+        setStage(stage.open && display === undefined
+          ? await closeStage()
+          : await openStage(display));
+      } catch (err) {
+        setError(describeError(err));
+      }
+    },
+    [stage.open],
+  );
 
   const toggleProjector = useCallback(
     async (display?: number) => {
@@ -196,6 +228,29 @@ export default function App() {
     },
     [projector.open, refreshDisplays],
   );
+
+  /*
+   * Tell the stage display what is staged next.
+   *
+   * Preview is this window's own state and the stage window is a separate
+   * webview, so it cannot be read from there -- it has to be pushed. Sent on
+   * every change and again when the stage opens, because a display that came
+   * up mid-service would otherwise show nothing until the operator next
+   * touched something.
+   */
+  useEffect(() => {
+    if (!stage.open) return;
+    const shown = preview
+      ? {
+          caption: keyOf(preview),
+          lines:
+            preview.kind === "scripture"
+              ? preview.verses.map((verse) => verse.text)
+              : [],
+        }
+      : null;
+    void tellStage(shown);
+  }, [stage.open, preview, keyOf]);
 
   const active =
     status.state === "listening" || status.state === "starting" || status.state === "reconnecting";
@@ -328,6 +383,8 @@ export default function App() {
         busy={busy || !settings}
         displays={displays}
         projector={projector}
+        stage={stage}
+        onToggleStage={(display) => void toggleStage(display)}
         onToggleProjector={(display) => void toggleProjector(display)}
         onRefreshDisplays={() => void refreshDisplays()}
       />

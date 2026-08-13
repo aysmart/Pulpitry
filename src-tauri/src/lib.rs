@@ -678,6 +678,31 @@ fn projector_state(projector: State<'_, Arc<Projector>>) -> ProjectorState {
     projector.state()
 }
 
+/// The stage display: what the preacher sees.
+///
+/// Async for the same reason `open_projector` is — building a webview from a
+/// synchronous command deadlocks the message loop on Windows and takes the
+/// whole application with it.
+#[tauri::command]
+async fn open_stage(
+    projector: State<'_, Arc<Projector>>,
+    display: Option<usize>,
+) -> CommandResult<projector::StageState> {
+    projector.open_stage(display).map_err(to_message)
+}
+
+#[tauri::command]
+async fn close_stage(
+    projector: State<'_, Arc<Projector>>,
+) -> CommandResult<projector::StageState> {
+    Ok(projector.close_stage())
+}
+
+#[tauri::command]
+fn stage_state(projector: State<'_, Arc<Projector>>) -> projector::StageState {
+    projector.stage_state()
+}
+
 /// Reads the bundled hymn library and hands it to the catalog.
 fn seed_hymns(app: &AppHandle, catalog: &Catalog) -> anyhow::Result<()> {
     use std::io::Read;
@@ -1002,6 +1027,9 @@ pub fn run() {
             open_projector,
             close_projector,
             projector_state,
+            open_stage,
+            close_stage,
+            stage_state,
             set_background,
             get_theme,
             catalog_save,

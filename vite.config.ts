@@ -13,7 +13,8 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig({
   plugins: [react(), tailwindcss()],
 
-  // Two entry points: the operator window and the projector (congregation) window.
+  // Three entry points: the operator window, the projector the congregation
+  // watches, and the stage display the preacher does.
   build: {
     // WebView2 on Windows is evergreen. On macOS the floor is Safari 15, which
     // is the oldest WebKit Vite's bundler can still emit for and matches the
@@ -25,6 +26,7 @@ export default defineConfig({
       input: {
         main: resolve(projectRoot, "index.html"),
         projector: resolve(projectRoot, "projector.html"),
+        stage: resolve(projectRoot, "stage.html"),
       },
     },
   },
