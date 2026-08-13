@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
+import { MirrorPanel } from "./MirrorPanel";
 import { HostedSubscription } from "./HostedSubscription";
 import { NodeRuntimeNotice } from "./NodeRuntimeNotice";
 
@@ -113,6 +114,8 @@ export function SettingsDialog({
   );
   const [assistKey, setAssistKey] = useState("");
 
+  const [mirrorEnabled, setMirrorEnabled] = useState(settings.mirrorEnabled);
+
   const [semanticEnabled, setSemanticEnabled] = useState(
     settings.semanticEnabled,
   );
@@ -216,6 +219,7 @@ export function SettingsDialog({
         assistApiVersion: assistApiVersion.trim(),
         semanticEnabled,
         semanticThreshold,
+        mirrorEnabled,
         speechEngine: engine,
         speechModel: model,
         // Made once by the backend and never edited here; sending back what we
@@ -450,6 +454,15 @@ export function SettingsDialog({
                 Forget speech key
               </button>
             ) : null}
+          </Section>
+
+          <div className="border-t border-pulpitry-line" />
+
+          <Section
+            title="Mirror to Castavox"
+            note="For a church running both, on two machines in the same building."
+          >
+            <MirrorPanel enabled={mirrorEnabled} onEnabledChange={setMirrorEnabled} />
           </Section>
 
           <div className="border-t border-pulpitry-line" />

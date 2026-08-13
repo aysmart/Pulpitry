@@ -54,7 +54,17 @@ fn get_settings(app: tauri::AppHandle) -> CommandResult<SettingsView> {
     Ok(view(settings))
 }
 
-fn view(settings: Settings) -> SettingsView {
+fn view(mut settings: Settings) -> SettingsView {
+    // The pairing tokens are not the window's business.
+    //
+    // They are derived secrets: whoever holds one can receive whatever this
+    // desk stages. The webview has no use for them -- it shows the *names* of
+    // paired screens, which the mirror state carries separately -- and the same
+    // rule that keeps an Azure key out of the settings file keeps these out of
+    // the UI. `save_settings` puts the stored ones back, so a view that never
+    // saw them cannot send back an empty list and forget every screen.
+    settings.mirror_pairings = Vec::new();
+
     SettingsView {
         settings,
         has_azure_key: settings::has_azure_key(),
@@ -73,6 +83,14 @@ fn save_settings(
 ) -> CommandResult<SettingsView> {
     // Read before the save, so the engine can be compared against what it was.
     let was = settings::load(&app).ok();
+
+    // The window was never given the pairing tokens (see `view`), so what it
+    // sends back has none. Taking them from disk rather than from the caller is
+    // what stops a save from the settings dialog forgetting every paired
+    // screen.
+    let mut settings = settings;
+    settings.mirror_pairings = was.as_ref().map(|old| old.mirror_pairings.clone()).unwrap_or_default();
+
     settings::save(&app, &settings).map_err(to_message)?;
 
     // Switching to local without naming a model is allowed, and is the ordinary

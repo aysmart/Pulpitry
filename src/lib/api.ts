@@ -28,6 +28,14 @@ export interface Settings {
   speechEngine: string;
   /** This machine, to a hosted subscription. Not a secret. */
   hostedDeviceId: string;
+  /**
+   * Offering what is on the projector to a Castavox on the same wifi.
+   *
+   * Off unless asked for: it opens a port and announces this machine on the
+   * local network, neither of which should happen to a church that never
+   * wanted it.
+   */
+  mirrorEnabled: boolean;
   /** The whisper.cpp model, by file name. Empty until one is chosen. */
   speechModel: string;
 
@@ -179,6 +187,31 @@ export const onFinal = (handler: (payload: TranscriptPayload) => void): Promise<
 
 export const onStatus = (handler: (status: SpeechStatus) => void): Promise<UnlistenFn> =>
   listen<SpeechStatus>(EVENT_STATUS, (event) => handler(event.payload));
+
+/**
+ * What the mirror is doing.
+ *
+ * The pairing *tokens* are deliberately not here — they are derived secrets and
+ * the window has no use for them. What it needs is the names, which is what
+ * this carries.
+ */
+export interface MirrorState {
+  enabled: boolean;
+  /** The code being offered right now, or empty. */
+  code: string;
+  watching: number;
+  paired: { id: string; name: string }[];
+  /** Empty unless something is wrong, in which case it is what to do. */
+  problem: string;
+}
+
+export const mirrorState = () => invoke<MirrorState>("mirror_state");
+export const mirrorOfferCode = () => invoke<string>("mirror_offer_code");
+export const mirrorWithdrawCode = () => invoke<void>("mirror_withdraw_code");
+export const mirrorForget = (peerId: string) => invoke<void>("mirror_forget", { peerId });
+
+export const onMirror = (handler: (state: MirrorState) => void): Promise<UnlistenFn> =>
+  listen<MirrorState>("mirror:changed", (event) => handler(event.payload));
 
 /** Tauri surfaces command failures as plain strings. */
 export function describeError(error: unknown): string {
