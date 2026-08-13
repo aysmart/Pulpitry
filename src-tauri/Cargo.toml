@@ -1,6 +1,6 @@
 [package]
 name = "pulpitry"
-version = "0.3.1"
+version = "0.4.0"
 description = "Live speech transcription, Bible verse detection, and worship presentation."
 authors = ["Ayorinde G. Smart"]
 edition = "2021"
