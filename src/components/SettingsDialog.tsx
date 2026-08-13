@@ -9,6 +9,7 @@ import {
   clearAssistKey,
   clearAzureKey,
   describeError,
+  measureSpeech,
   saveAssistKey,
   saveAzureKey,
   saveSettings,
@@ -115,6 +116,8 @@ export function SettingsDialog({
   const [assistKey, setAssistKey] = useState("");
 
   const [mirrorEnabled, setMirrorEnabled] = useState(settings.mirrorEnabled);
+  const [speed, setSpeed] = useState<string | null>(null);
+  const [timing, setTiming] = useState(false);
 
   const [semanticEnabled, setSemanticEnabled] = useState(
     settings.semanticEnabled,
@@ -362,7 +365,36 @@ export function SettingsDialog({
                   >
                     {fetching ? "Downloading…" : "Download"}
                   </button>
+                  {/* Measured, because reasoning about the processor has been
+                      wrong in both directions: a thin-and-light was handed a
+                      model it could not carry, and a machine that decodes
+                      twenty-five times faster than speech was told it might
+                      struggle. Four seconds settles it, before a Sunday. */}
+                  <button
+                    type="button"
+                    disabled={!model || timing}
+                    onClick={() => {
+                      setTiming(true);
+                      setSpeed("Timing this machine…");
+                      void measureSpeech()
+                        .then((result) =>
+                          setSpeed(
+                            result.factor > 0
+                              ? `${result.detail} (${(1 / result.factor).toFixed(1)}x real time)`
+                              : result.detail,
+                          ),
+                        )
+                        .catch((err) => setSpeed(describeError(err)))
+                        .finally(() => setTiming(false));
+                    }}
+                    className="rounded border border-pulpitry-line px-3 py-2 text-[12.5px] text-pulpitry-text disabled:opacity-40 focus-visible:focus-ring"
+                  >
+                    {timing ? "Timing…" : "Time it"}
+                  </button>
                 </div>
+                {speed ? (
+                  <p className="text-[11.5px] leading-snug text-pulpitry-muted">{speed}</p>
+                ) : null}
                 {modelNote ? (
                   <span className="text-[11.5px] leading-snug text-pulpitry-muted">
                     {modelNote}

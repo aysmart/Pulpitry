@@ -205,6 +205,20 @@ export interface MirrorState {
   problem: string;
 }
 
+/**
+ * How fast this machine decodes, measured.
+ *
+ * `factor` is seconds of work per second of audio: below 1.0 is faster than
+ * speech, and about 0.3 is comfortable. Zero means it could not be measured —
+ * usually a model still downloading — and `detail` says so.
+ */
+export interface SpeechSpeed {
+  factor: number;
+  detail: string;
+}
+
+export const measureSpeech = () => invoke<SpeechSpeed>("measure_speech");
+
 export const mirrorState = () => invoke<MirrorState>("mirror_state");
 export const mirrorOfferCode = () => invoke<string>("mirror_offer_code");
 export const mirrorWithdrawCode = () => invoke<void>("mirror_withdraw_code");

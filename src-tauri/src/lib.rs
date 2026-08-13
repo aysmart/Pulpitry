@@ -297,6 +297,38 @@ fn provision_local_model(app: &AppHandle) {
     });
 }
 
+/// How fast this machine decodes.
+///
+/// Answered by measuring rather than by reasoning about the processor. Every
+/// version of that reasoning has been wrong in one direction or the other, and
+/// four seconds of decoding settles it.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SpeechSpeed {
+    /// Seconds of work per second of audio. Below 1.0 is faster than speech.
+    factor: f32,
+    detail: String,
+}
+
+#[tauri::command]
+async fn measure_speech(app: AppHandle) -> CommandResult<SpeechSpeed> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let model = settings::load(&app).map(|s| s.speech_model).unwrap_or_default();
+
+    // Off the UI thread: it decodes twice, and the window has to keep painting.
+    tauri::async_runtime::spawn_blocking(move || match whisper::measure(&dir, &model) {
+        Ok(factor) => SpeechSpeed { factor, detail: whisper::describe_speed(factor) },
+        // Almost always "not downloaded yet", which is a thing to wait for
+        // rather than a fault.
+        Err(error) => SpeechSpeed {
+            factor: 0.0,
+            detail: format!("Could not measure this machine: {error:#}"),
+        },
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Fetches a model, reporting progress as `speech-model-progress` events.
 #[tauri::command]
 async fn download_speech_model(app: AppHandle, file: String) -> CommandResult<()> {
@@ -931,6 +963,7 @@ pub fn run() {
             hosted::hosted_activate,
             hosted::hosted_deactivate,
             speech_models,
+            measure_speech,
             mirror::mirror_state,
             mirror::mirror_offer_code,
             mirror::mirror_withdraw_code,
