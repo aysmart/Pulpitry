@@ -41,6 +41,19 @@ pub struct Settings {
     pub assist_model: String,
     pub assist_api_version: String,
 
+    /// Offering what is on the projector to a Castavox on the same wifi.
+    ///
+    /// Off unless asked for. It opens a port and announces this machine on the
+    /// local network, and neither is a thing to do to a church that never asked
+    /// — one running Pulpitry alone should look, on the network, like a church
+    /// that has never heard of the mirror.
+    #[serde(default)]
+    pub mirror_enabled: bool,
+    /// Screens that have been paired, so one paired last Sunday still works
+    /// today. Holds a derived secret and never leaves this machine.
+    #[serde(default)]
+    pub mirror_pairings: Vec<castavox_core::mirror::Pairing>,
+
     /// Local embedding-based paraphrase matching. Offline and free, so it is on
     /// by default; the index costs a couple of minutes to build once.
     /// Which recogniser turns audio into words: "local", "azure" or "hosted".
@@ -163,6 +176,8 @@ impl Default for Settings {
             speech_engine: "local".to_string(),
             hosted_device_id: String::new(),
             speech_model: String::new(),
+            mirror_enabled: false,
+            mirror_pairings: Vec::new(),
             semantic_enabled: true,
             // Measured against the full 31,102-verse index, and against the
             // negative class that actually matters. Announcements are easy to

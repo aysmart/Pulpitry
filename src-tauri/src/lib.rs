@@ -7,6 +7,7 @@ mod bible;
 mod catalog;
 mod detect;
 mod hosted;
+mod mirror;
 mod projector;
 mod semantic;
 mod settings;
@@ -96,6 +97,9 @@ fn save_settings(
         } else {
             speech.model_changed();
         }
+    }
+    if let Some(mirror) = app.try_state::<Arc<mirror::Mirror>>() {
+        mirror.configure(&settings);
     }
     detector.set_translation(&settings.translation);
     assistant.configure(&settings);
@@ -799,8 +803,16 @@ pub fn run() {
             // verse library imports.
             provision_local_model(app.handle());
 
+            // The mirror, off unless the church asked for it. Subscribed to the
+            // live event rather than called from set_live, so the projector
+            // stays unaware that any of this exists.
+            let mirror = mirror::Mirror::new(app.handle().clone());
+            mirror::follow_live(app.handle(), Arc::clone(&mirror));
+            app.manage(Arc::clone(&mirror));
+
             // Detection searches whichever translation the operator last chose.
             let saved = settings::load(app.handle()).unwrap_or_default();
+            mirror.configure(&saved);
             // A background chosen in a previous session has to be readable again.
             allow_asset(app.handle(), saved.projector.background_path.as_deref());
 
@@ -901,6 +913,10 @@ pub fn run() {
             hosted::hosted_activate,
             hosted::hosted_deactivate,
             speech_models,
+            mirror::mirror_state,
+            mirror::mirror_offer_code,
+            mirror::mirror_withdraw_code,
+            mirror::mirror_forget,
             download_speech_model,
             node_status,
             library_status,
