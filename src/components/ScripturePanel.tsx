@@ -70,14 +70,14 @@ export function ScripturePanel({
   translation: string;
   translations: Translation[];
   onSelectTranslation: (id: string) => void;
-  onPreview: (verse: Verse) => void;
-  onPreviewRange: (verses: Verse[]) => void;
+  onPreview: (verse: Verse, andShow?: boolean) => void;
+  onPreviewRange: (verses: Verse[], andShow?: boolean) => void;
   previewVerseIds: number[];
   liveVerseIds: number[];
   history: Presentable[];
   schedule: ScheduleController;
   onStageEntry: (index: number) => Promise<Presentable | null>;
-  onPreviewItem: (item: Presentable) => void;
+  onPreviewItem: (item: Presentable, andShow?: boolean) => void;
   keyOf: (item: Presentable) => string;
   previewKey: string | null;
   liveKey: string | null;
@@ -263,6 +263,7 @@ export function ScripturePanel({
                 key={keyOf(item)}
                 type="button"
                 onClick={() => onPreviewItem(item)}
+                onDoubleClick={() => onPreviewItem(item, true)}
                 className="rounded px-2 py-1.5 text-left transition-colors hover:bg-pulpitry-raised focus-visible:focus-ring"
               >
                 <span className="block text-[11px] text-pulpitry-muted">

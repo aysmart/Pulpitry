@@ -147,18 +147,50 @@ export function usePresentation() {
     [previewVerses],
   );
 
-  const display = useCallback(() => {
-    if (!preview) return;
-    void setLive(toLiveContent(preview));
+  /**
+   * Puts something on screen, and stages it at the same time.
+   *
+   * Takes what to show rather than reading `preview`, which is what makes a
+   * double-click work at all: React has not re-rendered between the click that
+   * staged it and the one that displayed it, so a version reading state would
+   * put the *previous* item on screen — in front of a congregation, once, with
+   * no obvious cause.
+   */
+  const show = useCallback((item: Presentable) => {
+    setPreview(item);
+    void setLive(toLiveContent(item));
 
-    const key = keyOf(preview);
+    const key = keyOf(item);
     setLiveKey(key);
     setHistory((current) => {
       // Re-displaying a passage should move it, not duplicate it.
-      const withoutDuplicate = current.filter((item) => keyOf(item) !== key);
-      return [preview, ...withoutDuplicate].slice(0, 50);
+      const withoutDuplicate = current.filter((entry) => keyOf(entry) !== key);
+      return [item, ...withoutDuplicate].slice(0, 50);
     });
-  }, [preview]);
+  }, []);
+
+  /** Sends whatever is staged. The Enter key, and the Display button. */
+  const display = useCallback(() => {
+    if (preview) show(preview);
+  }, [preview, show]);
+
+  /**
+   * Stage and send in one gesture.
+   *
+   * A double-click, and the reason it is worth having: during a service the
+   * operator usually knows exactly what they want on the wall, and making them
+   * click and then press Display is two acts for one intention. Single click
+   * still stages, so the cautious path is unchanged and is still the default.
+   */
+  const showVerses = useCallback(
+    (verses: Verse[]) => {
+      if (verses.length > 0) show({ kind: "scripture", verses });
+    },
+    [show],
+  );
+
+  const showVerse = useCallback((verse: Verse) => showVerses([verse]), [showVerses]);
+  const showItem = useCallback((item: Presentable) => show(item), [show]);
 
   const clearLive = useCallback(() => {
     void setLive(null);
@@ -231,6 +263,9 @@ export function usePresentation() {
     previewVerses,
     previewItem,
     display,
+    showVerse,
+    showVerses,
+    showItem,
     clearLive,
     step,
     canStepBack,

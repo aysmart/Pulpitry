@@ -221,7 +221,11 @@ function SongSections({
   keyOf: (item: Presentable) => string;
   previewKey: string | null;
   liveKey: string | null;
-  onPreview: (item: Presentable) => void;
+  /**
+   * Stages an item. `andShow` puts it on screen in the same gesture — a
+   * double-click, for when the operator already knows what they want there.
+   */
+  onPreview: (item: Presentable, andShow?: boolean) => void;
 }) {
   const stateOf = (key: string) =>
     key === liveKey ? "live" : key === previewKey ? "preview" : "idle";
@@ -238,7 +242,7 @@ function SongSections({
               theme={theme}
               label={section.label || `Slide ${index + 1}`}
               state={stateOf(keyOf(item))}
-              onSelect={() => onPreview(item)}
+              onSelect={(andShow) => onPreview(item, andShow)}
             />
           );
         })}
@@ -256,6 +260,7 @@ function SongSections({
             <button
               type="button"
               onClick={() => onPreview(item)}
+              onDoubleClick={() => onPreview(item, true)}
               className={`flex w-full gap-2 rounded px-2 py-1 text-left transition-colors focus-visible:focus-ring ${
                 state === "live"
                   ? "bg-pulpitry-gold/12"
@@ -291,7 +296,7 @@ export function SongLibrary({
   onError,
 }: {
   theme: ProjectorTheme;
-  onPreview: (item: Presentable) => void;
+  onPreview: (item: Presentable, andShow?: boolean) => void;
   previewKey: string | null;
   liveKey: string | null;
   keyOf: (item: Presentable) => string;

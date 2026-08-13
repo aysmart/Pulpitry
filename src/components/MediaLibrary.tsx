@@ -46,7 +46,11 @@ export function MediaLibrary({
   keyOf,
   onError,
 }: {
-  onPreview: (item: Presentable) => void;
+  /**
+   * Stages an item. `andShow` puts it on screen in the same gesture — a
+   * double-click, for when the operator already knows what they want there.
+   */
+  onPreview: (item: Presentable, andShow?: boolean) => void;
   previewKey: string | null;
   liveKey: string | null;
   keyOf: (item: Presentable) => string;
@@ -125,9 +129,9 @@ export function MediaLibrary({
     return key === previewKey ? "preview" : "idle";
   };
 
-  const choose = (item: Item) => {
+  const choose = (item: Item, andShow = false) => {
     const staged = presentableFor(item);
-    if (staged) onPreview(staged);
+    if (staged) onPreview(staged, andShow);
   };
 
   const TAB = (value: Filter, label: string) => (
@@ -213,6 +217,7 @@ export function MediaLibrary({
                 <button
                   type="button"
                   onClick={() => choose(item)}
+                  onDoubleClick={() => choose(item, true)}
                   title={item.title}
                   className="block h-full w-full focus-visible:focus-ring"
                 >
@@ -266,6 +271,7 @@ export function MediaLibrary({
                 <button
                   type="button"
                   onClick={() => choose(item)}
+                  onDoubleClick={() => choose(item, true)}
                   className={`min-w-0 flex-1 rounded px-2 py-1.5 text-left transition-colors focus-visible:focus-ring ${
                     state === "live"
                       ? "bg-pulpitry-gold/12"

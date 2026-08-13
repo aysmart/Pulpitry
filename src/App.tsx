@@ -67,6 +67,9 @@ export default function App() {
     previewVerse,
     previewVerses,
     previewItem,
+    showVerse,
+    showVerses,
+    showItem,
     keyOf,
     display,
     clearLive,
@@ -359,14 +362,14 @@ export default function App() {
           translation={translation}
           translations={library.translations}
           onSelectTranslation={selectTranslation}
-          onPreview={previewVerse}
-          onPreviewRange={previewVerses}
+          onPreview={(verse, andShow) => (andShow ? showVerse(verse) : previewVerse(verse))}
+          onPreviewRange={(verses, andShow) => (andShow ? showVerses(verses) : previewVerses(verses))}
           previewVerseIds={preview?.kind === "scripture" ? preview.verses.map((verse) => verse.id) : []}
           liveVerseIds={live?.ids ?? []}
           history={history}
           schedule={schedule}
           onStageEntry={stageEntry}
-          onPreviewItem={previewItem}
+          onPreviewItem={(item, andShow) => (andShow ? showItem(item) : previewItem(item))}
           keyOf={keyOf}
           previewKey={preview ? keyOf(preview) : null}
           liveKey={liveKey}

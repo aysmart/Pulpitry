@@ -27,7 +27,8 @@ export function SlideThumb({
   item: Presentable;
   theme: ProjectorTheme;
   state: "idle" | "preview" | "live";
-  onSelect: () => void;
+  /** `andShow` is a double-click: stage it and put it on screen at once. */
+  onSelect: (andShow?: boolean) => void;
   /** Overrides the item's own label, e.g. a section name. */
   label?: string;
 }) {
@@ -43,7 +44,8 @@ export function SlideThumb({
   return (
     <button
       type="button"
-      onClick={onSelect}
+      onClick={() => onSelect()}
+      onDoubleClick={() => onSelect(true)}
       title={label ?? presentableLabel(item)}
       className={`group flex flex-col gap-1 rounded text-left focus-visible:focus-ring ${
         state === "live" ? "ring-2 ring-pulpitry-gold" : state === "preview" ? "ring-2 ring-pulpitry-teal" : ""

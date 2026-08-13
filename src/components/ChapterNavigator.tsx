@@ -30,8 +30,8 @@ export function ChapterNavigator({
   translation: string;
   translations: Translation[];
   onSelectTranslation: (id: string) => void;
-  onPreview: (verse: Verse) => void;
-  onPreviewRange: (verses: Verse[]) => void;
+  onPreview: (verse: Verse, andShow?: boolean) => void;
+  onPreviewRange: (verses: Verse[], andShow?: boolean) => void;
   previewVerseIds: number[];
   liveVerseIds: number[];
 }) {
@@ -234,6 +234,7 @@ export function ChapterNavigator({
               type="button"
               data-verse={verse.verse}
               onClick={(event) => choose(verse, event.shiftKey)}
+              onDoubleClick={() => onPreview(verse, true)}
               className={`flex w-full gap-2 rounded px-2 py-1.5 text-left transition-colors focus-visible:focus-ring ${
                 isLive
                   ? "bg-pulpitry-gold/12 text-pulpitry-text"

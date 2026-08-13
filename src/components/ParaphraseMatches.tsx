@@ -29,7 +29,11 @@ export function ParaphraseMatches({
   listening,
 }: {
   suggestions: Suggestion[];
-  onPreview: (verse: Verse) => void;
+  /**
+   * Stages a verse. `andShow` puts it on screen in the same gesture — a
+   * double-click, for when the operator already knows what they want there.
+   */
+  onPreview: (verse: Verse, andShow?: boolean) => void;
   previewVerseId: number | null;
   liveVerseId: number | null;
   index: IndexStatus;
@@ -86,6 +90,7 @@ export function ParaphraseMatches({
             key={`${verse.id}-${suggestion.at}`}
             type="button"
             onClick={() => onPreview(verse)}
+            onDoubleClick={() => onPreview(verse, true)}
             className={`flex w-full flex-col gap-1 rounded border px-2.5 py-2 text-left transition-colors focus-visible:focus-ring ${
               isLive
                 ? "border-pulpitry-gold-dim bg-pulpitry-gold/10"

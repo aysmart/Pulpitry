@@ -38,7 +38,11 @@ export function SlideLibrary({
   onError,
 }: {
   theme: ProjectorTheme;
-  onPreview: (item: Presentable) => void;
+  /**
+   * Stages an item. `andShow` puts it on screen in the same gesture — a
+   * double-click, for when the operator already knows what they want there.
+   */
+  onPreview: (item: Presentable, andShow?: boolean) => void;
   previewKey: string | null;
   liveKey: string | null;
   keyOf: (item: Presentable) => string;
@@ -269,6 +273,7 @@ export function SlideLibrary({
                 <button
                   type="button"
                   onClick={() => staged && onPreview(staged)}
+                  onDoubleClick={() => staged && onPreview(staged, true)}
                   title={item.title}
                   className="block text-left focus-visible:focus-ring"
                 >
