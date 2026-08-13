@@ -38,6 +38,7 @@ export function MirrorPanel({
 }) {
   const [state, setState] = useState<MirrorState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -72,6 +73,40 @@ export function MirrorPanel({
     } catch (err) {
       setError(describeError(err));
     }
+  };
+
+  /**
+   * Puts the code on the clipboard.
+   *
+   * Worth having even though the code is six characters and printed large:
+   * the two machines are often one person with a laptop and a remote desktop
+   * session, or a phone photographing a screen, and typing from a photograph
+   * is where a transcription error comes from. `navigator.clipboard` needs a
+   * secure context, which a Tauri webview is; the fallback covers the older
+   * webviews on Linux where it is not.
+   */
+  const copy = async () => {
+    const code = state?.code ?? "";
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch {
+      const field = document.createElement("textarea");
+      field.value = code;
+      field.style.position = "fixed";
+      field.style.opacity = "0";
+      document.body.appendChild(field);
+      field.select();
+      try {
+        document.execCommand("copy");
+      } finally {
+        field.remove();
+      }
+    }
+    setCopied(true);
+    // Long enough to be read, short enough that the button is a button again
+    // before somebody wants to press it a second time.
+    window.setTimeout(() => setCopied(false), 1600);
   };
 
   const forget = async (id: string) => {
@@ -128,9 +163,14 @@ export function MirrorPanel({
                 <span className="text-[11.5px] text-pulpitry-muted">
                   It works once, and for five minutes. Ask for another whenever you need one.
                 </span>
-                <button type="button" onClick={() => void withdraw()} className={`${FIELD} self-start`}>
-                  Stop showing it
-                </button>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => void copy()} className={FIELD}>
+                    {copied ? "Copied" : "Copy code"}
+                  </button>
+                  <button type="button" onClick={() => void withdraw()} className={FIELD}>
+                    Stop showing it
+                  </button>
+                </div>
               </>
             ) : (
               <>
