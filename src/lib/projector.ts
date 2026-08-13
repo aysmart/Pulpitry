@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export const EVENT_LIVE = "live:changed";
 
@@ -88,33 +88,25 @@ export const closeProjector = () => invoke<ProjectorState>("close_projector");
 export const projectorState = () => invoke<ProjectorState>("projector_state");
 
 /**
- * The stage display — what the preacher sees, on a second screen.
+ * A second congregation-facing display.
  *
- * Same shape as the projector's, and deliberately independent of it: a church
- * may want one, the other, both, or the stage on the screen the projector is
- * not using. Which is which is not ours to decide.
+ * The same view, the same theme and the same content as the projector, on a
+ * screen the operator chooses — an overflow room, a foyer, a second hall. It
+ * renders from the same component rather than a copy of it, so the two cannot
+ * drift apart, and it is opened and closed independently because a church may
+ * want one, the other, or both.
  */
-export interface StageState {
+export interface SecondState {
   open: boolean;
   display: number | null;
 }
 
-export const openStage = (display?: number) =>
-  invoke<StageState>("open_stage", { display: display ?? null });
+export const openSecond = (display?: number) =>
+  invoke<SecondState>("open_second", { display: display ?? null });
 
-export const closeStage = () => invoke<StageState>("close_stage");
+export const closeSecond = () => invoke<SecondState>("close_second");
 
-export const stageState = () => invoke<StageState>("stage_state");
-
-/**
- * Pushes what is staged next to the stage window.
- *
- * Preview lives in the operator window's own state, so the stage display is
- * told rather than asked. A confidence monitor that only knew what was already
- * on the wall would be telling a preacher what they can see by turning round.
- */
-export const tellStage = (next: { caption: string; lines: string[] } | null) =>
-  emit("stage:next", { next });
+export const secondState = () => invoke<SecondState>("second_state");
 
 export const onLive = (handler: (content: LiveContent | null) => void): Promise<UnlistenFn> =>
   listen<LiveContent | null>(EVENT_LIVE, (event) => handler(event.payload));

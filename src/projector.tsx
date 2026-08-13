@@ -2,8 +2,11 @@ import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import { LiveBodyView } from "./components/LiveBodyView";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
 import {
   closeProjector,
+  closeSecond,
   getAudio,
   getLive,
   getMedia,
@@ -81,9 +84,15 @@ function Projector() {
   // A borderless always-on-top window covering the screen is a trap if there
   // is only one display: the operator cannot reach the controls to close it.
   // Escape is the way out.
+  //
+  // Which window to close is decided by which window this is. The same view
+  // serves both outputs -- a church with an overflow room wants the same
+  // content and the same theme there, and rendering it twice from one component
+  // is the only way the two cannot drift apart.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") void closeProjector();
+      if (event.key !== "Escape") return;
+      void (getCurrentWindow().label === "second" ? closeSecond() : closeProjector());
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);

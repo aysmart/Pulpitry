@@ -1,5 +1,5 @@
 import type { AudioDevice, SpeechStatus } from "../lib/api";
-import type { Display, ProjectorState, StageState } from "../lib/projector";
+import type { Display, ProjectorState, SecondState } from "../lib/projector";
 import { Logo } from "./Logo";
 
 const STATE_LABEL: Record<SpeechStatus["state"], string> = {
@@ -20,8 +20,8 @@ export function TopBar({
   busy,
   displays,
   projector,
-  stage,
-  onToggleStage,
+  second,
+  onToggleSecond,
   onToggleProjector,
   onRefreshDisplays,
 }: {
@@ -34,8 +34,8 @@ export function TopBar({
   busy: boolean;
   displays: Display[];
   projector: ProjectorState;
-  stage: StageState;
-  onToggleStage: (display?: number) => void;
+  second: SecondState;
+  onToggleSecond: (display?: number) => void;
   onToggleProjector: (display?: number) => void;
   onRefreshDisplays: () => void;
 }) {
@@ -141,25 +141,46 @@ export function TopBar({
         {projector.open ? "Projector on" : "Projector"}
       </button>
 
-      {/* The second output, beside the first and independent of it.
-          A church may want the stage on the screen the projector is not using,
-          or one without the other, and which is which is not ours to decide. */}
+      {/* The second output, with its own screen picker.
+          Which screen each output uses is the operator's decision and changes
+          between buildings, so both are chosen the same way rather than one
+          being inferred from the other. */}
+      {displays.length > 1 ? (
+        <select
+          value={second.display ?? ""}
+          aria-label="Second display"
+          onFocus={onRefreshDisplays}
+          onChange={(event) => onToggleSecond(Number(event.target.value))}
+          className="max-w-[170px] truncate rounded border border-pulpitry-line bg-pulpitry-raised px-2 py-1.5 text-[12px] text-pulpitry-text outline-none focus-visible:focus-ring"
+        >
+          <option value="" disabled>
+            Second display
+          </option>
+          {displays.map((display) => (
+            <option key={display.index} value={display.index}>
+              {display.name} ({display.width}×{display.height})
+              {display.isPrimary ? " — main" : ""}
+            </option>
+          ))}
+        </select>
+      ) : null}
+
       <button
         type="button"
-        onClick={() => onToggleStage()}
+        onClick={() => onToggleSecond()}
         onMouseEnter={onRefreshDisplays}
         title={
-          stage.open
-            ? "Close the stage display"
-            : "Open the stage display — what is live, what is next, and the time, for whoever is speaking"
+          second.open
+            ? "Close the second display"
+            : "Open a second congregation display — the same content, on another screen"
         }
         className={`rounded px-3 py-1.5 text-[12px] transition-colors focus-visible:focus-ring ${
-          stage.open
+          second.open
             ? "border border-pulpitry-teal bg-pulpitry-teal-dim text-pulpitry-text"
             : "border border-pulpitry-line bg-pulpitry-raised text-pulpitry-text hover:border-pulpitry-muted"
         }`}
       >
-        {stage.open ? "Stage on" : "Stage"}
+        {second.open ? "Second on" : "Second"}
       </button>
 
       {displays.length === 1 && !projector.open ? (

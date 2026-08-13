@@ -22,15 +22,18 @@ pub const EVENT_MEDIA_PROGRESS: &str = "media:progress";
 pub const EVENT_THEME: &str = "theme:changed";
 pub const WINDOW_LABEL: &str = "projector";
 /**
- * The second output: what the preacher sees, not what the congregation does.
+ * A second congregation-facing display.
  *
- * A different window rather than a second copy of the projector, because it
- * shows different things -- what is up now, what the operator has staged next,
- * and the time. A confidence monitor that merely mirrored the wall would tell
- * somebody standing in front of that wall nothing they could not see by turning
- * round.
+ * The same view on another screen -- an overflow room, a foyer, a second hall.
+ * It loads `projector.html` exactly as the first one does, so the content, the
+ * theme and every future change to either arrive in both without anybody
+ * remembering to do it twice.
+ *
+ * A separate window rather than a wider one: the two screens are rarely
+ * adjacent and never the same size, and a window stretched across both would
+ * put half a verse in each room.
  */
-pub const STAGE_LABEL: &str = "stage";
+pub const SECOND_LABEL: &str = "second";
 
 /// One verse within a passage.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -209,7 +212,7 @@ pub struct Projector {
     live: Mutex<Option<LiveContent>>,
     ticker: Mutex<Ticker>,
     display: Mutex<Option<usize>>,
-    stage: Mutex<Option<usize>>,
+    second: Mutex<Option<usize>>,
     audio: Mutex<AudioState>,
     media: Mutex<MediaCommand>,
     progress: Mutex<MediaProgress>,
@@ -222,7 +225,7 @@ impl Projector {
             live: Mutex::new(None),
             ticker: Mutex::new(Ticker::default()),
             display: Mutex::new(None),
-            stage: Mutex::new(None),
+            second: Mutex::new(None),
             audio: Mutex::new(AudioState::default()),
             media: Mutex::new(MediaCommand::default()),
             progress: Mutex::new(MediaProgress::default()),
@@ -477,36 +480,36 @@ impl Projector {
         ProjectorState { open: false, display: None }
     }
 
-    /// Opens the stage display, or moves it.
+    /// Opens the second display, or moves it to another screen.
     ///
-    /// Deliberately allowed on the same screen as the projector, and even on the
-    /// operator's. A church with two outputs and three uses for them should not
-    /// be told by us which is which, and somebody setting this up at home has
-    /// one screen and still wants to see what it looks like.
-    pub fn open_stage(&self, requested: Option<usize>) -> Result<StageState> {
-        let index = Self::place_stage(&self.app, requested)?;
-        *self.stage.lock() = Some(index);
-        Ok(self.stage_state())
+    /// Deliberately allowed on the same screen as the projector, and even on
+    /// the operator's. Somebody setting this up at home has one screen and
+    /// still wants to see what it looks like, and refusing would be us deciding
+    /// which of a church's screens is for what.
+    pub fn open_second(&self, requested: Option<usize>) -> Result<SecondState> {
+        let index = Self::place_second(&self.app, requested)?;
+        *self.second.lock() = Some(index);
+        Ok(self.second_state())
     }
 
-    pub fn close_stage(&self) -> StageState {
-        if let Some(window) = self.app.get_webview_window(STAGE_LABEL) {
+    pub fn close_second(&self) -> SecondState {
+        if let Some(window) = self.app.get_webview_window(SECOND_LABEL) {
             let _ = window.close();
         }
-        *self.stage.lock() = None;
-        StageState { open: false, display: None }
+        *self.second.lock() = None;
+        SecondState { open: false, display: None }
     }
 
-    pub fn stage_state(&self) -> StageState {
-        StageState {
-            open: self.app.get_webview_window(STAGE_LABEL).is_some(),
-            display: *self.stage.lock(),
+    pub fn second_state(&self) -> SecondState {
+        SecondState {
+            open: self.app.get_webview_window(SECOND_LABEL).is_some(),
+            display: *self.second.lock(),
         }
     }
 
     /// The same window dance as the projector, and the same warning applies:
     /// building a webview from a synchronous command deadlocks Windows.
-    fn place_stage(app: &AppHandle, requested: Option<usize>) -> Result<usize> {
+    fn place_second(app: &AppHandle, requested: Option<usize>) -> Result<usize> {
         let index = Self::chosen(app, requested)?;
         let monitors = app
             .available_monitors()
@@ -515,34 +518,35 @@ impl Projector {
         let position = monitor.position();
         let size = monitor.size();
 
-        if let Some(window) = app.get_webview_window(STAGE_LABEL) {
+        if let Some(window) = app.get_webview_window(SECOND_LABEL) {
             let _ = window.set_position(tauri::PhysicalPosition::new(position.x, position.y));
             let _ = window.set_size(tauri::PhysicalSize::new(size.width, size.height));
             let _ = window.set_focus();
             return Ok(index);
         }
 
-        WebviewWindowBuilder::new(app, STAGE_LABEL, WebviewUrl::App("stage.html".into()))
-            .title("Pulpitry — Stage")
+        WebviewWindowBuilder::new(app, SECOND_LABEL, WebviewUrl::App("projector.html".into()))
+            .title("Pulpitry — Second display")
             .decorations(false)
             .resizable(false)
             .always_on_top(true)
             .position(position.x as f64, position.y as f64)
             .inner_size(size.width as f64, size.height as f64)
-            // Black, not the projector's paper. This one is read in a dark
-            // room by somebody who must not be dazzled while they are speaking.
-            .background_color(tauri::window::Color(0, 0, 0, 255))
+            // The projector's own paper: this is the same output, and a
+            // second screen that flashed black between items would be the one
+            // thing distinguishing it.
+            .background_color(tauri::window::Color(244, 241, 234, 255))
             .build()
-            .map_err(|err| anyhow!("could not open the stage window: {err}"))?;
+            .map_err(|err| anyhow!("could not open the second display: {err}"))?;
 
         Ok(index)
     }
 }
 
-/// Where the stage display is, if it is anywhere.
+/// Where the second display is, if it is anywhere.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StageState {
+pub struct SecondState {
     pub open: bool,
     pub display: Option<usize>,
 }

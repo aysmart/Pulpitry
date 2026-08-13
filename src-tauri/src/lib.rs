@@ -678,29 +678,29 @@ fn projector_state(projector: State<'_, Arc<Projector>>) -> ProjectorState {
     projector.state()
 }
 
-/// The stage display: what the preacher sees.
+/// A second congregation-facing display, on a screen the operator chooses.
 ///
 /// Async for the same reason `open_projector` is — building a webview from a
 /// synchronous command deadlocks the message loop on Windows and takes the
 /// whole application with it.
 #[tauri::command]
-async fn open_stage(
+async fn open_second(
     projector: State<'_, Arc<Projector>>,
     display: Option<usize>,
-) -> CommandResult<projector::StageState> {
-    projector.open_stage(display).map_err(to_message)
+) -> CommandResult<projector::SecondState> {
+    projector.open_second(display).map_err(to_message)
 }
 
 #[tauri::command]
-async fn close_stage(
+async fn close_second(
     projector: State<'_, Arc<Projector>>,
-) -> CommandResult<projector::StageState> {
-    Ok(projector.close_stage())
+) -> CommandResult<projector::SecondState> {
+    Ok(projector.close_second())
 }
 
 #[tauri::command]
-fn stage_state(projector: State<'_, Arc<Projector>>) -> projector::StageState {
-    projector.stage_state()
+fn second_state(projector: State<'_, Arc<Projector>>) -> projector::SecondState {
+    projector.second_state()
 }
 
 /// Reads the bundled hymn library and hands it to the catalog.
@@ -1027,9 +1027,9 @@ pub fn run() {
             open_projector,
             close_projector,
             projector_state,
-            open_stage,
-            close_stage,
-            stage_state,
+            open_second,
+            close_second,
+            second_state,
             set_background,
             get_theme,
             catalog_save,
