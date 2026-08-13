@@ -163,6 +163,21 @@ jobs:
             file \
             xdg-utils
 
+      # whisper.cpp is built with the Vulkan backend on Windows, which needs the
+      # SDK present when the binary is *compiled*. Without it the build fails at
+      # link time with a message about ggml-vulkan rather than about a missing
+      # SDK, which is a bad hour for whoever meets it first.
+      #
+      # Only Windows. macOS uses Metal, which ships with the OS, and Linux is
+      # still CPU-only.
+      - name: Install the Vulkan SDK
+        if: runner.os == 'Windows'
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          install_runtime: true
+          cache: true
+          stripdown: true
+
       - name: Install dependencies
         run: npm ci
 
