@@ -74,6 +74,14 @@ fn save_settings(
     let was = settings::load(&app).ok();
     settings::save(&app, &settings).map_err(to_message)?;
 
+    // Switching to local without naming a model is allowed, and is the ordinary
+    // case: the dialog no longer insists on one. This picks one and fetches it,
+    // exactly as a first launch does, so the settings on disk may now hold a
+    // model the caller did not send -- which is why the view below is read back
+    // rather than echoing the argument.
+    provision_local_model(&app);
+    let settings = settings::load(&app).unwrap_or(settings);
+
     // Reaches a session already listening: the model is picked up between
     // utterances, and changing engine replaces the recogniser while capture
     // keeps going. Without this, both would wait for a restart.
@@ -205,6 +213,66 @@ async fn speech_models(app: AppHandle) -> CommandResult<Vec<whisper::ModelInfo>>
     tauri::async_runtime::spawn_blocking(move || whisper::catalogue(&dir))
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Chooses and fetches a speech model for a machine that has none.
+///
+/// The local engine used to open on a question — thirty model files, sizes from
+/// 30 MB to 1.5 GB, and a settings dialog that would not save until one was
+/// picked. A volunteer cannot answer that. Nothing in it says whether this
+/// laptop keeps up with `base` or `small`, so the question went unanswered, the
+/// engine that costs nothing sat unusable behind it, and local transcription
+/// read as not working.
+///
+/// So the machine is measured instead and one is chosen. At launch rather than
+/// at Start: this is up to 466 MB over whatever connection the church has, and
+/// Sunday morning is the wrong time to discover that. Progress goes out as the
+/// same `speech-model-progress` events the settings dialog already draws.
+///
+/// Does nothing unless the engine is local and no model has been chosen: an
+/// operator who picked one has answered the question, and re-answering it for
+/// them would be worse than never asking.
+fn provision_local_model(app: &AppHandle) {
+    let Ok(mut settings) = settings::load(app) else { return };
+    if settings.speech_engine != "local" || !settings.speech_model.trim().is_empty() {
+        return;
+    }
+    let Ok(dir) = app.path().app_data_dir() else { return };
+
+    let file = whisper::recommended(&settings.language);
+    settings.speech_model = file.clone();
+    if let Err(error) = settings::save(app, &settings) {
+        crate::log_line!("[speech] could not record the chosen model: {error:#}");
+        return;
+    }
+    crate::log_line!("[speech] chose {file} for this machine");
+
+    if whisper::is_installed(&dir, &file) {
+        return;
+    }
+
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        let report = |received: u64, total: u64| {
+            let _ = handle.emit(
+                "speech-model-progress",
+                serde_json::json!({
+                    "file": file, "received": received, "total": total, "state": "downloading",
+                }),
+            );
+        };
+        let payload = match whisper::download(&dir, &file, report) {
+            Ok(_) => serde_json::json!({ "file": file, "state": "ready" }),
+            // Reported and not retried. There is no network, or no disk, and an
+            // app that quietly tries again every launch is how a church on a
+            // metered connection finds out later.
+            Err(error) => {
+                crate::log_line!("[speech] could not fetch {file}: {error:#}");
+                serde_json::json!({ "file": file, "state": "error", "error": format!("{error:#}") })
+            }
+        };
+        let _ = handle.emit("speech-model-progress", payload);
+    });
 }
 
 /// Fetches a model, reporting progress as `speech-model-progress` events.
@@ -725,6 +793,11 @@ pub fn run() {
             }
 
             app.manage(catalog);
+
+            // A new install is on the local engine and has no model for it yet.
+            // Before the rest of the setup, so the fetch is under way while the
+            // verse library imports.
+            provision_local_model(app.handle());
 
             // Detection searches whichever translation the operator last chose.
             let saved = settings::load(app.handle()).unwrap_or_default();

@@ -120,7 +120,7 @@ export function SettingsDialog({
     settings.semanticThreshold,
   );
 
-  const [engine, setEngine] = useState(settings.speechEngine || "azure");
+  const [engine, setEngine] = useState(settings.speechEngine || "local");
   // Tracked rather than read straight from settings, because activating in this
   // dialog must make the option selectable without reopening it.
   const [hosted, setHosted] = useState(settings.hasHostedSubscription);
@@ -151,7 +151,7 @@ export function SettingsDialog({
         setModels(found);
         setModelNote(
           found.length
-            ? `${found.length} models available. Smaller is faster and less accurate; a quantised one is a good place to start on an older machine.`
+            ? `One was chosen for this machine and downloaded; this is here to change it. Larger is more accurate and slower — if transcription starts arriving behind the speaker, come back and take the next one down. ${found.length} available.`
             : "No models could be listed. Check the connection, or use Azure for now.",
         );
       })
@@ -279,21 +279,26 @@ export function SettingsDialog({
                 onChange={(event) => setEngine(event.target.value)}
                 className={FIELD}
               >
-                <option value="azure">Azure Speech — your own account</option>
-                <option value="local">This machine — no account needed</option>
+                {/* First, because it is the default and the one most churches
+                    should stay on. A model for it has already been chosen and
+                    fetched by the time anybody opens this. */}
+                <option value="local">
+                  This machine — free, no account needed
+                </option>
                 {/* Always offered, including before activation: choosing it is
                     how somebody reaches the licence field below. */}
                 <option value="hosted">
                   Castavox subscription{hosted ? "" : " — needs a licence key"}
                 </option>
+                <option value="azure">Azure Speech — your own account</option>
               </select>
               <span className="text-[11.5px] leading-snug text-pulpitry-muted">
-                Azure streams: words appear as they are spoken and a verse can
-                be found mid-sentence. This machine transcribes a sentence once
-                it ends, so a verse arrives a second or two later — but it needs
-                no account, no key and no network, and it costs nothing per
-                hour. A Castavox subscription streams like Azure without your
-                church having to open an Azure account at all.
+                This machine transcribes a sentence once it ends, so a verse
+                arrives a second or two later — but it needs no account, no key
+                and no network, and it costs nothing per hour. The other two
+                stream: words appear as they are spoken and a verse can be
+                found mid-sentence. A Castavox subscription does that without
+                your church having to open an Azure account at all.
               </span>
             </label>
 

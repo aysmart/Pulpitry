@@ -43,17 +43,29 @@ pub struct Settings {
 
     /// Local embedding-based paraphrase matching. Offline and free, so it is on
     /// by default; the index costs a couple of minutes to build once.
-    /// Which recogniser turns audio into words: "azure", "local" or "hosted".
+    /// Which recogniser turns audio into words: "local", "azure" or "hosted".
     ///
-    /// Defaults to Azure, because that is what an existing install already
-    /// uses and a silent change of engine would be a change of behaviour
-    /// nobody asked for.
+    /// A new install gets the local engine: it costs nothing, needs no account
+    /// and no network, and it is what most churches should be using. Azure was
+    /// the default when it was the only engine, and defaulting to it meant a
+    /// fresh install opened on a demand for a subscription key — a paywall in
+    /// front of the free thing.
+    ///
+    /// An install that predates this field still gets Azure, which is what the
+    /// serde default below is for. Those machines have a key and a region set
+    /// and are transcribing through them; switching their engine on upgrade
+    /// would be a change of behaviour nobody asked for, discovered on a Sunday.
+    #[serde(default = "engine_before_the_local_one")]
     pub speech_engine: String,
     /// This machine, to a hosted subscription. Not a secret and not a
     /// fingerprint: a random identifier made once, so that reactivating the
     /// same laptop does not consume a second of the seats they paid for.
     pub hosted_device_id: String,
-    /// The whisper.cpp model, by file name. Empty until one is chosen.
+    /// The whisper.cpp model, by file name.
+    ///
+    /// Empty means nothing has been chosen for this machine yet, which is the
+    /// signal `provision_local_model` acts on at startup. It is only ever empty
+    /// once.
     pub speech_model: String,
     pub semantic_enabled: bool,
     /// Cosine similarity a match must reach to be shown, 0 to 1.
@@ -127,6 +139,16 @@ impl Default for ProjectorTheme {
     }
 }
 
+/// What a settings file written before the local engine existed was using.
+///
+/// Not `Settings::default()`, which is a *new* install and gets the local
+/// engine. This is only for the field being absent from a file that is already
+/// on disk, and the answer there is always Azure: it was the only engine when
+/// that file was written.
+fn engine_before_the_local_one() -> String {
+    "azure".to_string()
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -138,7 +160,7 @@ impl Default for Settings {
             assist_endpoint: String::new(),
             assist_model: String::new(),
             assist_api_version: DEFAULT_ASSIST_API_VERSION.into(),
-            speech_engine: "azure".to_string(),
+            speech_engine: "local".to_string(),
             hosted_device_id: String::new(),
             speech_model: String::new(),
             semantic_enabled: true,
