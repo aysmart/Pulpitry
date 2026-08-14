@@ -54,6 +54,29 @@ pub struct Settings {
     #[serde(default)]
     pub mirror_pairings: Vec<castavox_core::mirror::Pairing>,
 
+    /*
+     * Publishing the projector to the network as an NDI source.
+     *
+     * Off unless asked for, for the mirror's reason and one of its own. It
+     * announces this machine on the network and, on macOS, the first attempt
+     * raises the Screen Recording prompt -- a permission dialog nobody asked
+     * for is alarming, and one that appears on a Sunday morning is worse.
+     *
+     * It is also the one feature here that is heavy: the projector's pixels,
+     * uncompressed, at around 100 Mbit/s for 1080p. That is a wired-network
+     * feature and turning it on by accident on church wifi would take the
+     * stream down with it.
+     */
+    #[serde(default)]
+    pub ndi_enabled: bool,
+    /// What the source is called on the network.
+    ///
+    /// Empty means the default below. A church with two campuses on one network
+    /// needs to tell them apart, and "Pulpitry" twice in a switcher's source
+    /// list is a coin toss.
+    #[serde(default)]
+    pub ndi_name: String,
+
     /// Local embedding-based paraphrase matching. Offline and free, so it is on
     /// by default; the index costs a couple of minutes to build once.
     /// Which recogniser turns audio into words: "local", "azure" or "hosted".
@@ -174,6 +197,8 @@ impl Default for Settings {
             assist_model: String::new(),
             assist_api_version: DEFAULT_ASSIST_API_VERSION.into(),
             speech_engine: "local".to_string(),
+            ndi_enabled: false,
+            ndi_name: String::new(),
             hosted_device_id: String::new(),
             speech_model: String::new(),
             mirror_enabled: false,

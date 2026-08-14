@@ -11,6 +11,7 @@ mod menu;
 mod mirror;
 mod ndi;
 mod ndi_capture;
+mod ndi_output;
 mod projector;
 mod semantic;
 mod settings;
@@ -368,6 +369,82 @@ fn library_status(library: State<'_, Arc<Library>>) -> CommandResult<LibraryStat
     library.status().map_err(to_message)
 }
 
+/*
+ * The NDI output, as the operator drives it.
+ *
+ * The running output lives in a Mutex<Option<..>> in app state: `Some` while it
+ * is publishing, `None` otherwise, and dropping the old one is what stops the
+ * threads and takes the source off the network. Nothing else is needed to stop
+ * it, which is the point of `Output` owning its own shutdown.
+ */
+struct NdiOutput(std::sync::Mutex<Option<ndi_output::Output>>);
+
+/// What the settings panel needs to draw the row.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NdiState {
+    /// Whether the runtime is installed at all.
+    available: bool,
+    running: bool,
+    name: String,
+    /// Set when starting failed, in words for the operator.
+    error: Option<String>,
+}
+
+#[tauri::command]
+fn ndi_status(state: State<'_, NdiOutput>, app: AppHandle) -> NdiState {
+    let settings = settings::load(&app).unwrap_or_default();
+    NdiState {
+        available: ndi_output::Output::available(),
+        running: state.0.lock().map(|held| held.is_some()).unwrap_or(false),
+        name: settings.ndi_name,
+        error: None,
+    }
+}
+
+/// Starts or stops publishing, and saves the choice.
+///
+/// The setting is written whatever happens, including when starting fails: an
+/// operator who asked for this and was told the runtime is missing should find
+/// the switch still on after installing it, rather than having to remember what
+/// they were doing.
+#[tauri::command]
+fn ndi_set(
+    state: State<'_, NdiOutput>,
+    app: AppHandle,
+    enabled: bool,
+    name: String,
+) -> CommandResult<NdiState> {
+    let mut settings = settings::load(&app).unwrap_or_default();
+    settings.ndi_enabled = enabled;
+    settings.ndi_name = name.trim().to_string();
+    let _ = settings::save(&app, &settings);
+
+    let mut held = state.0.lock().map_err(|_| "the NDI output is wedged".to_string())?;
+
+    // Always dropped first, even when starting again: a rename has to close the
+    // old source before opening the new one, or the network briefly carries two.
+    *held = None;
+
+    let mut error = None;
+    if enabled {
+        match ndi_output::Output::start(&settings.ndi_name) {
+            Ok(output) => *held = Some(output),
+            Err(problem) => {
+                crate::log_line!("[ndi] {problem}");
+                error = Some(problem);
+            }
+        }
+    }
+
+    Ok(NdiState {
+        available: ndi_output::Output::available(),
+        running: held.is_some(),
+        name: settings.ndi_name,
+        error,
+    })
+}
+
 /// Who the bundled texts belong to, for the About dialog.
 ///
 /// The Biblica editions and the Free Bible Version are CC BY-SA: naming them is
@@ -719,9 +796,37 @@ async fn list_displays(projector: State<'_, Arc<Projector>>) -> CommandResult<Ve
 #[tauri::command]
 async fn open_projector(
     projector: State<'_, Arc<Projector>>,
+    ndi: State<'_, NdiOutput>,
+    app: AppHandle,
     display: Option<usize>,
 ) -> CommandResult<ProjectorState> {
-    projector.open(display).map_err(to_message)
+    let state = projector.open(display).map_err(to_message)?;
+
+    /*
+     * Resume the NDI output, if it was left on.
+     *
+     * It cannot start at launch: there is no projector window then, so there is
+     * nothing to capture and the capture would fail on an empty room. The
+     * window appearing is the moment it becomes possible, which makes this the
+     * right place rather than a convenient one.
+     *
+     * A failure here is logged and swallowed. Opening the projector is the
+     * thing the operator asked for and it has already worked; refusing it
+     * because a network feature could not start would be the wrong way round.
+     */
+    let settings = settings::load(&app).unwrap_or_default();
+    if settings.ndi_enabled {
+        if let Ok(mut held) = ndi.0.lock() {
+            if held.is_none() {
+                match ndi_output::Output::start(&settings.ndi_name) {
+                    Ok(output) => *held = Some(output),
+                    Err(problem) => crate::log_line!("[ndi] could not resume: {problem}"),
+                }
+            }
+        }
+    }
+
+    Ok(state)
 }
 
 #[tauri::command]
@@ -900,6 +1005,10 @@ pub fn run() {
             }
 
             app.manage(Projector::new(app.handle().clone()));
+            // Not started here even when the setting is on: the projector has
+            // no window yet, so there would be nothing to capture. The window
+            // is what starts it.
+            app.manage(NdiOutput(std::sync::Mutex::new(None)));
 
             let library = Arc::new(Library::open(app.handle())?);
             app.manage(Arc::clone(&library));
@@ -1035,6 +1144,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_audio_inputs,
             bible_attributions,
+            ndi_status,
+            ndi_set,
             get_settings,
             save_settings,
             save_azure_key,

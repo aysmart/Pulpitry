@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
 import { MirrorPanel } from "./MirrorPanel";
+import { NdiPanel } from "./NdiPanel";
 import { HostedSubscription } from "./HostedSubscription";
 import { NodeRuntimeNotice } from "./NodeRuntimeNotice";
 
@@ -573,6 +574,18 @@ export function SettingsDialog({
             note="For a church running both, on two machines in the same building."
           >
             <MirrorPanel enabled={mirrorEnabled} onEnabledChange={setMirrorEnabled} />
+          </Section>
+
+          <div className="border-t border-pulpitry-line" />
+
+          {/* Directly under Mirror on purpose. They are the two ways out of
+              this machine and are constantly confused for each other, so the
+              cheap one comes first and this one says what it is not. */}
+          <Section
+            title="Send the screen elsewhere"
+            note="For a video team whose switcher is not Castavox, or who need the picture itself rather than the verse."
+          >
+            <NdiPanel />
           </Section>
 
           <div className="border-t border-pulpitry-line" />

@@ -1,8 +1,30 @@
 /// The build script, and one link argument macOS needs.
 fn main() {
     link_clang_builtins();
+    link_swift_runtime();
     tauri_build::build()
 }
+
+/// Finds the Swift runtime, for the screen capture the NDI output uses.
+///
+/// `screencapturekit` is Swift underneath, so anything linking it needs
+/// `libswift_Concurrency.dylib` and its siblings at load time. The bundled
+/// application finds them because macOS puts the Swift runtime on a system
+/// path; a bare `cargo test` binary does not, and aborts on launch with a dyld
+/// error naming a library nobody asked for.
+///
+/// The failure is worth describing because of what it takes down: not the NDI
+/// tests, but *every* test in the crate, since they share one binary. One
+/// missing rpath and the whole suite stops running.
+#[cfg(target_os = "macos")]
+fn link_swift_runtime() {
+    for path in ["/usr/lib/swift", "/usr/lib/swift/macosx"] {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{path}");
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn link_swift_runtime() {}
 
 /// Links clang's builtin runtime, for the Metal backend's availability checks.
 ///
