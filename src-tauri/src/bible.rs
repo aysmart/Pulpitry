@@ -90,6 +90,20 @@ struct ManifestEntry {
     file: String,
     verse_count: i64,
     checksum: String,
+    /*
+     * The licence, where the text carries one.
+     *
+     * Absent on the public-domain translations, which is most of them. Present
+     * on the Biblica open editions and the Free Bible Version, which are
+     * CC BY-SA -- and for those, naming the source is a condition of being
+     * allowed to ship the text at all, not a courtesy. It is read here so the
+     * About dialog can list them rather than the obligation living in a comment
+     * somebody has to remember.
+     */
+    #[serde(default)]
+    licence: Option<String>,
+    #[serde(default)]
+    attribution: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -239,6 +253,30 @@ impl Library {
             progress(self.status()?);
         }
         Ok(())
+    }
+
+    /// The texts whose licence obliges us to name them.
+    ///
+    /// CC BY-SA permits the commercial use this makes of them and asks for
+    /// attribution in return, so this is a condition of shipping rather than a
+    /// credit we chose to give. Deduplicated because five of the translations
+    /// are Biblica's and one line covers them.
+    pub fn attributions(&self, app: &AppHandle) -> Vec<String> {
+        let Ok(entries) = self.manifest(app) else {
+            return Vec::new();
+        };
+
+        let mut seen: Vec<String> = Vec::new();
+        for entry in entries {
+            let (Some(licence), Some(who)) = (entry.licence, entry.attribution) else {
+                continue;
+            };
+            let line = format!("{who} — {licence}");
+            if !seen.contains(&line) {
+                seen.push(line);
+            }
+        }
+        seen
     }
 
     fn manifest(&self, app: &AppHandle) -> Result<Vec<ManifestEntry>> {

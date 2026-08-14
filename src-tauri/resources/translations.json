@@ -86,5 +86,105 @@
     "file": "WEB.tsv.gz",
     "verseCount": 31098,
     "checksum": "3f560df1a446e8b7"
+  },
+  {
+    "id": "FBV",
+    "name": "Free Bible Version",
+    "year": 2023,
+    "file": "FBV.tsv.gz",
+    "licence": "CC BY-SA 4.0",
+    "attribution": "Free Bible Version © Dr. Jonathan Gallagher",
+    "verseCount": 31087,
+    "checksum": "0252535d6d4d21c2"
+  },
+  {
+    "id": "MSB",
+    "name": "Majority Standard Bible",
+    "year": 2024,
+    "file": "MSB.tsv.gz",
+    "verseCount": 31098,
+    "checksum": "da800602337eb4d8"
+  },
+  {
+    "id": "WEBU",
+    "name": "World English Bible (Updated)",
+    "year": 2022,
+    "file": "WEBU.tsv.gz",
+    "verseCount": 31098,
+    "checksum": "11cff5c5fe4977e1"
+  },
+  {
+    "id": "YOR",
+    "name": "Bíbélì Mímọ́ (Yoruba)",
+    "year": 2017,
+    "file": "YOR.tsv.gz",
+    "licence": "CC BY-SA 4.0",
+    "attribution": "Biblica® open edition © Biblica, Inc.",
+    "verseCount": 31087,
+    "checksum": "c54f34362070d88e"
+  },
+  {
+    "id": "IBO",
+    "name": "Baịbụlụ Nsọ (Igbo)",
+    "year": 2018,
+    "file": "IBO.tsv.gz",
+    "licence": "CC BY-SA 4.0",
+    "attribution": "Biblica® open edition © Biblica, Inc.",
+    "verseCount": 31103,
+    "checksum": "08779b27ff3add2a"
+  },
+  {
+    "id": "HAU",
+    "name": "Littafi Mai Tsarki (Hausa)",
+    "year": 2020,
+    "file": "HAU.tsv.gz",
+    "licence": "CC BY-SA 4.0",
+    "attribution": "Biblica® open edition © Biblica, Inc.",
+    "verseCount": 31087,
+    "checksum": "b6f8c72161cce67e"
+  },
+  {
+    "id": "SWH",
+    "name": "Biblia Takatifu (Swahili)",
+    "year": 2018,
+    "file": "SWH.tsv.gz",
+    "licence": "CC BY-SA 4.0",
+    "attribution": "Biblica® open edition © Biblica, Inc.",
+    "verseCount": 31103,
+    "checksum": "cd5ba33bdb65bed8"
+  },
+  {
+    "id": "TWI",
+    "name": "Twi Bible (Akuapem)",
+    "year": 2020,
+    "file": "TWI.tsv.gz",
+    "licence": "CC BY-SA 4.0",
+    "attribution": "Biblica® open edition © Biblica, Inc.",
+    "verseCount": 31100,
+    "checksum": "68386d1cccb7f2b8"
+  },
+  {
+    "id": "FRA",
+    "name": "Louis Segond (Français)",
+    "year": 1910,
+    "file": "FRA.tsv.gz",
+    "verseCount": 31170,
+    "checksum": "5b32bf48fecb27b5"
+  },
+  {
+    "id": "SPA",
+    "name": "Reina Valera (Español)",
+    "year": 1909,
+    "file": "SPA.tsv.gz",
+    "verseCount": 31084,
+    "checksum": "eb85551a9fc1b4bb"
+  },
+  {
+    "id": "POR",
+    "name": "Bíblia Livre (Português)",
+    "year": 2018,
+    "file": "POR.tsv.gz",
+    "verseCount": 31102,
+    "checksum": "9c31e36d603fffe0"
   }
 ]

@@ -368,6 +368,17 @@ fn library_status(library: State<'_, Arc<Library>>) -> CommandResult<LibraryStat
     library.status().map_err(to_message)
 }
 
+/// Who the bundled texts belong to, for the About dialog.
+///
+/// The Biblica editions and the Free Bible Version are CC BY-SA: naming them is
+/// a condition of being allowed to ship the text, so this is read from the
+/// manifest rather than typed into the dialog, where it would drift the first
+/// time a translation was added or dropped.
+#[tauri::command]
+fn bible_attributions(app: AppHandle, library: State<'_, Arc<Library>>) -> Vec<String> {
+    library.attributions(&app)
+}
+
 #[tauri::command]
 fn list_translations(library: State<'_, Arc<Library>>) -> CommandResult<Vec<Translation>> {
     library.translations().map_err(to_message)
@@ -1023,6 +1034,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             list_audio_inputs,
+            bible_attributions,
             get_settings,
             save_settings,
             save_azure_key,

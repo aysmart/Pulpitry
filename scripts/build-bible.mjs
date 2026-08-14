@@ -39,6 +39,20 @@ const SCROLL = "https://raw.githubusercontent.com/scrollmapper/bible_databases/m
  */
 const WEB_JSON = "https://raw.githubusercontent.com/TehShrike/world-english-bible/master/json";
 
+/*
+ * The Free Use Bible API, for everything that is not English.
+ *
+ * 1,256 translations, and the reason it is trusted here rather than any of the
+ * larger collections is what it leaves out: it carries eBible.org's corpus
+ * filtered to the texts eBible marks redistributable, and none of the 257 it
+ * does not. That was checked rather than assumed -- every one of its entries
+ * was matched against eBible's own catalogue and not one blocked text appears.
+ *
+ * One request per translation: `/complete.json` is the whole Bible, where the
+ * per-chapter route would be about twelve hundred.
+ */
+const HELLOAO = "https://bible.helloao.org/api";
+
 /**
  * The bundled set.
  *
@@ -61,6 +75,53 @@ const TRANSLATIONS = [
   { id: "GENEVA", name: "Geneva Bible", year: 1599, source: "scroll", file: "Geneva1599" },
   { id: "DRC", name: "Douay-Rheims (Challoner)", year: 1752, source: "scroll", file: "DRC" },
   { id: "WEB", name: "World English Bible", year: 2000, source: "web" },
+
+  /*
+   * Modern English, which the set above is short of.
+   *
+   * Everything before these is 1901 or earlier apart from three, and a
+   * congregation reading Jacobean English is a congregation working harder
+   * than it needs to. FBV is plain contemporary English; MSB is the Berean
+   * project's 2024 majority-text edition; WEBU is the World English Bible
+   * brought up to date.
+   *
+   * The NET Bible is deliberately absent and is the one worth explaining. Its
+   * licence is generous about ministry use and explicit that the text "cannot
+   * be bundled with paid products" -- commercial redistribution goes through
+   * HarperCollins. That is a conversation to have on purpose, not a flag to
+   * read off a catalogue, and until somebody has it the text stays out.
+   */
+  { id: "FBV", name: "Free Bible Version", year: 2023, source: "helloao", file: "eng_fbv",
+    licence: "CC BY-SA 4.0", attribution: "Free Bible Version © Dr. Jonathan Gallagher" },
+  { id: "MSB", name: "Majority Standard Bible", year: 2024, source: "helloao", file: "eng_msb" },
+  { id: "WEBU", name: "World English Bible (Updated)", year: 2022, source: "helloao", file: "eng_webu" },
+
+  /*
+   * The languages the congregations actually sing and preach in.
+   *
+   * These matter more than a twelfth English translation. A Yoruba service
+   * reading from an English Bible on the wall is the ordinary situation this
+   * fixes, and all three are Biblica's own open editions -- the NIV's publisher,
+   * released for free redistribution, so there is nothing here to clear.
+   *
+   * Book names stay English on purpose. The reference parser, the detector and
+   * every cross-translation lookup key on them, and a Bible whose books are
+   * named in Yoruba would be a Bible the microphone could not find a verse in.
+   * The verse text is the part that goes on the wall, and that is in Yoruba.
+   */
+  { id: "YOR", name: "Bíbélì Mímọ́ (Yoruba)", year: 2017, source: "helloao", file: "yor_bib",
+    licence: "CC BY-SA 4.0", attribution: "Biblica® open edition © Biblica, Inc." },
+  { id: "IBO", name: "Baịbụlụ Nsọ (Igbo)", year: 2018, source: "helloao", file: "ibo_bib",
+    licence: "CC BY-SA 4.0", attribution: "Biblica® open edition © Biblica, Inc." },
+  { id: "HAU", name: "Littafi Mai Tsarki (Hausa)", year: 2020, source: "helloao", file: "hau_bib",
+    licence: "CC BY-SA 4.0", attribution: "Biblica® open edition © Biblica, Inc." },
+  { id: "SWH", name: "Biblia Takatifu (Swahili)", year: 2018, source: "helloao", file: "swh_bib",
+    licence: "CC BY-SA 4.0", attribution: "Biblica® open edition © Biblica, Inc." },
+  { id: "TWI", name: "Twi Bible (Akuapem)", year: 2020, source: "helloao", file: "twi_aka",
+    licence: "CC BY-SA 4.0", attribution: "Biblica® open edition © Biblica, Inc." },
+  { id: "FRA", name: "Louis Segond (Français)", year: 1910, source: "helloao", file: "fra_lsg" },
+  { id: "SPA", name: "Reina Valera (Español)", year: 1909, source: "helloao", file: "spa_r09" },
+  { id: "POR", name: "Bíblia Livre (Português)", year: 2018, source: "helloao", file: "por_blj" },
 ];
 
 /** Canonical order and display names. Also the repo filename for the KJV source. */
@@ -262,6 +323,56 @@ async function loadWeb() {
   return { rows, skipped: [] };
 }
 
+/**
+ * One translation from the Free Use Bible API.
+ *
+ * The whole Bible arrives as a single document: books, each with chapters, each
+ * with a `content` array that mixes headings and verses. Only the verses are
+ * wanted, and a verse's own content is itself an array -- plain strings beside
+ * objects carrying `text` plus markup we do not use, which is how the words of
+ * Jesus are marked. Flattening both is the whole of the work.
+ */
+async function loadHelloAo(file) {
+  const document = await fetchJson(`${HELLOAO}/${file}/complete.json`);
+  const rows = [];
+  const skipped = [];
+
+  for (const book of document.books ?? []) {
+    // `order` is the canonical position, and these are 66-book Bibles. Anything
+    // outside that is apocryphal and is dropped rather than renumbered.
+    const number = book.order;
+    if (!Number.isInteger(number) || number < 1 || number > BOOKS.length) {
+      skipped.push(book.commonName ?? book.id);
+      continue;
+    }
+    const name = BOOKS[number - 1][0];
+
+    for (const entry of book.chapters ?? []) {
+      /*
+       * One level deeper than the per-chapter route, which returns the chapter
+       * itself. Here each element wraps it alongside audio links -- and reading
+       * it at the wrong depth yields no verses at all rather than an error,
+       * which is how this was first written and how the validator caught it.
+       */
+      const chapter = entry.chapter ?? entry;
+
+      for (const item of chapter.content ?? []) {
+        if (item?.type !== "verse" || typeof item.number !== "number") continue;
+
+        const text = clean(
+          (item.content ?? [])
+            .map((part) => (typeof part === "string" ? part : (part?.text ?? "")))
+            .join(" "),
+        );
+        if (!text) continue;
+        rows.push([number, name, chapter.number, item.number, text]);
+      }
+    }
+  }
+
+  return { rows, skipped };
+}
+
 function validate(id, rows) {
   if (rows.length < 25_000) {
     throw new Error(`${id}: only ${rows.length} verses — expected a complete Bible`);
@@ -310,7 +421,9 @@ async function main() {
         ? await loadArul(entry.id)
         : entry.source === "web"
           ? await loadWeb()
-          : await loadScroll(entry.id, entry.file);
+          : entry.source === "helloao"
+            ? await loadHelloAo(entry.file)
+            : await loadScroll(entry.id, entry.file);
 
     validate(entry.id, rows);
     rows.sort((a, b) => a[0] - b[0] || a[2] - b[2] || a[3] - b[3]);
@@ -326,6 +439,12 @@ async function main() {
       name: entry.name,
       year: entry.year,
       file,
+      /*
+       * Only where there is one. A public-domain text carries no condition and
+       * an empty "licence: public domain" on eleven entries would bury the five
+       * that do -- and it is those five the About dialog is obliged to name.
+       */
+      ...(entry.licence ? { licence: entry.licence, attribution: entry.attribution } : {}),
       verseCount: rows.length,
       // Lets the app notice a corrected text on upgrade. Verse counts alone
       // would not: fixing wording changes no counts.

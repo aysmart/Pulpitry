@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -16,11 +17,26 @@ import { openUrl } from "@tauri-apps/plugin-opener";
  */
 export function AboutDialog({ onClose }: { onClose: () => void }) {
   const [version, setVersion] = useState("");
+  /*
+   * Who the bundled texts belong to.
+   *
+   * Read from the manifest rather than written here. Several translations are
+   * CC BY-SA, where naming the source is a condition of shipping the text --
+   * so a hard-coded list would be a licence breach the first time somebody
+   * added a translation and forgot this file.
+   */
+  const [credits, setCredits] = useState<string[]>([]);
 
   useEffect(() => {
     void getVersion()
       .then(setVersion)
       .catch(() => setVersion(""));
+  }, []);
+
+  useEffect(() => {
+    void invoke<string[]>("bible_attributions")
+      .then(setCredits)
+      .catch(() => setCredits([]));
   }, []);
 
   useEffect(() => {
@@ -86,9 +102,11 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
             licensed. The models are fetched from its own repository.
           </li>
           <li>
-            Eleven public-domain Bible translations, about 342,000 verses, bundled and searched
-            locally. Copyrighted translations are fetched from their publishers with a key you
-            hold — we redistribute none of them.
+            Twenty-two Bible translations, about 684,000 verses, bundled and searched locally —
+            including Yoruba, Igbo, Hausa, Swahili, Twi, French, Spanish and Portuguese. Most are
+            public domain; the rest are shared under Creative Commons and credited below.
+            Translations that are neither, such as the NIV and ESV, are fetched from their
+            publishers with a key you hold — we redistribute none of them.
           </li>
           <li>266 public-domain hymns.</li>
           <li>
@@ -96,6 +114,21 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
             this machine for it.
           </li>
         </ul>
+
+        {/* A licence condition rather than a courtesy: CC BY-SA permits what we
+            do with these texts and asks to be named in return. */}
+        {credits.length > 0 ? (
+          <>
+            <h3 className="mt-6 text-[12px] uppercase tracking-[0.14em] text-pulpitry-muted">
+              Scripture credits
+            </h3>
+            <ul className="mt-2 flex flex-col gap-1 text-[11.5px] leading-snug text-pulpitry-muted">
+              {credits.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </>
+        ) : null}
 
         <h3 className="mt-6 text-[12px] uppercase tracking-[0.14em] text-pulpitry-muted">
           Help and licences
