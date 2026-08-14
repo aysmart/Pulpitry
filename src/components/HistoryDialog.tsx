@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Markdown } from "./Markdown";
-import { describeError } from "../lib/api";
+import { describeError, generateSlides, type DraftSlide } from "../lib/api";
+import { catalogSave } from "../lib/catalog";
 import {
   exportSummary,
   getSession,
@@ -78,6 +79,9 @@ export function HistoryDialog({
   const [lines, setLines] = useState<Line[]>([]);
   const [loadingLines, setLoadingLines] = useState(false);
   const [canSummarise, setCanSummarise] = useState(false);
+  const [slides, setSlides] = useState<DraftSlide[] | null>(null);
+  const [makingSlides, setMakingSlides] = useState(false);
+  const [keptSlides, setKeptSlides] = useState(0);
   const [summarising, setSummarising] = useState(false);
   const [exporting, setExporting] = useState<SummaryFormat | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -195,6 +199,69 @@ export function HistoryDialog({
       setSummarising(false);
     }
   }, [selected, replace]);
+
+  /*
+   * Slides from a service already preached.
+   *
+   * The same gesture as Summarise and beside it, because it is the same
+   * question asked twice: what was this about, and what would it look like on a
+   * wall. A church that recorded last Sunday and wants slides for the repeat at
+   * the evening service should not have to copy a transcript out of one dialog
+   * and paste it into another.
+   *
+   * Nothing is saved until each one is kept, exactly as when an outline is
+   * pasted in fresh -- the rule is about a model writing into a library
+   * unread, and it does not become safer because the words came from a
+   * transcript.
+   */
+  const makeSlides = useCallback(async () => {
+    if (!selected) return;
+    setError(null);
+    setMakingSlides(true);
+    setSlides(null);
+    setKeptSlides(0);
+    try {
+      const lines = await sessionLines(selected.id);
+      const transcript = lines.map((line) => line.text).join(" ");
+      setSlides(await generateSlides(transcript));
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setMakingSlides(false);
+    }
+  }, [selected]);
+
+  const keepSlide = useCallback(async (draft: DraftSlide, index: number) => {
+    setError(null);
+    try {
+      await catalogSave({
+        id: null,
+        title: draft.title || "Untitled slide",
+        subtitle: draft.reference,
+        body: {
+          kind: "slide",
+          blocks: [
+            ...(draft.title
+              ? [{ text: draft.title, level: "heading" as const, align: "center" as const, bold: true, italic: false }]
+              : []),
+            ...draft.lines.map((text) => ({
+              text,
+              level: "body" as const,
+              align: "center" as const,
+              bold: false,
+              italic: false,
+            })),
+          ],
+        },
+        path: null,
+        updatedAt: Date.now(),
+      });
+      setSlides((current) => current?.filter((_, at) => at !== index) ?? null);
+      setKeptSlides((n) => n + 1);
+    } catch (err) {
+      setError(describeError(err));
+    }
+  }, []);
 
   const write = useCallback(
     async (format: SummaryFormat) => {
@@ -355,6 +422,90 @@ export function HistoryDialog({
                 </p>
 
                 {/* What it was about. */}
+                {/* Slides from what was said, beside the summary and asked for
+                    the same way. A church recording the morning and repeating
+                    it in the evening should not have to copy a transcript out
+                    of one dialog and into another. */}
+                {canSummarise ? (
+                  <section className="mt-4 rounded-md border border-pulpitry-line bg-pulpitry-raised/40 px-4 py-3.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-[11px] tracking-[0.14em] text-pulpitry-teal uppercase">
+                        Slides
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => void makeSlides()}
+                        disabled={makingSlides}
+                        className="rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1 text-[11.5px] text-pulpitry-text transition-colors hover:border-pulpitry-muted disabled:opacity-50 focus-visible:focus-ring"
+                      >
+                        {makingSlides ? "Reading the transcript…" : "Make slides"}
+                      </button>
+                    </div>
+
+                    {keptSlides > 0 ? (
+                      <p className="mt-2 text-[12px] text-pulpitry-muted">
+                        {keptSlides} kept — they are in the slide library.
+                      </p>
+                    ) : null}
+
+                    {slides?.length === 0 ? (
+                      <p className="mt-2 text-[12.5px] leading-relaxed text-pulpitry-muted">
+                        Nothing here made slides. It was told to return nothing rather than
+                        invent something.
+                      </p>
+                    ) : null}
+
+                    {slides && slides.length > 0 ? (
+                      <div className="mt-3 flex flex-col gap-2">
+                        {slides.map((draft, index) => (
+                          <div
+                            key={`${draft.title}-${index}`}
+                            className="rounded border border-pulpitry-line px-3 py-2"
+                          >
+                            <div className="flex items-baseline justify-between gap-3">
+                              <span className="text-[13px] text-pulpitry-text">
+                                {draft.title || "Untitled"}
+                              </span>
+                              {draft.reference ? (
+                                <span className="shrink-0 text-[11px] text-pulpitry-teal">
+                                  {draft.reference}
+                                </span>
+                              ) : null}
+                            </div>
+                            {draft.lines.length > 0 ? (
+                              <ul className="mt-1 flex flex-col gap-0.5 text-[12px] leading-snug text-pulpitry-muted">
+                                {draft.lines.map((line, at) => (
+                                  <li key={at}>{line}</li>
+                                ))}
+                              </ul>
+                            ) : null}
+                            <div className="mt-2 flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void keepSlide(draft, index)}
+                                className="rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1 text-[11.5px] text-pulpitry-text focus-visible:focus-ring"
+                              >
+                                Keep
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSlides((current) =>
+                                    current?.filter((_, at) => at !== index) ?? null,
+                                  )
+                                }
+                                className="rounded px-2.5 py-1 text-[11.5px] text-pulpitry-muted underline-offset-2 hover:underline focus-visible:focus-ring"
+                              >
+                                Discard
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </section>
+                ) : null}
+
                 <section className="mt-4 rounded-md border border-pulpitry-line bg-pulpitry-raised/40 px-4 py-3.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-[11px] tracking-[0.14em] text-pulpitry-teal uppercase">

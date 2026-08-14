@@ -51,7 +51,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
         aria-modal="true"
         aria-label="About Pulpitry"
         onClick={(event) => event.stopPropagation()}
-        className="flex max-h-full w-[440px] flex-col overflow-auto rounded-lg border border-pulpitry-line bg-pulpitry-panel p-6"
+        className="flex max-h-full w-[440px] flex-col overflow-auto rounded-lg border border-pulpitry-line bg-pulpitry-surface shadow-2xl p-6"
       >
         <h2 className="text-[19px] text-pulpitry-text">Pulpitry</h2>
         <p className="mt-1 text-[12.5px] text-pulpitry-muted">
@@ -63,11 +63,21 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
           projector, with the passage a speaker is quoting found as they say it.
         </p>
 
+        {/* Whose it is. The first version of this dialog listed everybody
+            else's work and not the author's, which is the wrong way round for
+            a page headed About. */}
+        <p className="mt-4 text-[13px] text-pulpitry-text">
+          Made by <span className="text-pulpitry-gold">Ayorinde G. Smart</span>
+        </p>
+        <p className="mt-1 text-[12px] text-pulpitry-muted">
+          © {new Date().getFullYear()} Castavox. All rights reserved.
+        </p>
+
         {/* The part the native panel could not do. A church running this in
             public should be able to find out whose work is inside it without
             leaving the application. */}
         <h3 className="mt-6 text-[12px] uppercase tracking-[0.14em] text-pulpitry-muted">
-          What is inside
+          Built on
         </h3>
         <ul className="mt-2 flex flex-col gap-1.5 text-[12.5px] leading-snug text-pulpitry-muted">
           <li>
