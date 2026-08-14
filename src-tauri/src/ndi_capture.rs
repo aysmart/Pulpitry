@@ -80,6 +80,10 @@ pub struct Capture {
     running: Arc<AtomicBool>,
     #[cfg(target_os = "macos")]
     stream: Option<screencapturekit::stream::SCStream>,
+    #[cfg(target_os = "windows")]
+    control: Option<
+        windows_capture::capture::CaptureControl<WindowsSink, std::convert::Infallible>,
+    >,
 }
 
 impl Drop for Capture {
@@ -91,6 +95,13 @@ impl Drop for Capture {
             // Never `unwrap`: this runs while the application is closing, and a
             // stream the system has already torn down is not a reason to abort.
             if let Err(error) = stream.stop_capture() {
+                crate::log_line!("[ndi] the capture did not stop cleanly: {error:?}");
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        if let Some(control) = self.control.take() {
+            if let Err(error) = control.stop() {
                 crate::log_line!("[ndi] the capture did not stop cleanly: {error:?}");
             }
         }
@@ -261,13 +272,139 @@ fn frame_from(sample: &screencapturekit::cm::CMSampleBuffer) -> Option<Frame> {
     Some(Frame { width, height, pixels })
 }
 
-#[cfg(not(target_os = "macos"))]
+/*
+ * Windows, through Windows.Graphics.Capture.
+ *
+ * The platform this feature is really for: a church with a video team and a
+ * switcher is usually running Windows, and the Mac is the machine on the
+ * operator's desk.
+ *
+ * Two differences from the macOS path, both in our favour.
+ *
+ * There is no permission prompt. Windows.Graphics.Capture asks nothing for a
+ * window the calling process owns, so the whole Screen Recording conversation
+ * simply does not exist here.
+ *
+ * And the capture calls us rather than the reverse: the handler below runs on
+ * the capture's own thread and is handed each frame as it arrives. That is why
+ * the border and cursor are turned off in the settings rather than cropped
+ * afterwards -- a yellow capture border rendered into a stream, or a mouse
+ * pointer drifting across a projected verse, is the kind of thing nobody
+ * notices until it is recorded.
+ */
+#[cfg(target_os = "windows")]
+use windows_capture::capture::{Context, GraphicsCaptureApiHandler};
+#[cfg(target_os = "windows")]
+use windows_capture::frame::Frame as WinFrame;
+#[cfg(target_os = "windows")]
+use windows_capture::graphics_capture_api::InternalCaptureControl;
+
+/// Where captured frames land on Windows.
+///
+/// At module scope rather than inside `start`, because [`Capture`] has to name
+/// its type to hold the control handle -- and a handle that is dropped is a
+/// capture that stops, which is the whole of how this shuts down.
+#[cfg(target_os = "windows")]
+pub struct WindowsSink {
+    latest: Latest,
+    /// Reused between frames. A 1080p frame is 8 MB and allocating one thirty
+    /// times a second is work the projector could feel.
+    scratch: Vec<u8>,
+}
+
+#[cfg(target_os = "windows")]
+impl GraphicsCaptureApiHandler for WindowsSink {
+    type Flags = Latest;
+    type Error = std::convert::Infallible;
+
+    fn new(context: Context<Self::Flags>) -> Result<Self, Self::Error> {
+        Ok(Self { latest: context.flags, scratch: Vec::new() })
+    }
+
+    fn on_frame_arrived(
+        &mut self,
+        frame: &mut WinFrame,
+        _control: InternalCaptureControl,
+    ) -> Result<(), Self::Error> {
+        let width = frame.width();
+        let height = frame.height();
+
+        let Ok(buffer) = frame.buffer() else {
+            // A dropped frame is not a fault worth stopping for: the sender
+            // repeats the last one and the next arrives in 33 ms.
+            return Ok(());
+        };
+
+        // The rows arrive padded to a hardware alignment; this hands back a
+        // tightly packed view, which is what the sender wants.
+        let packed = buffer.as_nopadding_buffer(&mut self.scratch);
+        self.latest.put(Frame { width, height, pixels: packed.to_vec() });
+        Ok(())
+    }
+
+    fn on_closed(&mut self) -> Result<(), Self::Error> {
+        // The projector was closed. Nothing to do: the sender keeps sending
+        // the last frame until the operator turns the output off, which is
+        // better than a source vanishing mid-service.
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub fn start(window_title: &str, fps: u32, latest: Latest) -> Result<Capture, Problem> {
+    use windows_capture::settings::{
+        ColorFormat, CursorCaptureSettings, DirtyRegionSettings, DrawBorderSettings,
+        MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
+    };
+    use windows_capture::window::Window;
+
+    /*
+     * Our own window, by title and by process.
+     *
+     * The same rule as macOS and for the same reason: a church may have a
+     * browser tab or a document whose title bar carries the same words, and
+     * sending somebody else's window to the stream is the worst thing this
+     * feature could do.
+     */
+    let ours = std::process::id();
+    let window = Window::enumerate()
+        .map_err(|error| Problem::Failed(format!("{error:?}")))?
+        .into_iter()
+        .find(|window| {
+            window.process_id().is_ok_and(|pid| pid == ours)
+                && window.title().is_ok_and(|title| title == window_title)
+        })
+        .ok_or(Problem::NoProjector)?;
+
+    let settings = Settings::new(
+        window,
+        // No pointer on the wall, and no capture border in the stream.
+        CursorCaptureSettings::WithoutCursor,
+        DrawBorderSettings::WithoutBorder,
+        SecondaryWindowSettings::Default,
+        MinimumUpdateIntervalSettings::Custom(std::time::Duration::from_micros(
+            1_000_000 / fps.max(1) as u64,
+        )),
+        DirtyRegionSettings::Default,
+        // BGRA, matching what the sender declares to NDI.
+        ColorFormat::Bgra8,
+        latest,
+    );
+
+    let control = WindowsSink::start_free_threaded(settings)
+        .map_err(|error| Problem::Failed(format!("{error:?}")))?;
+
+    crate::log_line!("[ndi] capturing the projector at {fps} fps");
+    Ok(Capture { running: Arc::new(AtomicBool::new(true)), control: Some(control) })
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn start(_window_title: &str, _fps: u32, _latest: Latest) -> Result<Capture, Problem> {
-    // Windows is next, and is the platform this feature is really for -- a
-    // church with a video team is usually running Windows. Until then the
-    // settings panel offers nothing rather than offering something that fails.
+    // Linux would need PipeWire and a portal, which is a different shape again.
+    // Until somebody asks, the panel offers nothing rather than something that
+    // fails after being switched on.
     Err(Problem::Failed(
-        "Sending the projector over NDI is macOS-only in this version.".to_string(),
+        "Sending the projector over NDI is not available on this system yet.".to_string(),
     ))
 }
 
