@@ -49,18 +49,89 @@ const REGIONS = [
   "westus3",
 ];
 
+/**
+ * What can be spoken, and which engine can hear it.
+ *
+ * The three engines disagree, and a picker that hides that sells a church
+ * something that produces nonsense: ask a Castavox subscription for Swahili and
+ * it answers confidently in the wrong language. `hosted`, `azure` and `local`
+ * say who can actually do each one.
+ *
+ * Yoruba and Hausa are local-only, which inverts the usual advice — for those
+ * languages this machine is not the compromise, it is the only thing that
+ * works. Igbo is heard by nothing and is deliberately not offered: its Bible is
+ * bundled and searchable, but there is no engine to listen for it.
+ *
+ * Kept in step with castavox-core's `languages.rs`, which is the same table for
+ * Castavox.
+ */
 const LANGUAGES = [
-  { code: "en-US", label: "English (United States)" },
-  { code: "en-GB", label: "English (United Kingdom)" },
-  { code: "en-NG", label: "English (Nigeria)" },
-  { code: "en-AU", label: "English (Australia)" },
-  { code: "en-CA", label: "English (Canada)" },
-  { code: "en-IN", label: "English (India)" },
-  { code: "en-ZA", label: "English (South Africa)" },
-  { code: "fr-FR", label: "French (France)" },
-  { code: "es-ES", label: "Spanish (Spain)" },
-  { code: "pt-BR", label: "Portuguese (Brazil)" },
+  { code: "en-US", label: "English (United States)", hosted: true, azure: true, local: true },
+  { code: "en-GB", label: "English (United Kingdom)", hosted: true, azure: true, local: true },
+  { code: "en-NG", label: "English (Nigeria)", hosted: true, azure: true, local: true },
+  { code: "en-GH", label: "English (Ghana)", hosted: true, azure: true, local: true },
+  { code: "en-KE", label: "English (Kenya)", hosted: true, azure: true, local: true },
+  { code: "en-ZA", label: "English (South Africa)", hosted: true, azure: true, local: true },
+  { code: "en-IN", label: "English (India)", hosted: true, azure: true, local: true },
+  { code: "en-AU", label: "English (Australia)", hosted: true, azure: true, local: true },
+  { code: "en-CA", label: "English (Canada)", hosted: true, azure: true, local: true },
+  { code: "yo-NG", label: "Yoruba", hosted: false, azure: false, local: true },
+  { code: "ha-NG", label: "Hausa", hosted: false, azure: false, local: true },
+  { code: "sw-KE", label: "Swahili (Kenya)", hosted: false, azure: true, local: true },
+  { code: "sw-TZ", label: "Swahili (Tanzania)", hosted: false, azure: true, local: true },
+  { code: "fr-FR", label: "French (France)", hosted: true, azure: true, local: true },
+  { code: "fr-CA", label: "French (Canada)", hosted: true, azure: true, local: true },
+  { code: "es-ES", label: "Spanish (Spain)", hosted: true, azure: true, local: true },
+  { code: "es-MX", label: "Spanish (Mexico)", hosted: true, azure: true, local: true },
+  { code: "pt-BR", label: "Portuguese (Brazil)", hosted: true, azure: true, local: true },
+  { code: "pt-PT", label: "Portuguese (Portugal)", hosted: true, azure: true, local: true },
+  { code: "de-DE", label: "German", hosted: true, azure: true, local: true },
+  { code: "it-IT", label: "Italian", hosted: true, azure: true, local: true },
+  { code: "nl-NL", label: "Dutch", hosted: true, azure: true, local: true },
+  { code: "hi-IN", label: "Hindi", hosted: true, azure: true, local: true },
+  { code: "ru-RU", label: "Russian", hosted: true, azure: true, local: true },
+  { code: "ja-JP", label: "Japanese", hosted: true, azure: true, local: true },
+  { code: "pl-PL", label: "Polish", hosted: true, azure: true, local: true },
+  { code: "zh-CN", label: "Chinese (Mandarin)", hosted: false, azure: true, local: true },
+  { code: "ko-KR", label: "Korean", hosted: false, azure: true, local: true },
+  { code: "ar-EG", label: "Arabic (Egypt)", hosted: false, azure: true, local: true },
+  { code: "am-ET", label: "Amharic", hosted: false, azure: true, local: true },
+  { code: "af-ZA", label: "Afrikaans", hosted: false, azure: true, local: true },
+  { code: "zu-ZA", label: "Zulu", hosted: false, azure: true, local: false },
+  { code: "tl-PH", label: "Tagalog", hosted: false, azure: true, local: true },
+  { code: "id-ID", label: "Indonesian", hosted: false, azure: true, local: true },
+  { code: "uk-UA", label: "Ukrainian", hosted: false, azure: true, local: true },
+  { code: "ro-RO", label: "Romanian", hosted: false, azure: true, local: true },
+  { code: "ta-IN", label: "Tamil", hosted: false, azure: true, local: true },
 ];
+
+/**
+ * What to say when the language and the engine disagree.
+ *
+ * Nothing in the ordinary case, which is most of them. When they do disagree it
+ * names the engine that *would* work — "this cannot do Yoruba" leaves an
+ * operator stuck, "use this machine instead" does not.
+ */
+function languageWarning(code: string, engine: string): string | null {
+  const language = LANGUAGES.find((entry) => entry.code === code);
+  if (!language) return null;
+
+  const works =
+    engine === "hosted" ? language.hosted : engine === "azure" ? language.azure : language.local;
+  if (works) return null;
+
+  const instead: string[] = [];
+  if (language.local && engine !== "local") instead.push("this machine");
+  if (language.azure && engine !== "azure") instead.push("your own Azure account");
+  if (language.hosted && engine !== "hosted") instead.push("a Castavox subscription");
+
+  const named =
+    engine === "hosted" ? "A Castavox subscription" : engine === "azure" ? "Azure" : "This machine";
+
+  return instead.length === 0
+    ? `${named} cannot transcribe ${language.label}, and nor can the others. The Bible can still be searched and displayed in it; only listening is unavailable.`
+    : `${named} cannot transcribe ${language.label}. Use ${instead.join(" or ")} instead.`;
+}
 
 /** Bytes as something a person can weigh against their own machine. */
 function describeSize(bytes: number): string {
@@ -474,6 +545,13 @@ export function SettingsDialog({
                     </option>
                   ))}
                 </select>
+                {/* Said at the moment of choosing rather than discovered during
+                    a sermon, which is when the wrong engine announces itself. */}
+                {languageWarning(language, engine) ? (
+                  <span className="mt-1.5 block text-[11.5px] leading-snug text-pulpitry-gold">
+                    {languageWarning(language, engine)}
+                  </span>
+                ) : null}
               </label>
             )}
 
