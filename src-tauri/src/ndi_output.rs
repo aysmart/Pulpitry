@@ -63,6 +63,21 @@ impl Output {
         ndi::Runtime::open().is_some()
     }
 
+    /// What this machine can see on the network, our own source included.
+    ///
+    /// "Is anybody able to see this?" is the only question an operator has
+    /// about NDI, and answering it from our own discovery beats telling them to
+    /// go and look in OBS. A source that is announced but absent here is a
+    /// network that will not carry it -- a guest wifi with client isolation, a
+    /// VLAN, a firewall -- and that is worth knowing before Sunday rather than
+    /// during it.
+    ///
+    /// Two seconds: NDI's discovery answers in well under one on a healthy
+    /// network, and a settings panel that hangs for longer feels broken.
+    pub fn visible_sources() -> Vec<String> {
+        ndi::Runtime::open().map(|runtime| runtime.sources(2000)).unwrap_or_default()
+    }
+
     /// Starts publishing, or says why it could not in words an operator can use.
     pub fn start(name: &str) -> Result<Self, String> {
         let name = if name.trim().is_empty() { DEFAULT_NAME } else { name.trim() };

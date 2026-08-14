@@ -391,6 +391,20 @@ struct NdiState {
     error: Option<String>,
 }
 
+/// What NDI sources this machine can see, ours included.
+///
+/// Asked on demand rather than with the status, because it costs two seconds of
+/// discovery and the settings panel opens far more often than anybody wonders
+/// whether the network is carrying the feed.
+#[tauri::command]
+async fn ndi_sources() -> Vec<String> {
+    // On a thread: discovery blocks, and blocking the async runtime stalls
+    // every other command the window is waiting on.
+    tauri::async_runtime::spawn_blocking(ndi_output::Output::visible_sources)
+        .await
+        .unwrap_or_default()
+}
+
 #[tauri::command]
 fn ndi_status(state: State<'_, NdiOutput>, app: AppHandle) -> NdiState {
     let settings = settings::load(&app).unwrap_or_default();
@@ -1145,6 +1159,7 @@ pub fn run() {
             list_audio_inputs,
             bible_attributions,
             ndi_status,
+            ndi_sources,
             ndi_set,
             get_settings,
             save_settings,

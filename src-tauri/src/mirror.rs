@@ -250,9 +250,25 @@ impl Mirror {
     fn announce(self: &Arc<Self>) {
         // A pairing that just happened has to survive a restart, and this is
         // the moment it is known about.
-        if let Some(running) = self.inner.lock().as_ref() {
-            let pairings = running.desk.pairings();
-            drop(running);
+        /*
+         * The lock is released before the pairings are written down.
+         *
+         * `remember` loads and saves the settings file, and `stage` takes this
+         * same lock for every verse put on the wall. Holding it across a disk
+         * write means a service stalls behind one -- briefly, and on the one
+         * path that runs while somebody is pairing a machine mid-setup.
+         *
+         * This read `drop(running)`, which dropped a *reference* and did
+         * nothing at all: the guard was a temporary living to the end of the
+         * `if let`, and the compiler said so in a warning that went unread
+         * until a release build printed it. Taking the value out in its own
+         * scope is what actually ends the borrow.
+         */
+        let pairings = {
+            let held = self.inner.lock();
+            held.as_ref().map(|running| running.desk.pairings())
+        };
+        if let Some(pairings) = pairings {
             self.remember(pairings);
         }
         let _ = self.app.emit(EVENT_MIRROR, self.state());

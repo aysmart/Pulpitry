@@ -118,6 +118,14 @@ pub enum Problem {
     /// Nothing to capture. The projector is not open.
     NoProjector,
     /// macOS has not been told this application may record the screen.
+    ///
+    /// Constructed only there, and deliberately not behind a `cfg`. Windows
+    /// asks no permission to capture a window the calling process owns, so this
+    /// is dead on that platform -- but a variant that exists everywhere keeps
+    /// the `Display` text, the tests and the settings panel identical across
+    /// the two, and a platform-conditional enum would buy a warning's silence
+    /// with a second shape of the same type.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     NotPermitted,
     /// Anything else, already logged.
     Failed(String),

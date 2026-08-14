@@ -36,6 +36,17 @@ export function NdiPanel() {
   const [state, setState] = useState<NdiState | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  /*
+   * What the network can see, asked for rather than polled.
+   *
+   * The one question an operator has about NDI is whether anybody else can see
+   * the feed, and the honest answer comes from discovery rather than from us
+   * saying we are sending. A source announced but absent from this list is a
+   * network that will not carry it -- guest wifi with client isolation, a VLAN,
+   * a firewall -- which is worth finding out on a Tuesday.
+   */
+  const [seen, setSeen] = useState<string[] | null>(null);
+  const [looking, setLooking] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -109,6 +120,39 @@ export function NdiPanel() {
             <span className="text-pulpitry-text">To send verses to Castavox, use Mirror above
             instead</span> — that sends a few dozen bytes and works on any connection.
           </p>
+
+          {state.running ? (
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                disabled={looking}
+                onClick={() => {
+                  setLooking(true);
+                  void invoke<string[]>("ndi_sources")
+                    .then(setSeen)
+                    .catch(() => setSeen([]))
+                    .finally(() => setLooking(false));
+                }}
+                className="self-start rounded px-1 py-0.5 text-[11.5px] text-pulpitry-muted underline-offset-2 hover:underline focus-visible:focus-ring"
+              >
+                {looking ? "Looking…" : "Check the network can see it"}
+              </button>
+              {seen !== null && !looking ? (
+                seen.some((source) => source.includes(name || "Pulpitry")) ? (
+                  <span className="text-[11.5px] text-pulpitry-teal">
+                    Found on the network. Any NDI software here can take it.
+                  </span>
+                ) : (
+                  <span className="text-[11.5px] leading-snug text-pulpitry-gold">
+                    Sending, but this machine cannot find it on the network.
+                    {seen.length > 0
+                      ? " Other sources are visible, so NDI works — something is blocking ours."
+                      : " No NDI sources at all are visible, which usually means the network blocks discovery: guest wifi, client isolation, or a firewall."}
+                  </span>
+                )
+              ) : null}
+            </div>
+          ) : null}
 
           {state.error ? (
             <p role="alert" className="text-[11.5px] leading-snug text-pulpitry-gold">
