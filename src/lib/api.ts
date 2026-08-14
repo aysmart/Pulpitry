@@ -219,6 +219,22 @@ export interface SpeechSpeed {
 
 export const measureSpeech = () => invoke<SpeechSpeed>("measure_speech");
 
+/**
+ * One slide the model proposed, before anybody has approved it.
+ *
+ * `reference` is a citation and never verse text: Pulpitry holds eleven
+ * translations, and a model quoting from memory gets a verse subtly wrong in
+ * front of the people most likely to notice.
+ */
+export interface DraftSlide {
+  title: string;
+  lines: string[];
+  reference: string;
+}
+
+export const generateSlides = (source: string) =>
+  invoke<DraftSlide[]>("generate_slides", { source });
+
 export const mirrorState = () => invoke<MirrorState>("mirror_state");
 export const mirrorOfferCode = () => invoke<string>("mirror_offer_code");
 export const mirrorWithdrawCode = () => invoke<void>("mirror_withdraw_code");

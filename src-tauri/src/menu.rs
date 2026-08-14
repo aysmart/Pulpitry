@@ -99,6 +99,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         &[
             &item("listen", "Start or stop listening", Some("CmdOrCtrl+L"))?,
             &PredefinedMenuItem::separator(app)?,
+            &item("slides", "Slides from a sermon…", None)?,
             &item("history", "Past services…", Some("CmdOrCtrl+H"))?,
             &item("mirror", "Mirror to Castavox…", None)?,
         ],

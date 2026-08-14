@@ -12,6 +12,7 @@ mod mirror;
 mod projector;
 mod semantic;
 mod settings;
+mod slides;
 mod speech;
 mod log;
 mod summarise;
@@ -485,6 +486,48 @@ fn summary_available(app: AppHandle) -> bool {
     settings::load(&app)
         .map(|settings| summarise::available(&settings, settings::has_assist_key()))
         .unwrap_or(false)
+}
+
+/// Turns a sermon or an outline into draft slides.
+///
+/// `source` is whatever the operator has: an outline typed by the preacher, a
+/// paragraph of notes, or the transcript of a service already recorded. What
+/// comes back is drafts, and nothing is written to the slide library until
+/// somebody has read them and pressed Keep — see `slides.rs` for why.
+#[tauri::command]
+async fn generate_slides(app: AppHandle, source: String) -> CommandResult<Vec<slides::DraftSlide>> {
+    let settings = settings::load(&app).map_err(to_message)?;
+
+    // The same credential rule as the summariser. On a subscription it is the
+    // device token and the deployment is ours; anywhere else it is the church's
+    // own model key, and asking for the wrong one is how a church on a plan
+    // gets told to buy a second thing.
+    let hosted = settings.speech_engine == "hosted";
+    let key = if hosted {
+        settings::load_hosted_token()
+            .map_err(to_message)?
+            .filter(|token| !token.trim().is_empty())
+            .ok_or_else(|| {
+                "Activate your Castavox subscription in Settings to make slides.".to_string()
+            })?
+    } else {
+        settings::load_assist_key()
+            .map_err(to_message)?
+            .filter(|key| !key.trim().is_empty())
+            .ok_or_else(|| {
+                "Slides need the assistant. Add a model key and endpoint in Settings.".to_string()
+            })?
+    };
+
+    if !summarise::available(&settings, true) {
+        return Err("Slides need the assistant. Set the endpoint and deployment in Settings.".into());
+    }
+
+    // Off the UI thread: one request that may take the better part of a minute.
+    tauri::async_runtime::spawn_blocking(move || slides::generate(&settings, &key, &source))
+        .await
+        .map_err(|err| err.to_string())?
+        .map_err(to_message)
 }
 
 /// Asks the model what a recorded service was about.
@@ -1014,6 +1057,7 @@ pub fn run() {
             history_remove,
             summary_available,
             summarise_session,
+            generate_slides,
             export_summary,
             semantic_status,
             get_live,

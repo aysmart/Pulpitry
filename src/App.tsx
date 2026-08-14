@@ -5,6 +5,7 @@ import { AboutDialog } from "./components/AboutDialog";
 import { HistoryDialog } from "./components/HistoryDialog";
 import { ScripturePanel } from "./components/ScripturePanel";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { SlidesFromSermon } from "./components/SlidesFromSermon";
 import { StagePanel } from "./components/StagePanel";
 import { TopBar } from "./components/TopBar";
 import { TranscriptPanel } from "./components/TranscriptPanel";
@@ -100,6 +101,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [slidesOpen, setSlidesOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -374,6 +376,9 @@ export default function App() {
         case "history":
           setHistoryOpen(true);
           break;
+        case "slides":
+          setSlidesOpen(true);
+          break;
         case "mirror":
           // The mirror lives inside Settings rather than in a dialog of its
           // own, so this opens the page it is on.
@@ -498,6 +503,8 @@ export default function App() {
       </footer>
 
       {aboutOpen ? <AboutDialog onClose={() => setAboutOpen(false)} /> : null}
+
+      {slidesOpen ? <SlidesFromSermon onClose={() => setSlidesOpen(false)} /> : null}
 
       {historyOpen ? (
         <HistoryDialog
