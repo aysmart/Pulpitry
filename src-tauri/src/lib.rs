@@ -10,6 +10,7 @@ mod hosted;
 mod menu;
 mod mirror;
 mod ndi;
+mod ndi_capture;
 mod projector;
 mod semantic;
 mod settings;
