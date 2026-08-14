@@ -55,12 +55,13 @@ jobs:
           set -euo pipefail
           windows='{"name":"Windows","os":"windows-latest","target":"x86_64-pc-windows-msvc"}'
           linux='{"name":"Linux (x86_64)","os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}'
-          # macos-15, not macos-14. The NDI screen capture pulls in apple-metal,
-          # whose Swift bridge uses MTLLogState and MTLResidencySet -- macOS 15
-          # API. On the older image it fails in the build script with "cannot
-          # find type 'MTLLogState' in scope", which reads like a broken crate
-          # and is an out-of-date SDK.
-          arm='{"name":"macOS (Apple silicon)","os":"macos-15","target":"aarch64-apple-darwin"}'
+          # macos-26, which is what Castavox builds on and what apple-metal
+          # actually needs. That crate comes in with the NDI screen capture and
+          # its Swift bridge uses MTLLogState, MTLResidencySet and
+          # MTLSamplerReductionMode. macos-14 failed on the first of those and
+          # macos-15 on the third, each time inside a build script and each time
+          # reading like a broken crate rather than an SDK a version behind.
+          arm='{"name":"macOS (Apple silicon)","os":"macos-26","target":"aarch64-apple-darwin"}'
 
           # Intel is not built. It was, and it was never published: the download
           # page offers Apple silicon only, and the publish step deleted the
@@ -210,6 +211,30 @@ jobs:
       # what they are, and this is the only part we control.
       # Everything downstream reads TARGET_ROOT rather than assuming
       # src-tauri/target, because on Windows it is neither.
+      # Ninja, not MSBuild, for the CMake sub-builds.
+      #
+      # FTK1011 is a *FileTracker* error, and FileTracker is MSBuild's. The
+      # path it cannot create is whisper.cpp's Vulkan shader generator, four
+      # sub-projects deep, and shortening our end of it was not enough: from
+      # C:\ct the remainder is still around 200 characters of whisper-rs-sys's
+      # own nesting, which we do not control.
+      #
+      # Ninja does not use FileTracker, so the error cannot occur rather than
+      # occurring less often. It needs the MSVC environment, which is what the
+      # dev-cmd step is for -- without it cmake finds no compiler at all.
+      - name: MSVC environment for Ninja
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Ninja
+        if: runner.os == 'Windows'
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: Build CMake sub-projects with Ninja
+        if: runner.os == 'Windows'
+        run: echo "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
+        shell: pwsh
+
       - name: Keep Windows build paths short
         if: runner.os == 'Windows'
         run: |
