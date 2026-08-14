@@ -84,6 +84,18 @@ export type ItemBody =
   | { kind: "media"; looping: boolean }
   | { kind: "template"; theme: ProjectorTheme }
   | { kind: "slide"; blocks: TextBlock[] }
+  /**
+   * A sermon's slides, kept together and stepped in order.
+   *
+   * A group rather than a dozen loose slides, for the same reason a song is one
+   * item and not eight verses: they were made together and are used in order,
+   * and a library that scattered them would make the operator reassemble on
+   * Sunday what was assembled on Friday.
+   *
+   * It borrows a song's section shape because it *is* that shape — a label and
+   * some lines — so everything that already steps a song steps this too.
+   */
+  | { kind: "deck"; sections: SongSection[] }
   /** A service plan: the running order for one gathering. */
   | { kind: "service"; entries: PlanEntry[] };
 

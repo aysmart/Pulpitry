@@ -72,6 +72,17 @@ export function presentableFor(item: Item): Presentable | null {
         index: 0,
         sections: item.body.sections,
       };
+    // A deck is a song's shape with a sermon's content, so it stages as one:
+    // stepping, keys and the projector all work without knowing the
+    // difference. What differs is where it is listed and what it is called.
+    case "deck":
+      return {
+        kind: "lyric",
+        songId: item.id,
+        title: item.title,
+        index: 0,
+        sections: item.body.sections,
+      };
     case "image":
       // The file is the item. Without a path there is nothing to show, which
       // is a broken row rather than a blank slide.

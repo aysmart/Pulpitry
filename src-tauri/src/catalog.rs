@@ -197,6 +197,19 @@ pub enum ItemBody {
     Media { looping: bool },
     Template { theme: Box<ProjectorTheme> },
     Slide { blocks: Vec<TextBlock> },
+    /**
+     * A sermon's slides, kept together and stepped through in order.
+     *
+     * A group rather than a dozen loose slides, for the same reason a song is
+     * one item and not eight verses: they were made together, they are used in
+     * order, and a library that scattered them would make the operator
+     * reassemble on Sunday what the model already assembled on Friday.
+     *
+     * It borrows a song's section shape because it is the same shape -- a label
+     * and some lines -- and inventing a second one would mean two things to
+     * keep in step every time either changed.
+     */
+    Deck { sections: Vec<SongSection> },
     /// A service plan: the running order for one gathering.
     Service { entries: Vec<PlanEntry> },
 }
@@ -210,6 +223,7 @@ impl ItemBody {
             ItemBody::Media { .. } => "media",
             ItemBody::Template { .. } => "template",
             ItemBody::Slide { .. } => "slide",
+            ItemBody::Deck { .. } => "deck",
             ItemBody::Service { .. } => "service",
         }
     }
@@ -228,6 +242,16 @@ impl ItemBody {
             ItemBody::Slide { blocks } => blocks
                 .iter()
                 .map(|block| block.text.clone())
+                .collect::<Vec<_>>()
+                .join(" "),
+            // Searched by what is on the slides, like a song is searched by its
+            // words: an operator looking for last month's sermon remembers a
+            // phrase from it long before they remember what it was called.
+            ItemBody::Deck { sections } => sections
+                .iter()
+                .flat_map(|section| {
+                    std::iter::once(section.label.clone()).chain(section.lines.iter().cloned())
+                })
                 .collect::<Vec<_>>()
                 .join(" "),
             // An operator looking for an old service remembers what was in it

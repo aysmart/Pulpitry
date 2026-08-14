@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { catalogSave, type Item } from "../lib/catalog";
+import type { TextBlock } from "../lib/projector";
 import { describeError, generateSlides, type DraftSlide } from "../lib/api";
 
 /**
@@ -28,12 +29,64 @@ import { describeError, generateSlides, type DraftSlide } from "../lib/api";
  * people most likely to notice. Where the outline cites a passage the reference
  * is shown, and the operator stages the real verse from the library beside it.
  */
+/**
+ * A draft as the blocks a slide is made of.
+ *
+ * Three decisions about how it looks, and each was wrong in the first version.
+ *
+ * The title is a heading, which the renderer draws 1.4x larger — without that
+ * every line came out the same size and the slide read as a paragraph that had
+ * been chopped up.
+ *
+ * The reference goes *on* the slide, small and italic, rather than only into
+ * the item's subtitle where the congregation never sees it. A citation that
+ * exists in the library and not on the wall is a citation nobody can follow.
+ *
+ * And it is centred. A church slide is looked at, not read line by line, and
+ * left-aligned fragments float against the left edge of a projector that is
+ * rarely the same shape as the screen it is pointed at.
+ */
+export function blocksFor(draft: DraftSlide): TextBlock[] {
+  const blocks: TextBlock[] = [];
+
+  if (draft.title) {
+    blocks.push({
+      text: draft.title,
+      level: "heading",
+      align: "center",
+      bold: true,
+      italic: false,
+    });
+  }
+
+  for (const text of draft.lines) {
+    blocks.push({ text, level: "body", align: "center", bold: false, italic: false });
+  }
+
+  if (draft.reference) {
+    // Italic and last: it is an attribution, and it should not compete with
+    // the words it is attributing.
+    blocks.push({
+      text: draft.reference,
+      level: "body",
+      align: "center",
+      bold: false,
+      italic: true,
+    });
+  }
+
+  return blocks;
+}
+
 export function SlidesFromSermon({ onClose }: { onClose: () => void }) {
   const [source, setSource] = useState("");
   const [drafts, setDrafts] = useState<DraftSlide[] | null>(null);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kept, setKept] = useState(0);
+  // What the group is called. Offered rather than demanded: a sermon usually
+  // has a title, and an operator who does not know it yet should not be stopped.
+  const [title, setTitle] = useState("");
 
   const generate = async () => {
     setWorking(true);
@@ -48,45 +101,40 @@ export function SlidesFromSermon({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const keep = async (draft: DraftSlide, index: number) => {
+  /**
+   * Keeps the whole sermon as one item.
+   *
+   * A group, like a song, and for the same reason: these slides were made
+   * together and are used in order. Saving them one at a time scattered a
+   * sermon across a library sorted by title, and made the operator reassemble
+   * on Sunday what was assembled on Friday.
+   *
+   * Discarding is still per slide, before this — the point of reviewing is to
+   * drop the one that missed, and what is kept is what is left.
+   */
+  const keep = async () => {
+    if (!drafts || drafts.length === 0) return;
     setError(null);
     try {
       const item: Item = {
         id: null,
-        title: draft.title || "Untitled slide",
-        subtitle: draft.reference,
+        title: title.trim() || "Sermon slides",
+        subtitle: `${drafts.length} slide${drafts.length === 1 ? "" : "s"}`,
         body: {
-          kind: "slide",
-          blocks: [
-            // The title as a heading, the lines as body. The same shape the
-            // slide editor produces by hand, so a kept slide is indistinguishable
-            // from one somebody typed and can be edited the same way.
-            ...(draft.title
-              ? [
-                  {
-                    text: draft.title,
-                    level: "heading" as const,
-                    align: "center" as const,
-                    bold: true,
-                    italic: false,
-                  },
-                ]
-              : []),
-            ...draft.lines.map((text) => ({
-              text,
-              level: "body" as const,
-              align: "center" as const,
-              bold: false,
-              italic: false,
-            })),
-          ],
+          kind: "deck",
+          sections: drafts.map((draft) => ({
+            // The title labels the section, as a song's does, so the operator
+            // can see what is coming in the section list.
+            label: draft.title || "Slide",
+            lines: [...draft.lines, ...(draft.reference ? [draft.reference] : [])],
+          })),
         },
         path: null,
         updatedAt: Date.now(),
       };
       await catalogSave(item);
-      setDrafts((current) => current?.filter((_, at) => at !== index) ?? null);
-      setKept((n) => n + 1);
+      setKept(drafts.length);
+      setDrafts(null);
     } catch (err) {
       setError(describeError(err));
     }
@@ -123,7 +171,7 @@ export function SlidesFromSermon({ onClose }: { onClose: () => void }) {
             </button>
             {kept > 0 ? (
               <span className="text-[12px] text-pulpitry-muted">
-                {kept} kept — they are in the slide library.
+                Kept {kept} slide{kept === 1 ? "" : "s"} as one set, in the slide library.
               </span>
             ) : null}
           </div>
@@ -161,29 +209,38 @@ export function SlidesFromSermon({ onClose }: { onClose: () => void }) {
                 </ul>
               ) : null}
 
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => void keep(draft, index)}
-                  className="rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1 text-[12px] text-pulpitry-text focus-visible:focus-ring"
-                >
-                  Keep
-                </button>
-                {/* Dropped one at a time, because the usual outcome is six good
-                    slides and one that missed the point. */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDrafts((current) => current?.filter((_, at) => at !== index) ?? null)
-                  }
-                  className="rounded px-2.5 py-1 text-[12px] text-pulpitry-muted underline-offset-2 hover:underline focus-visible:focus-ring"
-                >
-                  Discard
-                </button>
-              </div>
+              {/* Dropped one at a time, because the usual outcome is six good
+                  slides and one that missed the point. Keeping is for the set. */}
+              <button
+                type="button"
+                onClick={() =>
+                  setDrafts((current) => current?.filter((_, at) => at !== index) ?? null)
+                }
+                className="self-start rounded px-2.5 py-1 text-[12px] text-pulpitry-muted underline-offset-2 hover:underline focus-visible:focus-ring"
+              >
+                Discard
+              </button>
             </div>
           ))}
         </div>
+
+        {drafts && drafts.length > 0 ? (
+          <div className="flex shrink-0 items-center gap-2 border-t border-pulpitry-line px-5 py-3">
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="What to call this set"
+              className="min-w-0 flex-1 rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1.5 text-[13px] text-pulpitry-text outline-none focus-visible:focus-ring"
+            />
+            <button
+              type="button"
+              onClick={() => void keep()}
+              className="shrink-0 rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-1.5 text-[13px] text-pulpitry-text focus-visible:focus-ring"
+            >
+              Keep {drafts.length} as a set
+            </button>
+          </div>
+        ) : null}
 
         <footer className="flex shrink-0 justify-end border-t border-pulpitry-line px-5 py-3">
           <button

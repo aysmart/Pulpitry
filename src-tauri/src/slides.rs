@@ -116,16 +116,33 @@ fn body(settings: &Settings, sermon: &str) -> serde_json::Value {
                 "content":
                     "You turn a preacher's sermon or outline into slides for a church screen. \
                      Return JSON: {\"slides\":[{\"title\":\"…\",\"lines\":[\"…\"],\"reference\":\"…\"}]}. \
-                     Rules, and they matter more than style: \
-                     Use the preacher's own words and order wherever you can; do not improve, \
-                     summarise beyond what is needed to fit, or add points they did not make. \
-                     Each slide gets a short title and at most four lines of at most twelve \
-                     words each — a congregation reads a wall at a glance. \
+                     \
+                     What a good church slide is, and this matters more than being thorough: \
+                     it is read at a glance, from the back, by somebody listening to a person \
+                     rather than reading a page. So it carries a few words, not a summary. \
+                     \
+                     TITLE: at most five words. Title Case. No trailing punctuation. It is a \
+                     signpost, not a sentence — 'The Father Runs', not 'The father runs to \
+                     meet his son while he is still far off'. \
+                     \
+                     LINES: at most three, at most seven words each. Each is a phrase, not a \
+                     sentence: no full stops at the end, no numbering, no bullet characters, \
+                     no 'Point 1' or '2.' — the slide is the numbering. Sentence case. Cut \
+                     every word that is not doing work: 'Grace we did not earn' beats 'This is \
+                     the grace that we did not and could not ever earn'. \
+                     A slide with a strong title and one line is better than one with four \
+                     weak lines. Leave `lines` empty if the title says it. \
+                     \
+                     Use the preacher's own words and order wherever you can. Do not add \
+                     points they did not make, and do not improve their theology. \
+                     \
                      Never write out scripture text. If a passage is cited, put the reference \
-                     in `reference` and leave it out of `lines`; the application holds the \
-                     translations and will show the real verse. \
-                     Prefer fewer slides. Return an empty list rather than inventing content \
-                     if there is nothing to make slides from."
+                     in `reference` — 'Luke 15:20', nothing else — and leave it out of `lines`; \
+                     the application holds the translations and shows the real verse. \
+                     \
+                     Prefer fewer slides: one idea each, in the order they were preached. \
+                     Skip notices, greetings and housekeeping. Return an empty list rather \
+                     than inventing content if there is nothing worth putting on a wall."
             },
             { "role": "user", "content": sermon }
         ]
@@ -159,6 +176,42 @@ fn advise(failure: &castavox_core::assistant::Failure, hosted: bool) -> anyhow::
     }
 }
 
+/// Strips the marks a model leaves on a line that a slide should not carry.
+///
+/// Numbering, bullets, wrapping quotes and a trailing full stop. Each is
+/// harmless in prose and wrong on a wall: "2. Social Media Content — the…"
+/// projected behind a preacher reads as a document somebody forgot to format,
+/// and the numbering is doing a job the sequence of slides already does.
+fn tidy(line: &str) -> String {
+    let mut text = line.trim();
+
+    // "1.", "2)", "-", "*", "•", "–" at the start, in any combination, because
+    // a model asked not to number things will sometimes number them anyway.
+    loop {
+        let before = text;
+        text = text.trim_start();
+        text = text.trim_start_matches(['-', '*', '•', '–', '—']);
+        let digits: String = text.chars().take_while(char::is_ascii_digit).collect();
+        if !digits.is_empty() {
+            let rest = &text[digits.len()..];
+            if let Some(after) = rest.strip_prefix('.').or_else(|| rest.strip_prefix(')')) {
+                text = after;
+            }
+        }
+        if text == before {
+            break;
+        }
+    }
+
+    let text = text.trim().trim_matches('"').trim_matches('\'').trim();
+    // A trailing stop, but not an ellipsis or a question -- those are the
+    // author's and mean something.
+    let text = if text.ends_with("..") { text } else { text.trim_end_matches('.') };
+
+    // Whitespace a model put in for a page, collapsed for a screen.
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn read(content: &str) -> Result<Vec<DraftSlide>> {
     let text = content.trim();
     // Fenced blocks, despite being asked for bare JSON. Models do this.
@@ -179,22 +232,23 @@ fn read(content: &str) -> Result<Vec<DraftSlide>> {
     let reply: Reply =
         serde_json::from_str(text).context("the model's reply was not the shape asked for")?;
 
-    // Tidied here rather than trusted. A model asked for four short lines will
-    // occasionally return eight long ones, and a slide nobody can read from the
-    // back of a hall is worse than no slide.
+    // Tidied here rather than trusted. Asked for three short phrases, a model
+    // will return five numbered sentences often enough that cleaning them is
+    // part of the feature rather than a workaround -- and the artefacts are
+    // always the same few, so they are cheap to remove.
     let slides: Vec<DraftSlide> = reply
         .slides
         .into_iter()
         .map(|slide| DraftSlide {
-            title: slide.title.trim().to_string(),
+            title: tidy(&slide.title),
             lines: slide
                 .lines
-                .into_iter()
-                .map(|line| line.trim().to_string())
+                .iter()
+                .map(|line| tidy(line))
                 .filter(|line| !line.is_empty())
-                .take(4)
+                .take(3)
                 .collect(),
-            reference: slide.reference.trim().to_string(),
+            reference: slide.reference.trim().trim_end_matches('.').to_string(),
         })
         .filter(|slide| !slide.title.is_empty() || !slide.lines.is_empty())
         .take(MAX_SLIDES)
@@ -228,9 +282,9 @@ mod tests {
 
     #[test]
     fn keeps_a_slide_readable_from_the_back_of_a_hall() {
-        // Asked for at most four lines and given eight. A slide nobody can read
-        // is worse than no slide, so the extra are dropped here rather than
-        // reaching a wall.
+        // Asked for at most three lines and given eight. A slide nobody can
+        // read is worse than no slide, so the extra are dropped here rather
+        // than reaching a wall.
         let many: Vec<String> = (1..=8).map(|n| format!("\"line {n}\"")).collect();
         let got = read(&format!(
             r#"{{"slides":[{{"title":"Long","lines":[{}]}}]}}"#,
@@ -238,7 +292,48 @@ mod tests {
         ))
         .unwrap();
 
-        assert_eq!(got[0].lines.len(), 4);
+        assert_eq!(got[0].lines.len(), 3);
+    }
+
+    #[test]
+    fn strips_the_marks_that_belong_on_a_page_and_not_on_a_wall() {
+        /*
+         * The output that prompted this. A model told not to number things
+         * numbers them anyway, and "2. Social Media Content — the…" projected
+         * behind a preacher reads as a document somebody forgot to format.
+         *
+         * The numbering is also doing a job the sequence of slides already
+         * does, which is why it is removed rather than tolerated.
+         */
+        assert_eq!(tidy("2. Social Media Content"), "Social Media Content");
+        assert_eq!(tidy("1) The Father Runs"), "The Father Runs");
+        assert_eq!(tidy("- Grace we did not earn"), "Grace we did not earn");
+        assert_eq!(tidy("• A far country"), "A far country");
+        assert_eq!(tidy("  \"He was still far off\"  "), "He was still far off");
+    }
+
+    #[test]
+    fn drops_a_full_stop_but_keeps_what_the_author_meant() {
+        // A phrase on a slide does not end in a full stop. A question mark and
+        // an ellipsis are doing work, and taking them would change the line.
+        assert_eq!(tidy("He was still a long way off."), "He was still a long way off");
+        assert_eq!(tidy("Who is my neighbour?"), "Who is my neighbour?");
+        assert_eq!(tidy("But while he was still far off.."), "But while he was still far off..");
+    }
+
+    #[test]
+    fn collapses_whitespace_meant_for_a_page() {
+        assert_eq!(tidy("Grace   we  did\n not earn"), "Grace we did not earn");
+    }
+
+    #[test]
+    fn asks_for_a_slide_rather_than_a_summary() {
+        // The prompt is the feature here. If these instructions go, the output
+        // goes back to paragraphs chopped into lines.
+        let prompt = body(&Settings::default(), "a sermon").to_string();
+        assert!(prompt.contains("at most five words"));
+        assert!(prompt.contains("no numbering"));
+        assert!(prompt.contains("read at a glance"));
     }
 
     #[test]

@@ -65,7 +65,11 @@ export function SlideLibrary({
 
   const refresh = useCallback(async () => {
     try {
-      setSlides(await catalogList("slide"));
+      // Sets first, then loose slides. A sermon's slides are kept as one item
+      // and this is where somebody looks for them -- listing only the loose
+      // ones would make a kept sermon invisible in the place it was saved to.
+      const [decks, loose] = await Promise.all([catalogList("deck"), catalogList("slide")]);
+      setSlides([...decks, ...loose]);
     } catch (err) {
       fail(err);
     }
@@ -266,7 +270,27 @@ export function SlideLibrary({
             const staged = presentableFor(item);
             const key = staged ? keyOf(staged) : "";
             const state = key === liveKey ? "live" : key === previewKey ? "preview" : "idle";
-            const blocks = item.body.kind === "slide" ? item.body.blocks : [];
+            /*
+             * A set is drawn as its first slide.
+             *
+             * Its sections are label-and-lines rather than styled blocks, so
+             * they are turned into blocks here only to be *shown* in the grid.
+             * Nothing is saved from this: clicking stages the set and steps
+             * through it, exactly as a song does.
+             */
+            const blocks =
+              item.body.kind === "slide"
+                ? item.body.blocks
+                : item.body.kind === "deck"
+                  ? (item.body.sections[0]?.lines ?? []).map((text) => ({
+                      text,
+                      level: "body" as const,
+                      align: "center" as const,
+                      bold: false,
+                      italic: false,
+                    }))
+                  : [];
+            const isSet = item.body.kind === "deck";
 
             return (
               <div key={item.id} className="group relative flex flex-col gap-1">
@@ -292,6 +316,12 @@ export function SlideLibrary({
                     {item.title}
                   </span>
                 </button>
+
+                {isSet ? (
+                  <span className="pointer-events-none absolute top-1 left-1 rounded bg-pulpitry-ink/80 px-1.5 py-0.5 text-[10px] text-pulpitry-muted">
+                    {item.body.kind === "deck" ? `${item.body.sections.length} slides` : ""}
+                  </span>
+                ) : null}
 
                 <span className="absolute top-1 right-1 hidden gap-0.5 group-hover:flex">
                   <button

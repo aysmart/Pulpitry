@@ -231,37 +231,37 @@ export function HistoryDialog({
     }
   }, [selected]);
 
-  const keepSlide = useCallback(async (draft: DraftSlide, index: number) => {
+  /**
+   * Keeps the whole set, named after the service it came from.
+   *
+   * A group like a song, for the reason the other entry point gives: they were
+   * made together and are used in order. Here the name is already known — it is
+   * the service's own title — so nobody is asked for one.
+   */
+  const keepSlides = useCallback(async () => {
+    if (!selected || !slides || slides.length === 0) return;
     setError(null);
     try {
       await catalogSave({
         id: null,
-        title: draft.title || "Untitled slide",
-        subtitle: draft.reference,
+        title: selected.title || "Sermon slides",
+        subtitle: `${slides.length} slide${slides.length === 1 ? "" : "s"}`,
         body: {
-          kind: "slide",
-          blocks: [
-            ...(draft.title
-              ? [{ text: draft.title, level: "heading" as const, align: "center" as const, bold: true, italic: false }]
-              : []),
-            ...draft.lines.map((text) => ({
-              text,
-              level: "body" as const,
-              align: "center" as const,
-              bold: false,
-              italic: false,
-            })),
-          ],
+          kind: "deck",
+          sections: slides.map((draft) => ({
+            label: draft.title || "Slide",
+            lines: [...draft.lines, ...(draft.reference ? [draft.reference] : [])],
+          })),
         },
         path: null,
         updatedAt: Date.now(),
       });
-      setSlides((current) => current?.filter((_, at) => at !== index) ?? null);
-      setKeptSlides((n) => n + 1);
+      setKeptSlides(slides.length);
+      setSlides(null);
     } catch (err) {
       setError(describeError(err));
     }
-  }, []);
+  }, [selected, slides]);
 
   const write = useCallback(
     async (format: SummaryFormat) => {
@@ -444,7 +444,7 @@ export function HistoryDialog({
 
                     {keptSlides > 0 ? (
                       <p className="mt-2 text-[12px] text-pulpitry-muted">
-                        {keptSlides} kept — they are in the slide library.
+                        Kept {keptSlides} slide{keptSlides === 1 ? "" : "s"} as one set.
                       </p>
                     ) : null}
 
@@ -479,28 +479,26 @@ export function HistoryDialog({
                                 ))}
                               </ul>
                             ) : null}
-                            <div className="mt-2 flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => void keepSlide(draft, index)}
-                                className="rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1 text-[11.5px] text-pulpitry-text focus-visible:focus-ring"
-                              >
-                                Keep
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setSlides((current) =>
-                                    current?.filter((_, at) => at !== index) ?? null,
-                                  )
-                                }
-                                className="rounded px-2.5 py-1 text-[11.5px] text-pulpitry-muted underline-offset-2 hover:underline focus-visible:focus-ring"
-                              >
-                                Discard
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSlides((current) =>
+                                  current?.filter((_, at) => at !== index) ?? null,
+                                )
+                              }
+                              className="mt-2 rounded px-2.5 py-1 text-[11.5px] text-pulpitry-muted underline-offset-2 hover:underline focus-visible:focus-ring"
+                            >
+                              Discard
+                            </button>
                           </div>
                         ))}
+                        <button
+                          type="button"
+                          onClick={() => void keepSlides()}
+                          className="mt-1 self-start rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-1.5 text-[12px] text-pulpitry-text focus-visible:focus-ring"
+                        >
+                          Keep {slides.length} as a set
+                        </button>
                       </div>
                     ) : null}
                   </section>
