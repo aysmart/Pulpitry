@@ -3770,6 +3770,7 @@ dependencies = [
  "cpal",
  "flate2",
  "keyring",
+ "libloading 0.8.9",
  "parking_lot",
  "printpdf",
  "pulldown-cmark",

@@ -32,6 +32,11 @@ castavox-core = { git = "https://github.com/aysmart/castavox-core", branch = "ma
 # through asset:, scoped at runtime to that one file.
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-shell = "2"
+
+# Loading the NDI runtime, which is the church's own installation rather than
+# something we ship -- see src/ndi.rs. One crate rather than a dlopen arm and a
+# LoadLibrary arm.
+libloading = "0.8"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }

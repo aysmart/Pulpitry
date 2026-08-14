@@ -9,6 +9,7 @@ mod detect;
 mod hosted;
 mod menu;
 mod mirror;
+mod ndi;
 mod projector;
 mod semantic;
 mod settings;

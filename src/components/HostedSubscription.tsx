@@ -17,7 +17,18 @@ import { hostedActivate, hostedDeactivate, hostedStatus, type HostedView } from 
 const FIELD =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-2 text-[13px] text-pulpitry-text outline-none focus-visible:focus-ring";
 
-const day = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
+/*
+ * The renewal date, with the year on it.
+ *
+ * "renews 14 Aug" is a date an operator reads as this week. Once a plan can be
+ * bought for a year that is off by twelve months, and the way a church finds
+ * out is by budgeting for the wrong month. The year costs four characters.
+ */
+const day = new Intl.DateTimeFormat(undefined, {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
 
 /**
  * Teal while there is room, gold once the limit is close.
