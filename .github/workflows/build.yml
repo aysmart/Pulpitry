@@ -55,7 +55,12 @@ jobs:
           set -euo pipefail
           windows='{"name":"Windows","os":"windows-latest","target":"x86_64-pc-windows-msvc"}'
           linux='{"name":"Linux (x86_64)","os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}'
-          arm='{"name":"macOS (Apple silicon)","os":"macos-14","target":"aarch64-apple-darwin"}'
+          # macos-15, not macos-14. The NDI screen capture pulls in apple-metal,
+          # whose Swift bridge uses MTLLogState and MTLResidencySet -- macOS 15
+          # API. On the older image it fails in the build script with "cannot
+          # find type 'MTLLogState' in scope", which reads like a broken crate
+          # and is an out-of-date SDK.
+          arm='{"name":"macOS (Apple silicon)","os":"macos-15","target":"aarch64-apple-darwin"}'
 
           # Intel is not built. It was, and it was never published: the download
           # page offers Apple silicon only, and the publish step deleted the
@@ -195,6 +200,28 @@ jobs:
       - name: Check types
         run: npx tsc --noEmit
 
+      # Windows has a 260-character path limit, and the Vulkan backend builds a
+      # shader generator four sub-projects deep inside target/. The result is
+      # `FTK1011: could not create the new file tracking log file`, which names
+      # a tracking log rather than the length and sends you looking for a
+      # permissions problem that is not there.
+      #
+      # A short target directory is the whole fix: the paths underneath it are
+      # what they are, and this is the only part we control.
+      # Everything downstream reads TARGET_ROOT rather than assuming
+      # src-tauri/target, because on Windows it is neither.
+      - name: Keep Windows build paths short
+        if: runner.os == 'Windows'
+        run: |
+          echo "CARGO_TARGET_DIR=C:\ct" >> $env:GITHUB_ENV
+          echo "TARGET_ROOT=C:\ct" >> $env:GITHUB_ENV
+          git config --system core.longpaths true
+        shell: pwsh
+
+      - name: Where the build output lands
+        if: runner.os != 'Windows'
+        run: echo "TARGET_ROOT=src-tauri/target" >> $GITHUB_ENV
+
       - name: Test the core
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib
 
@@ -210,12 +237,12 @@ jobs:
           name: pulpitry-${{ matrix.target }}
           if-no-files-found: error
           path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
-            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
-            src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
-            src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
-            src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
+            ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/msi/*.msi
+            ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/nsis/*.exe
+            ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/deb/*.deb
+            ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/rpm/*.rpm
+            ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/appimage/*.AppImage
 
   # Publishing, which happens somewhere else on purpose.
   #
