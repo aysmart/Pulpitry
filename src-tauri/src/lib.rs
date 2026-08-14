@@ -7,6 +7,7 @@ mod bible;
 mod catalog;
 mod detect;
 mod hosted;
+mod menu;
 mod mirror;
 mod projector;
 mod semantic;
@@ -825,6 +826,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .menu(menu::build)
+        .on_menu_event(|app, event| menu::chose(app, event.id().as_ref()))
         .setup(|app| {
             // First, so that everything after it can be explained if it fails.
             // A GUI build on Windows has no console: without this the app can

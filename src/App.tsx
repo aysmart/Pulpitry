@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 
+import { AboutDialog } from "./components/AboutDialog";
 import { HistoryDialog } from "./components/HistoryDialog";
 import { ScripturePanel } from "./components/ScripturePanel";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -97,6 +99,7 @@ export default function App() {
   const [translation, setTranslation] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -347,6 +350,59 @@ export default function App() {
         )}%`
       : null);
 
+  /*
+   * The menu bar, answered here.
+   *
+   * Every one of these has a button in the window that already knows the state
+   * it changes -- whether the projector is open, whether the microphone is
+   * running. Doing the work again from a menu handler would be a second
+   * implementation of each, and the two would disagree the first time either
+   * changed. So the menu chooses and this dispatches to what the buttons call.
+   */
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let active = true;
+
+    void listen<string>("menu:chose", (event) => {
+      switch (event.payload) {
+        case "about":
+          setAboutOpen(true);
+          break;
+        case "settings":
+          setSettingsOpen(true);
+          break;
+        case "history":
+          setHistoryOpen(true);
+          break;
+        case "mirror":
+          // The mirror lives inside Settings rather than in a dialog of its
+          // own, so this opens the page it is on.
+          setSettingsOpen(true);
+          break;
+        case "projector":
+          void toggleProjector();
+          break;
+        case "second":
+          void toggleSecond();
+          break;
+        case "listen":
+          void toggleListening();
+          break;
+        case "clear":
+          clearLive();
+          break;
+      }
+    }).then((off) => {
+      if (active) stop = off;
+      else off();
+    });
+
+    return () => {
+      active = false;
+      stop?.();
+    };
+  }, [toggleProjector, toggleSecond, toggleListening, clearLive]);
+
   return (
     <div className="flex h-full flex-col bg-pulpitry-ink text-pulpitry-text">
       <TopBar
@@ -440,6 +496,8 @@ export default function App() {
           </span>
         )}
       </footer>
+
+      {aboutOpen ? <AboutDialog onClose={() => setAboutOpen(false)} /> : null}
 
       {historyOpen ? (
         <HistoryDialog
