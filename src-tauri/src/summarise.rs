@@ -77,9 +77,8 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
     // build panics on a background thread and takes the request with it. This
     // is not a test-only concern; it would have failed for every operator who
     // ever pressed Summarise.
-    castavox_core::tls::install();
 
-    let client = reqwest::blocking::Client::builder()
+    let client = castavox_core::tls::client()
         .timeout(std::time::Duration::from_secs(120))
         .build()
         .context("could not prepare the request")?;

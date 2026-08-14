@@ -140,28 +140,49 @@ export function HostedSubscription({
 
   const plan = state.entitlement;
 
+  /*
+   * Every current plan is unlimited, and a meter is the wrong shape for one.
+   *
+   * The allowance arrives as a number nothing can reach, which keeps the
+   * arithmetic honest everywhere it is compared — but drawn here it became a
+   * progress bar pinned at zero and the words "1000000 hr left", which is not a
+   * promise anybody made and reads as a fault.
+   *
+   * So when it is unlimited we say the word and drop the bar. What replaces it
+   * is the figure that is still worth knowing: how much has been used. That is
+   * the number an operator wants at the end of a month, and the only one the
+   * bar was ever really carrying.
+   */
+  const unlimited = plan?.speechRemaining === "Unlimited";
+
   return (
     <div className="flex flex-col gap-2">
       {plan ? (
         <>
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-[13px] text-pulpitry-text">
-              {plan.speechRemaining === "none left" ? "No hours left" : `${plan.speechRemaining} left`}
+              {plan.speechRemaining === "none left"
+                ? "No hours left"
+                : unlimited
+                  ? "Unlimited transcription"
+                  : `${plan.speechRemaining} left`}
             </span>
             <span className="text-[11.5px] tabular-nums text-pulpitry-muted">
               renews {day.format(new Date(plan.periodEndsAt))}
             </span>
           </div>
 
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-pulpitry-raised">
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${Math.min(100, plan.usedFraction * 100)}%`,
-                backgroundColor: barColour(plan.usedFraction),
-              }}
-            />
-          </div>
+          {unlimited ? null : (
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-pulpitry-raised">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${Math.min(100, plan.usedFraction * 100)}%`,
+                  backgroundColor: barColour(plan.usedFraction),
+                }}
+              />
+            </div>
+          )}
 
           {/* Where the hours went. One plan covers both apps, so without this
               an operator cannot tell which of them spent them. */}

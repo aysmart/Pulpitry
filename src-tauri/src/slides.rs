@@ -69,9 +69,8 @@ pub fn generate(settings: &Settings, key: &str, sermon: &str) -> Result<Vec<Draf
     // Before the client is built. rustls picks its provider at construction and
     // installing one afterwards panics on a background thread -- the same trap
     // the summariser documents, and the same fix.
-    castavox_core::tls::install();
 
-    let client = reqwest::blocking::Client::builder()
+    let client = castavox_core::tls::client()
         .timeout(std::time::Duration::from_secs(120))
         .build()
         .context("could not prepare the request")?;

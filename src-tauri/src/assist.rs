@@ -150,9 +150,8 @@ pub struct Assistant {
 
 impl Assistant {
     pub fn new(app: AppHandle, library: Arc<Library>) -> Arc<Self> {
-        castavox_core::tls::install();
         let (queue, incoming) = sync_channel::<String>(4);
-        let client = reqwest::blocking::Client::builder()
+        let client = castavox_core::tls::client()
             .timeout(REQUEST_TIMEOUT)
             .build()
             .unwrap_or_default();
@@ -490,10 +489,18 @@ mod tests {
 
     #[test]
     fn a_tls_backend_is_installed_before_any_request() {
-        // Without a provider, rustls refuses at the first HTTPS call — which
-        // would be mid-service, not at build time. Naming it is the trade for
-        // not compiling aws-lc-rs, so it has to actually happen.
-        castavox_core::tls::install();
+        /*
+         * Without a provider, building a client *panics* -- it does not fail --
+         * and it would do so mid-service rather than at build time. Naming the
+         * provider is the trade for not compiling aws-lc-rs, so it has to
+         * actually happen.
+         *
+         * Asserted through the builder rather than by asking whether one is
+         * installed. The old form passed while the process was still broken:
+         * something else in the test binary had installed one, which says
+         * nothing about whether this path does.
+         */
+        castavox_core::tls::client().build().expect("a client without ceremony");
         assert!(
             rustls::crypto::CryptoProvider::get_default().is_some(),
             "no TLS backend installed; the model assist would fail on first use",
@@ -742,8 +749,7 @@ mod tests {
     /// other test happened to install the provider first, which is a race
     /// rather than a guarantee -- and on Linux it lost.
     fn client() -> reqwest::blocking::Client {
-        castavox_core::tls::install();
-        reqwest::blocking::Client::new()
+            castavox_core::tls::client().build().expect("client")
     }
 
     #[test]

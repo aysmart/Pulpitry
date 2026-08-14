@@ -576,7 +576,7 @@ dependencies = [
 [[package]]
 name = "castavox-core"
 version = "0.1.0"
-source = "git+https://github.com/aysmart/castavox-core?branch=main#363f58300986ceb017d2d0b288cdb2d4cee56f49"
+source = "git+https://github.com/aysmart/castavox-core?branch=main#c2a87d5bf58f3f3eaee553581311237b4663e9a9"
 dependencies = [
  "anyhow",
  "candle-core",
