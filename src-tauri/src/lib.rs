@@ -470,6 +470,20 @@ fn bible_attributions(app: AppHandle, library: State<'_, Arc<Library>>) -> Vec<S
     library.attributions(&app)
 }
 
+/// The Greek or Hebrew behind one verse, for the operator's screen.
+///
+/// Never the projector. A congregation is not reading morphology codes, and an
+/// interlinear on a wall is a distraction wearing the clothes of scholarship.
+#[tauri::command]
+fn original_words(
+    library: State<'_, Arc<Library>>,
+    book: i64,
+    chapter: i64,
+    verse: i64,
+) -> CommandResult<Vec<bible::OriginalWord>> {
+    library.original(book, chapter, verse).map_err(to_message)
+}
+
 #[tauri::command]
 fn list_translations(library: State<'_, Arc<Library>>) -> CommandResult<Vec<Translation>> {
     library.translations().map_err(to_message)
@@ -1123,6 +1137,23 @@ pub fn run() {
                     let _ = reporter.emit(bible::EVENT_LIBRARY, status);
                 };
 
+                /*
+                 * The Greek and Hebrew, after the translations rather than
+                 * before them.
+                 *
+                 * Four hundred thousand rows takes a few seconds on a first
+                 * launch, and nothing on screen needs it: an operator opens
+                 * to a verse list, not an interlinear. Making them wait for it
+                 * before the first translation appears would trade the thing
+                 * they came for against the thing they may never open.
+                 *
+                 * A failure is logged and swallowed. It is a reference panel;
+                 * losing it should not stop a service.
+                 */
+                if let Err(err) = library.ensure_interlinear(&handle) {
+                    crate::log_line!("[bible] the interlinear did not import: {err:#}");
+                }
+
                 let status = match library.ensure_bundled_translations(&handle, report) {
                     Ok(()) => library.status().unwrap_or_else(|err| LibraryStatus {
                         ready: false,
@@ -1158,6 +1189,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_audio_inputs,
             bible_attributions,
+            original_words,
             ndi_status,
             ndi_sources,
             ndi_set,

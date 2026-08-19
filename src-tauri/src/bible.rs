@@ -23,6 +23,9 @@ pub const EVENT_LIBRARY: &str = "library:status";
 /// Lists the translation files shipped as Tauri resources.
 const MANIFEST: &str = "resources/translations.json";
 
+/// The Greek and Hebrew, built by scripts/build-interlinear.mjs.
+const INTERLINEAR: &str = "resources/interlinear.tsv.gz";
+
 /// Bumped whenever the schema below changes. The database is a cache derived
 /// entirely from bundled resources, so the cheapest correct migration is to
 /// discard it and re-import rather than carry ALTER statements forward.
@@ -53,6 +56,32 @@ CREATE TABLE IF NOT EXISTS verses (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_verses_reference
     ON verses(translation, book_number, chapter, verse);
+
+/*
+ * The original languages, keyed by where a word sits rather than by
+ * translation.
+ *
+ * Greek and Hebrew belong to no translation: a church reading the KJV and one
+ * reading the Yoruba Bible are looking at the same underlying text. So this
+ * joins on book, chapter and verse, and every translation gets it for free.
+ *
+ * No foreign key to `verses`. A verse a translation happens not to carry -- a
+ * versification difference, a book still importing -- should not take its Greek
+ * with it.
+ */
+CREATE TABLE IF NOT EXISTS interlinear (
+    book_number     INTEGER NOT NULL,
+    chapter         INTEGER NOT NULL,
+    verse           INTEGER NOT NULL,
+    position        INTEGER NOT NULL,
+    original        TEXT    NOT NULL,
+    transliteration TEXT    NOT NULL DEFAULT '',
+    gloss           TEXT    NOT NULL DEFAULT '',
+    strongs         TEXT    NOT NULL DEFAULT '',
+    morphology      TEXT    NOT NULL DEFAULT '',
+    lemma           TEXT    NOT NULL DEFAULT '',
+    PRIMARY KEY (book_number, chapter, verse, position)
+);
 
 CREATE TABLE IF NOT EXISTS verse_embeddings (
     verse_id    INTEGER PRIMARY KEY,
@@ -112,6 +141,25 @@ pub struct Book {
     pub number: i64,
     pub name: String,
     pub chapters: i64,
+}
+
+/// One word of the original, as the operator's screen shows it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OriginalWord {
+    /// The Greek or Hebrew itself. Hebrew keeps its `/` morpheme boundaries,
+    /// because "in/ beginning" is how the language actually works and
+    /// flattening it discards the thing an interlinear exists to show.
+    pub original: String,
+    pub transliteration: String,
+    /// The contextual gloss, brackets included: "[The] book" is more honest
+    /// than "book" about what the original says and what English adds.
+    pub gloss: String,
+    /// Disambiguated Strong's — `G0025`, `H1254A`.
+    pub strongs: String,
+    pub morphology: String,
+    /// The dictionary form, for looking a root up elsewhere.
+    pub lemma: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -569,6 +617,109 @@ impl Library {
             Ok(Book { number: row.get(0)?, name: row.get(1)?, chapters: row.get(2)? })
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// The Greek or Hebrew behind one verse, in the order it is read.
+    ///
+    /// Empty rather than an error when there is none. The Apocrypha, a
+    /// versification difference, a verse number a translation carries and the
+    /// original does not -- none of those is a fault, and an operator who
+    /// opened the panel on one should see nothing rather than a complaint.
+    pub fn original(&self, book_number: i64, chapter: i64, verse: i64) -> Result<Vec<OriginalWord>> {
+        let connection = self.connection.lock();
+        let mut statement = connection.prepare(
+            "SELECT original, transliteration, gloss, strongs, morphology, lemma
+             FROM interlinear
+             WHERE book_number = ?1 AND chapter = ?2 AND verse = ?3
+             ORDER BY position",
+        )?;
+
+        let words = statement
+            .query_map(params![book_number, chapter, verse], |row| {
+                Ok(OriginalWord {
+                    original: row.get(0)?,
+                    transliteration: row.get(1)?,
+                    gloss: row.get(2)?,
+                    strongs: row.get(3)?,
+                    morphology: row.get(4)?,
+                    lemma: row.get(5)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(words)
+    }
+
+    /// Loads the interlinear once, and never again unless the file changes.
+    ///
+    /// Four hundred thousand rows is a few seconds of inserts, so it is guarded
+    /// by a count rather than repeated on every launch. A partial import from an
+    /// interrupted first run is caught by that same count being wrong, and the
+    /// table is rebuilt from scratch rather than topped up -- half an
+    /// interlinear is worse than none, because nothing about it looks broken.
+    pub fn ensure_interlinear(&self, app: &AppHandle) -> Result<i64> {
+        let path = app
+            .path()
+            .resolve(INTERLINEAR, tauri::path::BaseDirectory::Resource)
+            .context("the interlinear resource is missing from this build")?;
+
+        let file = fs::File::open(&path)
+            .with_context(|| format!("could not open {}", path.display()))?;
+        let mut raw = String::new();
+        GzDecoder::new(file)
+            .read_to_string(&mut raw)
+            .with_context(|| format!("could not decompress {}", path.display()))?;
+
+        let expected = raw.lines().filter(|line| !line.trim().is_empty()).count() as i64;
+
+        {
+            let connection = self.connection.lock();
+            let held: i64 =
+                connection.query_row("SELECT COUNT(*) FROM interlinear", [], |row| row.get(0))?;
+            if held == expected {
+                return Ok(0);
+            }
+        }
+
+        let mut connection = self.connection.lock();
+        let transaction = connection.transaction()?;
+        transaction.execute("DELETE FROM interlinear", [])?;
+
+        let mut imported = 0i64;
+        {
+            let mut insert = transaction.prepare(
+                "INSERT INTO interlinear(book_number, chapter, verse, position,
+                                         original, transliteration, gloss, strongs,
+                                         morphology, lemma)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            )?;
+
+            for (index, line) in raw.lines().enumerate() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let fields: Vec<&str> = line.split('\t').collect();
+                if fields.len() < 10 {
+                    bail!("{}: line {} has too few fields", path.display(), index + 1);
+                }
+                insert.execute(params![
+                    fields[0].parse::<i64>().context("bad book number")?,
+                    fields[1].parse::<i64>().context("bad chapter number")?,
+                    fields[2].parse::<i64>().context("bad verse number")?,
+                    fields[3].parse::<i64>().context("bad word position")?,
+                    fields[4],
+                    fields[5],
+                    fields[6],
+                    fields[7],
+                    fields[8],
+                    fields[9],
+                ])?;
+                imported += 1;
+            }
+        }
+        transaction.commit()?;
+
+        crate::log_line!("[bible] imported {imported} words of Greek and Hebrew");
+        Ok(imported)
     }
 
     pub fn chapter(&self, translation: &str, book_number: i64, chapter: i64) -> Result<Vec<Verse>> {
