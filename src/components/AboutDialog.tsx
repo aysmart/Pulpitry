@@ -102,11 +102,13 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
             licensed. The models are fetched from its own repository.
           </li>
           <li>
-            Twenty-two Bible translations, about 684,000 verses, bundled and searched locally —
-            including Yoruba, Igbo, Hausa, Swahili, Twi, French, Spanish and Portuguese. Most are
-            public domain; the rest are shared under Creative Commons and credited below.
-            Translations that are neither, such as the NIV and ESV, are fetched from their
-            publishers with a key you hold — we redistribute none of them.
+            Twenty-two Bible translations, about 684,000 verses, bundled and searched on this
+            machine — including Yoruba, Igbo, Hausa, Swahili, Twi, French, Spanish and Portuguese.
+            All of them are here: nothing is fetched from anywhere and nothing needs a key, so the
+            library works with the network unplugged. Most are public domain; the rest are shared
+            under Creative Commons and credited below. Translations still under copyright, such as
+            the NIV and ESV, are simply not included — putting their words in a download is
+            redistribution, whatever key it was fetched with.
           </li>
           <li>266 public-domain hymns.</li>
           <li>
