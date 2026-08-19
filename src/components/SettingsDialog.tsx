@@ -67,25 +67,127 @@ const REGIONS = [
  * Castavox.
  */
 const LANGUAGES = [
-  { code: "en-US", label: "English (United States)", hosted: true, azure: true, local: true },
-  { code: "en-GB", label: "English (United Kingdom)", hosted: true, azure: true, local: true },
-  { code: "en-NG", label: "English (Nigeria)", hosted: true, azure: true, local: true },
-  { code: "en-GH", label: "English (Ghana)", hosted: true, azure: true, local: true },
-  { code: "en-KE", label: "English (Kenya)", hosted: true, azure: true, local: true },
-  { code: "en-ZA", label: "English (South Africa)", hosted: true, azure: true, local: true },
-  { code: "en-IN", label: "English (India)", hosted: true, azure: true, local: true },
-  { code: "en-AU", label: "English (Australia)", hosted: true, azure: true, local: true },
-  { code: "en-CA", label: "English (Canada)", hosted: true, azure: true, local: true },
+  {
+    code: "en-US",
+    label: "English (United States)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "en-GB",
+    label: "English (United Kingdom)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "en-NG",
+    label: "English (Nigeria)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "en-GH",
+    label: "English (Ghana)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "en-KE",
+    label: "English (Kenya)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "en-ZA",
+    label: "English (South Africa)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "en-IN",
+    label: "English (India)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "en-AU",
+    label: "English (Australia)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "en-CA",
+    label: "English (Canada)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
   { code: "yo-NG", label: "Yoruba", hosted: false, azure: false, local: true },
   { code: "ha-NG", label: "Hausa", hosted: false, azure: false, local: true },
-  { code: "sw-KE", label: "Swahili (Kenya)", hosted: false, azure: true, local: true },
-  { code: "sw-TZ", label: "Swahili (Tanzania)", hosted: false, azure: true, local: true },
-  { code: "fr-FR", label: "French (France)", hosted: true, azure: true, local: true },
-  { code: "fr-CA", label: "French (Canada)", hosted: true, azure: true, local: true },
-  { code: "es-ES", label: "Spanish (Spain)", hosted: true, azure: true, local: true },
-  { code: "es-MX", label: "Spanish (Mexico)", hosted: true, azure: true, local: true },
-  { code: "pt-BR", label: "Portuguese (Brazil)", hosted: true, azure: true, local: true },
-  { code: "pt-PT", label: "Portuguese (Portugal)", hosted: true, azure: true, local: true },
+  {
+    code: "sw-KE",
+    label: "Swahili (Kenya)",
+    hosted: false,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "sw-TZ",
+    label: "Swahili (Tanzania)",
+    hosted: false,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "fr-FR",
+    label: "French (France)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "fr-CA",
+    label: "French (Canada)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "es-ES",
+    label: "Spanish (Spain)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "es-MX",
+    label: "Spanish (Mexico)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "pt-BR",
+    label: "Portuguese (Brazil)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "pt-PT",
+    label: "Portuguese (Portugal)",
+    hosted: true,
+    azure: true,
+    local: true,
+  },
   { code: "de-DE", label: "German", hosted: true, azure: true, local: true },
   { code: "it-IT", label: "Italian", hosted: true, azure: true, local: true },
   { code: "nl-NL", label: "Dutch", hosted: true, azure: true, local: true },
@@ -93,15 +195,45 @@ const LANGUAGES = [
   { code: "ru-RU", label: "Russian", hosted: true, azure: true, local: true },
   { code: "ja-JP", label: "Japanese", hosted: true, azure: true, local: true },
   { code: "pl-PL", label: "Polish", hosted: true, azure: true, local: true },
-  { code: "zh-CN", label: "Chinese (Mandarin)", hosted: false, azure: true, local: true },
+  {
+    code: "zh-CN",
+    label: "Chinese (Mandarin)",
+    hosted: false,
+    azure: true,
+    local: true,
+  },
   { code: "ko-KR", label: "Korean", hosted: false, azure: true, local: true },
-  { code: "ar-EG", label: "Arabic (Egypt)", hosted: false, azure: true, local: true },
+  {
+    code: "ar-EG",
+    label: "Arabic (Egypt)",
+    hosted: false,
+    azure: true,
+    local: true,
+  },
   { code: "am-ET", label: "Amharic", hosted: false, azure: true, local: true },
-  { code: "af-ZA", label: "Afrikaans", hosted: false, azure: true, local: true },
+  {
+    code: "af-ZA",
+    label: "Afrikaans",
+    hosted: false,
+    azure: true,
+    local: true,
+  },
   { code: "zu-ZA", label: "Zulu", hosted: false, azure: true, local: false },
   { code: "tl-PH", label: "Tagalog", hosted: false, azure: true, local: true },
-  { code: "id-ID", label: "Indonesian", hosted: false, azure: true, local: true },
-  { code: "uk-UA", label: "Ukrainian", hosted: false, azure: true, local: true },
+  {
+    code: "id-ID",
+    label: "Indonesian",
+    hosted: false,
+    azure: true,
+    local: true,
+  },
+  {
+    code: "uk-UA",
+    label: "Ukrainian",
+    hosted: false,
+    azure: true,
+    local: true,
+  },
   { code: "ro-RO", label: "Romanian", hosted: false, azure: true, local: true },
   { code: "ta-IN", label: "Tamil", hosted: false, azure: true, local: true },
 ];
@@ -118,16 +250,26 @@ function languageWarning(code: string, engine: string): string | null {
   if (!language) return null;
 
   const works =
-    engine === "hosted" ? language.hosted : engine === "azure" ? language.azure : language.local;
+    engine === "hosted"
+      ? language.hosted
+      : engine === "azure"
+        ? language.azure
+        : language.local;
   if (works) return null;
 
   const instead: string[] = [];
   if (language.local && engine !== "local") instead.push("this machine");
-  if (language.azure && engine !== "azure") instead.push("your own Azure account");
-  if (language.hosted && engine !== "hosted") instead.push("a Castavox subscription");
+  if (language.azure && engine !== "azure")
+    instead.push("your own Azure account");
+  if (language.hosted && engine !== "hosted")
+    instead.push("a Castavox subscription");
 
   const named =
-    engine === "hosted" ? "A Castavox subscription" : engine === "azure" ? "Azure" : "This machine";
+    engine === "hosted"
+      ? "A Castavox subscription"
+      : engine === "azure"
+        ? "Azure"
+        : "This machine";
 
   return instead.length === 0
     ? `${named} cannot transcribe ${language.label}, and nor can the others. The Bible can still be searched and displayed in it; only listening is unavailable.`
@@ -191,6 +333,7 @@ export function SettingsDialog({
   const [speed, setSpeed] = useState<string | null>(null);
   const [timing, setTiming] = useState(false);
 
+  const [checkIn, setCheckIn] = useState(settings.checkIn);
   const [semanticEnabled, setSemanticEnabled] = useState(
     settings.semanticEnabled,
   );
@@ -292,6 +435,7 @@ export function SettingsDialog({
         assistEndpoint: assistEndpoint.trim(),
         assistModel: assistModel.trim(),
         assistApiVersion: assistApiVersion.trim(),
+        checkIn,
         semanticEnabled,
         semanticThreshold,
         mirrorEnabled,
@@ -375,9 +519,9 @@ export function SettingsDialog({
                 This machine transcribes a sentence once it ends, so a verse
                 arrives a second or two later — but it needs no account, no key
                 and no network, and it costs nothing per hour. The other two
-                stream: words appear as they are spoken and a verse can be
-                found mid-sentence. A Castavox subscription does that without
-                your church having to open an Azure account at all.
+                stream: words appear as they are spoken and a verse can be found
+                mid-sentence. A Castavox subscription does that without your
+                church having to open an Azure account at all.
               </span>
             </label>
 
@@ -465,7 +609,9 @@ export function SettingsDialog({
                   </button>
                 </div>
                 {speed ? (
-                  <p className="text-[11.5px] leading-snug text-pulpitry-muted">{speed}</p>
+                  <p className="text-[11.5px] leading-snug text-pulpitry-muted">
+                    {speed}
+                  </p>
                 ) : null}
                 {modelNote ? (
                   <span className="text-[11.5px] leading-snug text-pulpitry-muted">
@@ -573,7 +719,10 @@ export function SettingsDialog({
             title="Mirror to Castavox"
             note="For a church running both, on two machines in the same building."
           >
-            <MirrorPanel enabled={mirrorEnabled} onEnabledChange={setMirrorEnabled} />
+            <MirrorPanel
+              enabled={mirrorEnabled}
+              onEnabledChange={setMirrorEnabled}
+            />
           </Section>
 
           <div className="border-t border-pulpitry-line" />
@@ -586,6 +735,34 @@ export function SettingsDialog({
             note="For a video team whose switcher is not Castavox, or who need the picture itself rather than the verse."
           >
             <NdiPanel />
+          </Section>
+
+          <div className="border-t border-pulpitry-line" />
+
+          {/*
+            Disclosed rather than buried, and off until it is switched on.
+
+            The privacy policy tells churches that on the free local engine
+            nothing leaves the building. That stays true of anybody who leaves
+            this alone, which is what makes it a promise we can keep rather than
+            one we outgrew -- so the note says exactly what would be sent and,
+            just as plainly, what would not.
+          */}
+          <Section
+            title="Telling us this installation exists"
+            note="Once a day, if you switch it on: a random identifier made on this machine, which application and version, your operating system, what kind of processor it has, and which transcription engine you chose. Your country is worked out from the connection and the address is discarded. Never your machine's name, never your address, and never a transcript, a verse or a filename — there is no field for any of those. It never delays anything, and if it cannot be sent nothing happens."
+          >
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={checkIn}
+                onChange={(event) => setCheckIn(event.target.checked)}
+                className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+              />
+              <span className="text-[13px] text-pulpitry-text">
+                Send a daily check-in
+              </span>
+            </label>
           </Section>
 
           <div className="border-t border-pulpitry-line" />

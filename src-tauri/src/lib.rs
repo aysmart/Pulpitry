@@ -1,6 +1,6 @@
 // Six modules now live in castavox-core, shared with Castavox rather than
 // copied into it. Named here so the rest of this file reads unchanged.
-use castavox_core::{audio, embed, exports, node, transcripts, whisper};
+use castavox_core::{audio, checkin, embed, exports, node, transcripts, whisper};
 
 mod assist;
 mod bible;
@@ -314,6 +314,10 @@ struct SpeechSpeed {
     factor: f32,
     detail: String,
 }
+
+/// Where a check-in goes. The broker, which derives the country at its edge and
+/// discards the address before anything is written down.
+const CHECK_IN_ENDPOINT: &str = "https://castavox.com/api/v1/check-in";
 
 #[tauri::command]
 async fn measure_speech(
@@ -1103,6 +1107,32 @@ pub fn run() {
             // Before the rest of the setup, so the fetch is under way while the
             // verse library imports.
             provision_local_model(app.handle());
+
+            /*
+             * The once-a-day check-in, if this church switched it on.
+             *
+             * Reads the stored setting and does nothing whatever when it is
+             * off: no identifier is written, no thread is started, no request
+             * is made. The privacy policy tells churches on the free local
+             * engine that nothing leaves the building, and for anybody who has
+             * not touched the switch that stays literally true.
+             *
+             * Failure is silent and never delays this. `send` returns
+             * immediately and does its work on its own thread.
+             */
+            {
+                let stored = settings::load(app.handle()).unwrap_or_default();
+                if let Ok(dir) = app.path().app_data_dir() {
+                    checkin::send(
+                        stored.check_in,
+                        CHECK_IN_ENDPOINT,
+                        &dir,
+                        "pulpitry",
+                        env!("CARGO_PKG_VERSION"),
+                        &stored.speech_engine,
+                    );
+                }
+            }
 
             // The mirror, off unless the church asked for it. Subscribed to the
             // live event rather than called from set_live, so the projector

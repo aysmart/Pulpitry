@@ -103,6 +103,17 @@ pub struct Settings {
     /// signal `provision_local_model` acts on at startup. It is only ever empty
     /// once.
     pub speech_model: String,
+    /// Whether this installation sends the once-a-day check-in.
+    ///
+    /// Off, and only the operator turns it on. The privacy policy tells
+    /// churches that on the free local engine nothing leaves the building, and
+    /// that sentence stays true of everybody who never touches this. Opt-out
+    /// would have made it false for them without their doing anything.
+    ///
+    /// `#[serde(default)]` so an existing settings file reads as off rather
+    /// than as unset -- an upgrade must not opt anybody in.
+    #[serde(default)]
+    pub check_in: bool,
     pub semantic_enabled: bool,
     /// Cosine similarity a match must reach to be shown, 0 to 1.
     pub semantic_threshold: f32,
@@ -203,6 +214,8 @@ impl Default for Settings {
             speech_model: String::new(),
             mirror_enabled: false,
             mirror_pairings: Vec::new(),
+            // Off. Only an operator turns this on.
+            check_in: false,
             semantic_enabled: true,
             // Measured against the full 31,102-verse index, and against the
             // negative class that actually matters. Announcements are easy to
