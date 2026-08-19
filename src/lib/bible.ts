@@ -101,3 +101,18 @@ export interface OriginalWord {
  */
 export const originalWords = (book: number, chapter: number, verse: number) =>
   invoke<OriginalWord[]>("original_words", { book, chapter, verse });
+
+/** One Strong's entry, from the bundled brief lexicons. */
+export interface LexiconEntry {
+  strongs: string;
+  lemma: string;
+  transliteration: string;
+  part: string;
+  gloss: string;
+  /** The full entry, paragraphs separated by newlines. Plain text. */
+  definition: string;
+}
+
+/** What a Strong's number means, or null where the lexicon has no entry. */
+export const lexiconEntry = (strongs: string) =>
+  invoke<LexiconEntry | null>("lexicon_entry", { strongs });

@@ -26,6 +26,9 @@ const MANIFEST: &str = "resources/translations.json";
 /// The Greek and Hebrew, built by scripts/build-interlinear.mjs.
 const INTERLINEAR: &str = "resources/interlinear.tsv.gz";
 
+/// Strong's definitions, built by scripts/build-lexicon.mjs.
+const LEXICON: &str = "resources/lexicon.tsv.gz";
+
 /// Bumped whenever the schema below changes. The database is a cache derived
 /// entirely from bundled resources, so the cheapest correct migration is to
 /// discard it and re-import rather than carry ALTER statements forward.
@@ -81,6 +84,21 @@ CREATE TABLE IF NOT EXISTS interlinear (
     morphology      TEXT    NOT NULL DEFAULT '',
     lemma           TEXT    NOT NULL DEFAULT '',
     PRIMARY KEY (book_number, chapter, verse, position)
+);
+
+/*
+ * What a Strong's number means, from STEPBible's brief lexicons.
+ *
+ * Keyed by the same extended numbers the interlinear carries, so a word on
+ * screen reaches its entry with nothing to match on.
+ */
+CREATE TABLE IF NOT EXISTS lexicon (
+    strongs     TEXT PRIMARY KEY,
+    lemma       TEXT NOT NULL DEFAULT '',
+    translit    TEXT NOT NULL DEFAULT '',
+    part        TEXT NOT NULL DEFAULT '',
+    gloss       TEXT NOT NULL DEFAULT '',
+    definition  TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS verse_embeddings (
@@ -160,6 +178,22 @@ pub struct OriginalWord {
     pub morphology: String,
     /// The dictionary form, for looking a root up elsewhere.
     pub lemma: String,
+}
+
+/// One Strong's entry, as the operator reads it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LexiconEntry {
+    pub strongs: String,
+    pub lemma: String,
+    pub transliteration: String,
+    /// The lexicon's own part-of-speech code — `G:N-F`, `G:V`.
+    pub part: String,
+    /// A few words. What a busy operator reads.
+    pub gloss: String,
+    /// The full entry, paragraphs separated by newlines. Plain text: the
+    /// source is HTML and is stripped at build time rather than rendered.
+    pub definition: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -719,6 +753,154 @@ impl Library {
         transaction.commit()?;
 
         crate::log_line!("[bible] imported {imported} words of Greek and Hebrew");
+        Ok(imported)
+    }
+
+    /// What one Strong's number means, looked up progressively.
+    ///
+    /// # Why one lookup is three
+    ///
+    /// The interlinear and the lexicon disagree about how a Strong's number is
+    /// written, and finding that out cost 10,844 words — over half the Hebrew —
+    /// silently having no entry at all.
+    ///
+    /// The interlinear carries the *disambiguated* number: `H1254A` where two
+    /// distinct roots share one Strong's number, `H7225G` where the sense is
+    /// pinned by the Greek, `H0853_A` for a further split. The lexicon is keyed
+    /// more coarsely, and where it does disambiguate it lowercases the suffix:
+    /// `H1254a`.
+    ///
+    /// So: exact, then case-insensitively, then with the disambiguators
+    /// stripped. The last is a slightly wider answer than was asked for — the
+    /// root rather than one sense of it — which for an operator reading a word
+    /// in a service is far better than nothing, and is what a printed
+    /// concordance would have given them anyway.
+    pub fn lexicon(&self, strongs: &str) -> Result<Option<LexiconEntry>> {
+        let trimmed = strongs.trim();
+        if trimmed.is_empty() {
+            return Ok(None);
+        }
+
+        // `H0853_A` -> `H0853`, `H7225G` -> `H7225`. The number is the prefix
+        // letter and the digits; anything after it is disambiguation.
+        let base: String = {
+            let mut out = String::new();
+            let mut chars = trimmed.chars();
+            if let Some(letter) = chars.next() {
+                out.push(letter);
+            }
+            for ch in chars {
+                if ch.is_ascii_digit() {
+                    out.push(ch);
+                } else {
+                    break;
+                }
+            }
+            out
+        };
+
+        for (sql, key) in [
+            ("SELECT strongs, lemma, translit, part, gloss, definition FROM lexicon WHERE strongs = ?1", trimmed.to_string()),
+            ("SELECT strongs, lemma, translit, part, gloss, definition FROM lexicon WHERE strongs = ?1 COLLATE NOCASE", trimmed.to_string()),
+            ("SELECT strongs, lemma, translit, part, gloss, definition FROM lexicon WHERE strongs = ?1 COLLATE NOCASE", base.clone()),
+            /*
+             * Last: the first entry sharing this number, whatever its suffix.
+             *
+             * `H5921A_A` is a sense of a sense, and the lexicon carries neither
+             * it nor a bare `H5921` -- only `H5921a`. Without this step every
+             * word like it, and there are thousands, has no entry at all while
+             * the definition sits in the table under a name one character off.
+             *
+             * Ordered so the answer is stable rather than whichever row the
+             * planner reached first: the same word gives the same entry twice.
+             */
+            ("SELECT strongs, lemma, translit, part, gloss, definition FROM lexicon WHERE strongs LIKE ?1 || '%' ORDER BY strongs LIMIT 1", base.clone()),
+        ] {
+            if key.is_empty() {
+                continue;
+            }
+            if let Some(found) = self.lexicon_row(sql, &key)? {
+                return Ok(Some(found));
+            }
+        }
+        Ok(None)
+    }
+
+    fn lexicon_row(&self, sql: &str, key: &str) -> Result<Option<LexiconEntry>> {
+        let connection = self.connection.lock();
+        let mut statement = connection.prepare(sql)?;
+
+        let mut rows = statement.query_map(params![key], |row| {
+            Ok(LexiconEntry {
+                strongs: row.get(0)?,
+                lemma: row.get(1)?,
+                transliteration: row.get(2)?,
+                part: row.get(3)?,
+                gloss: row.get(4)?,
+                definition: row.get(5)?,
+            })
+        })?;
+        Ok(rows.next().transpose()?)
+    }
+
+    /// Loads the lexicon once, guarded by a row count like the interlinear.
+    pub fn ensure_lexicon(&self, app: &AppHandle) -> Result<i64> {
+        let path = app
+            .path()
+            .resolve(LEXICON, tauri::path::BaseDirectory::Resource)
+            .context("the lexicon resource is missing from this build")?;
+
+        let file = fs::File::open(&path)
+            .with_context(|| format!("could not open {}", path.display()))?;
+        let mut raw = String::new();
+        GzDecoder::new(file)
+            .read_to_string(&mut raw)
+            .with_context(|| format!("could not decompress {}", path.display()))?;
+
+        let expected = raw.lines().filter(|line| !line.trim().is_empty()).count() as i64;
+        {
+            let connection = self.connection.lock();
+            let held: i64 =
+                connection.query_row("SELECT COUNT(*) FROM lexicon", [], |row| row.get(0))?;
+            if held == expected {
+                return Ok(0);
+            }
+        }
+
+        let mut connection = self.connection.lock();
+        let transaction = connection.transaction()?;
+        transaction.execute("DELETE FROM lexicon", [])?;
+
+        let mut imported = 0i64;
+        {
+            let mut insert = transaction.prepare(
+                "INSERT INTO lexicon(strongs, lemma, translit, part, gloss, definition)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            )?;
+            for line in raw.lines() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let fields: Vec<&str> = line.split('\t').collect();
+                if fields.len() < 6 {
+                    continue;
+                }
+                insert.execute(params![
+                    fields[0],
+                    fields[1],
+                    fields[2],
+                    fields[3],
+                    fields[4],
+                    // Paragraphs are marked rather than embedded, so a row
+                    // stays a row. Put back on the way in.
+                    fields[5].replace('¶', "\n"),
+                ])?;
+                imported += 1;
+            }
+        }
+        transaction.commit()?;
+
+        crate::log_line!("[bible] imported {imported} lexicon entries");
         Ok(imported)
     }
 

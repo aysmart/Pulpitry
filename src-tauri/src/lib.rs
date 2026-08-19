@@ -484,6 +484,15 @@ fn original_words(
     library.original(book, chapter, verse).map_err(to_message)
 }
 
+/// What a Strong's number means. Asked when the operator opens a word.
+#[tauri::command]
+fn lexicon_entry(
+    library: State<'_, Arc<Library>>,
+    strongs: String,
+) -> CommandResult<Option<bible::LexiconEntry>> {
+    library.lexicon(&strongs).map_err(to_message)
+}
+
 #[tauri::command]
 fn list_translations(library: State<'_, Arc<Library>>) -> CommandResult<Vec<Translation>> {
     library.translations().map_err(to_message)
@@ -1153,6 +1162,9 @@ pub fn run() {
                 if let Err(err) = library.ensure_interlinear(&handle) {
                     crate::log_line!("[bible] the interlinear did not import: {err:#}");
                 }
+                if let Err(err) = library.ensure_lexicon(&handle) {
+                    crate::log_line!("[bible] the lexicon did not import: {err:#}");
+                }
 
                 let status = match library.ensure_bundled_translations(&handle, report) {
                     Ok(()) => library.status().unwrap_or_else(|err| LibraryStatus {
@@ -1190,6 +1202,7 @@ pub fn run() {
             list_audio_inputs,
             bible_attributions,
             original_words,
+            lexicon_entry,
             ndi_status,
             ndi_sources,
             ndi_set,
