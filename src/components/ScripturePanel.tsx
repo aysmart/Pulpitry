@@ -5,14 +5,13 @@ import { presentableLabel, presentableText, type Presentable } from "../lib/useP
 import type { Detection } from "../lib/useDetections";
 import type { SpokenReference } from "../lib/useSpokenReferences";
 import { ChapterNavigator } from "./ChapterNavigator";
+import { Detections } from "./Detections";
 import type { ProjectorTheme } from "../lib/theme";
 import type { IndexStatus } from "../lib/useSemanticIndex";
 import type { Suggestion } from "../lib/useSuggestions";
 import type { Ticker } from "../lib/projector";
 import type { ScheduleController } from "../lib/useSchedule";
-import { DetectedVerses } from "./DetectedVerses";
 import { MediaLibrary } from "./MediaLibrary";
-import { ParaphraseMatches } from "./ParaphraseMatches";
 import { SchedulePanel } from "./SchedulePanel";
 import { SlideLibrary } from "./SlideLibrary";
 import { TickerPanel } from "./TickerPanel";
@@ -25,8 +24,12 @@ const TABS = [
   "Songs",
   "Media",
   "Slides",
+  // One tab, three origins. They were two, and splitting them split the
+  // operator's attention at the moment they had least of it -- the question is
+  // always "do I put this on the wall?", and answering it should not mean
+  // looking in two places and comparing timestamps. See Detections.tsx for how
+  // the distinction is kept.
   "Detected",
-  "Paraphrase",
   "Schedule",
   "History",
   "Themes",
@@ -108,7 +111,7 @@ export function ScripturePanel({
       title=""
       accent="teal"
       bodyClassName={
-        tab === "Detected" || tab === "Paraphrase" || tab === "History" ? "" : "overflow-hidden"
+        tab === "Detected" || tab === "History" ? "" : "overflow-hidden"
       }
       actions={
         <div className="flex flex-wrap justify-end gap-0">
@@ -124,13 +127,11 @@ export function ScripturePanel({
               }`}
             >
               {name}
-              {name === "Detected" && detections.length + references.length > 0 ? (
+              {name === "Detected" &&
+              detections.length + references.length + suggestions.length > 0 ? (
                 <span className="ml-1 text-pulpitry-teal tabular-nums">
-                  {detections.length + references.length}
+                  {detections.length + references.length + suggestions.length}
                 </span>
-              ) : null}
-              {name === "Paraphrase" && suggestions.length > 0 ? (
-                <span className="ml-1 text-pulpitry-teal tabular-nums">{suggestions.length}</span>
               ) : null}
               {name === "Schedule" && schedule.entries.length > 0 ? (
                 <span className="ml-1 text-pulpitry-teal tabular-nums">
@@ -279,25 +280,16 @@ export function ScripturePanel({
       ) : null}
 
       {tab === "Detected" ? (
-        <DetectedVerses
+        <Detections
           detections={detections}
           references={references}
-          onPreview={onPreview}
-          previewVerseId={previewVerseIds[0] ?? null}
-          liveVerseId={liveVerseIds[0] ?? null}
-          listening={listening}
-        />
-      ) : null}
-
-      {tab === "Paraphrase" ? (
-        <ParaphraseMatches
           suggestions={suggestions}
           onPreview={onPreview}
           previewVerseId={previewVerseIds[0] ?? null}
           liveVerseId={liveVerseIds[0] ?? null}
+          listening={listening}
           index={semanticIndex}
           assistEnabled={assistEnabled}
-          listening={listening}
         />
       ) : null}
     </Panel>
