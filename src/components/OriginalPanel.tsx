@@ -120,15 +120,63 @@ export function OriginalPanel({
 
   return (
     <div className="flex flex-col gap-2 p-2">
+      {/* Above the words, not below them: under a wrap of twenty-five cards
+          it sat off the bottom of a short panel and reading it meant
+          scrolling past the thing you had just clicked. */}
+      {opened ? (
+        <div className="flex flex-col gap-1 rounded border border-pulpitry-teal/30 bg-pulpitry-raised px-2.5 py-2">
+          {opened.entry ? (
+            <>
+              <span className="flex items-baseline justify-between gap-2">
+                <span className="text-[13px] text-pulpitry-text">
+                  {opened.entry.lemma}{" "}
+                  <span className="text-pulpitry-teal">{opened.entry.transliteration}</span>
+                </span>
+                <span className="shrink-0 text-[10px] text-pulpitry-muted tabular-nums">
+                  {opened.entry.strongs} {opened.entry.part}
+                </span>
+              </span>
+              {opened.entry.gloss ? (
+                <span className="text-[12.5px] text-pulpitry-text">{opened.entry.gloss}</span>
+              ) : null}
+              {opened.entry.definition ? (
+                // Pre-wrapped: the entry keeps its own paragraphs and sense
+                // numbering, which is most of what makes it readable.
+                <span className="max-h-40 overflow-auto whitespace-pre-wrap text-[11.5px] leading-snug text-pulpitry-muted">
+                  {opened.entry.definition}
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <span className="text-[11.5px] text-pulpitry-muted">
+              No entry for {opened.strongs}.
+            </span>
+          )}
+        </div>
+      ) : null}
       <div className="flex flex-wrap gap-1.5">
       {words.map((word, at) => (
-        <button
+        /*
+         * A div rather than a button, and the card carries two actions.
+         *
+         * The Strong's number inside it opens the lexicon while the card itself
+         * stages the word -- and a button inside a button is invalid HTML whose
+         * inner clicks browsers deliver inconsistently. This was the bug:
+         * pressing the number did nothing at all.
+         */
+        <div
           key={`${word.strongs}-${at}`}
-          type="button"
+          role="button"
+          tabIndex={0}
           onClick={() => onStage(word, `${verse.book} ${verse.chapter}:${verse.verse}`)}
           onDoubleClick={() => onStage(word, `${verse.book} ${verse.chapter}:${verse.verse}`, true)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              onStage(word, `${verse.book} ${verse.chapter}:${verse.verse}`);
+            }
+          }}
           title="Click to stage this word, double-click to put it on screen"
-          className="flex min-w-[86px] flex-col gap-0.5 rounded border border-pulpitry-line px-2 py-1.5 text-left transition-colors hover:border-pulpitry-teal/40 hover:bg-pulpitry-raised focus-visible:focus-ring"
+          className="flex min-w-[86px] cursor-pointer flex-col gap-0.5 rounded border border-pulpitry-line px-2 py-1.5 text-left transition-colors hover:border-pulpitry-teal/40 hover:bg-pulpitry-raised focus-visible:focus-ring"
         >
           {/* The original is the largest thing in the card, because it is what
               somebody opened this to read. */}
@@ -171,42 +219,10 @@ export function OriginalPanel({
               <span className="text-[10px] text-pulpitry-muted/70">{word.morphology}</span>
             ) : null}
           </span>
-        </button>
+        </div>
       ))}
       </div>
 
-      {/* The entry, under the words rather than over the verse. */}
-      {opened ? (
-        <div className="flex flex-col gap-1 rounded border border-pulpitry-teal/30 bg-pulpitry-raised px-2.5 py-2">
-          {opened.entry ? (
-            <>
-              <span className="flex items-baseline justify-between gap-2">
-                <span className="text-[13px] text-pulpitry-text">
-                  {opened.entry.lemma}{" "}
-                  <span className="text-pulpitry-teal">{opened.entry.transliteration}</span>
-                </span>
-                <span className="shrink-0 text-[10px] text-pulpitry-muted tabular-nums">
-                  {opened.entry.strongs} {opened.entry.part}
-                </span>
-              </span>
-              {opened.entry.gloss ? (
-                <span className="text-[12.5px] text-pulpitry-text">{opened.entry.gloss}</span>
-              ) : null}
-              {opened.entry.definition ? (
-                // Pre-wrapped: the entry keeps its own paragraphs and sense
-                // numbering, which is most of what makes it readable.
-                <span className="max-h-40 overflow-auto whitespace-pre-wrap text-[11.5px] leading-snug text-pulpitry-muted">
-                  {opened.entry.definition}
-                </span>
-              ) : null}
-            </>
-          ) : (
-            <span className="text-[11.5px] text-pulpitry-muted">
-              No entry for {opened.strongs}.
-            </span>
-          )}
-        </div>
-      ) : null}
     </div>
   );
 }
