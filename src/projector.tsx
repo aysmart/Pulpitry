@@ -20,7 +20,12 @@ import {
   type MediaCommand,
   type Ticker,
 } from "./lib/projector";
-import { DEFAULT_THEME, getTheme, onTheme, type ProjectorTheme } from "./lib/theme";
+import {
+  DEFAULT_THEME,
+  getTheme,
+  onTheme,
+  type ProjectorTheme,
+} from "./lib/theme";
 import { Backdrop } from "./components/Backdrop";
 import { TickerBand } from "./components/TickerBand";
 import "./styles.css";
@@ -58,11 +63,21 @@ function Projector() {
 
     // This window can be opened at any point during a service, so take whatever
     // is already live rather than staying blank until the next change.
-    void getLive().then((current) => active && setContent(current)).catch(() => undefined);
-    void getTheme().then((current) => active && setTheme(current)).catch(() => undefined);
-    void getAudio().then((current) => active && setAudio(current)).catch(() => undefined);
-    void getMedia().then((current) => active && setCommand(current)).catch(() => undefined);
-    void getTicker().then((current) => active && setTicker(current)).catch(() => undefined);
+    void getLive()
+      .then((current) => active && setContent(current))
+      .catch(() => undefined);
+    void getTheme()
+      .then((current) => active && setTheme(current))
+      .catch(() => undefined);
+    void getAudio()
+      .then((current) => active && setAudio(current))
+      .catch(() => undefined);
+    void getMedia()
+      .then((current) => active && setCommand(current))
+      .catch(() => undefined);
+    void getTicker()
+      .then((current) => active && setTicker(current))
+      .catch(() => undefined);
 
     void Promise.all([
       onLive((next) => active && setContent(next)),
@@ -92,7 +107,9 @@ function Projector() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      void (getCurrentWindow().label === "second" ? closeSecond() : closeProjector());
+      void (getCurrentWindow().label === "second"
+        ? closeSecond()
+        : closeProjector());
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -108,20 +125,58 @@ function Projector() {
 
       <TickerBand ticker={ticker} theme={theme} />
 
-      <div className="relative flex h-full w-full flex-col items-center justify-center px-[6vw] py-[5vh]">
-        {content ? (
-          <>
-            <LiveBodyView body={content.body} theme={theme} audio={audio} command={command} />
-            {theme.showReference && content.caption ? (
-              <p
-                className="mt-[4vh] text-center text-[clamp(0.9rem,1.6vw,1.8rem)] tracking-wide opacity-60"
-                style={{ color: theme.textColor }}
-              >
-                {content.caption}
-              </p>
+      {/*
+        Text is laid out into 16:9, whatever shape the screen is.
+
+        # Why the screen's own shape is not used
+
+        A church's projector may be 16:10, or a TV panel may report something
+        odd, and the desk's two preview panes are boxes on a laptop that are
+        neither. Letting each surface use its own proportions meant the same
+        words broke in different places and each one held a different number of
+        lines -- so the pane labelled Live was not showing what was live.
+
+        Fixing every surface to one ratio makes them the same layout by
+        construction rather than by coincidence. 16:9 because that is what
+        church projectors and streams are, and what a template is designed in.
+
+        The backdrop above is deliberately outside this box and still covers the
+        whole screen. Constraining the words is the point; letterboxing the
+        colour would put black bars on a wall for no reason.
+      */}
+      <div className="relative flex h-full w-full items-center justify-center">
+        {/*
+          `min()` rather than max-width and max-height: `aspect-ratio` is
+          honoured against an element's preferred size and then clamped, so a
+          box given both constraints quietly stops being 16:9 on exactly the
+          screens this exists to handle. Sizing it explicitly cannot drift.
+
+          177.78cqh is 16/9 of the height. The units resolve against the root
+          above, which is why the containment for the text sits on the child.
+        */}
+        <div className="[aspect-ratio:16/9] [width:min(100cqw,177.78cqh)]">
+          <div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden px-[6cqw] py-[5cqh] [container-type:size]">
+            {content ? (
+              <>
+                <LiveBodyView
+                  body={content.body}
+                  theme={theme}
+                  audio={audio}
+                  command={command}
+                  progress={content.progress}
+                />
+                {theme.showReference && content.caption ? (
+                  <p
+                    className="mt-[4vh] text-center text-[clamp(0.9rem,1.6vw,1.8rem)] tracking-wide opacity-60"
+                    style={{ color: theme.textColor }}
+                  >
+                    {content.caption}
+                  </p>
+                ) : null}
+              </>
             ) : null}
-          </>
-        ) : null}
+          </div>
+        </div>
       </div>
     </div>
   );

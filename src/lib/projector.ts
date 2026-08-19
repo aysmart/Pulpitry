@@ -44,6 +44,32 @@ export interface LiveContent {
   caption: string;
   /** Verse ids behind this, so lists can highlight what is live. */
   ids: number[];
+  /**
+   * How far through a long body it has been wound, 0 at the top and 1 at the
+   * end.
+   *
+   * Zero for everything a screen holds at once, which is almost everything: a
+   * verse, a chorus, a written slide. It exists for the one thing that does not
+   * fit -- a lexicon entry, which runs to several hundred words.
+   *
+   * # Why a fraction and not a frame number
+   *
+   * This counted screenfuls, which does not survive two screens. The desk broke
+   * one entry into four frames and a paired Castavox broke the same entry into
+   * two, because they have different shapes and different amounts of room -- so
+   * "frame 3" was a place that existed on one and not the other, and winding
+   * there did nothing at all on the screen. The same is true inside this app
+   * whenever the projector's display is not the shape of the preview box.
+   *
+   * A fraction is the one thing every surface can agree on without knowing
+   * anything about the others: exact at both ends -- 0 is the first line
+   * everywhere, 1 is the last everywhere -- and proportional in between, which
+   * is the best available when one surface genuinely shows more text.
+   *
+   * The operator still steps in whole screenfuls. That conversion happens where
+   * the measurement lives, not here.
+   */
+  progress: number;
 }
 
 /** Plain text, for sizing decisions and the operator's panes. */
@@ -76,7 +102,8 @@ export interface ProjectorState {
 
 export const getLive = () => invoke<LiveContent | null>("get_live");
 
-export const setLive = (content: LiveContent | null) => invoke<void>("set_live", { content });
+export const setLive = (content: LiveContent | null) =>
+  invoke<void>("set_live", { content });
 
 export const listDisplays = () => invoke<Display[]>("list_displays");
 
@@ -108,7 +135,9 @@ export const closeSecond = () => invoke<SecondState>("close_second");
 
 export const secondState = () => invoke<SecondState>("second_state");
 
-export const onLive = (handler: (content: LiveContent | null) => void): Promise<UnlistenFn> =>
+export const onLive = (
+  handler: (content: LiveContent | null) => void,
+): Promise<UnlistenFn> =>
   listen<LiveContent | null>(EVENT_LIVE, (event) => handler(event.payload));
 
 /**
@@ -127,9 +156,12 @@ export const EVENT_AUDIO = "audio:changed";
 
 export const getAudio = () => invoke<AudioState>("get_audio");
 
-export const setAudio = (audio: AudioState) => invoke<AudioState>("set_audio", { audio });
+export const setAudio = (audio: AudioState) =>
+  invoke<AudioState>("set_audio", { audio });
 
-export const onAudio = (handler: (audio: AudioState) => void): Promise<UnlistenFn> =>
+export const onAudio = (
+  handler: (audio: AudioState) => void,
+): Promise<UnlistenFn> =>
   listen<AudioState>(EVENT_AUDIO, (event) => handler(event.payload));
 
 /** A band of text crawling across the screen, over whatever is live. */
@@ -151,9 +183,12 @@ export const EVENT_TICKER = "ticker:changed";
 
 export const getTicker = () => invoke<Ticker>("get_ticker");
 
-export const setTicker = (ticker: Ticker) => invoke<Ticker>("set_ticker", { ticker });
+export const setTicker = (ticker: Ticker) =>
+  invoke<Ticker>("set_ticker", { ticker });
 
-export const onTicker = (handler: (ticker: Ticker) => void): Promise<UnlistenFn> =>
+export const onTicker = (
+  handler: (ticker: Ticker) => void,
+): Promise<UnlistenFn> =>
   listen<Ticker>(EVENT_TICKER, (event) => handler(event.payload));
 
 /** What the operator has asked the clip to do. Both surfaces obey it. */
@@ -183,15 +218,20 @@ export const getMedia = () => invoke<MediaCommand>("get_media");
 export const setMedia = (command: MediaCommand) =>
   invoke<MediaCommand>("set_media", { command });
 
-export const getMediaProgress = () => invoke<MediaProgress>("get_media_progress");
+export const getMediaProgress = () =>
+  invoke<MediaProgress>("get_media_progress");
 
 export const reportMediaProgress = (progress: MediaProgress) =>
   invoke<void>("report_media_progress", { progress });
 
-export const onMedia = (handler: (command: MediaCommand) => void): Promise<UnlistenFn> =>
+export const onMedia = (
+  handler: (command: MediaCommand) => void,
+): Promise<UnlistenFn> =>
   listen<MediaCommand>(EVENT_MEDIA, (event) => handler(event.payload));
 
 export const onMediaProgress = (
   handler: (progress: MediaProgress) => void,
 ): Promise<UnlistenFn> =>
-  listen<MediaProgress>(EVENT_MEDIA_PROGRESS, (event) => handler(event.payload));
+  listen<MediaProgress>(EVENT_MEDIA_PROGRESS, (event) =>
+    handler(event.payload),
+  );

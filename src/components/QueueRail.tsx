@@ -32,7 +32,8 @@ export function QueueRail({
   entries: PlanEntry[];
   /** The service being run, so the rail says which plan this is. */
   name: string;
-  onStage: (index: number) => void;
+  /** Stages the entry. `andShow` sends it in the same gesture. */
+  onStage: (index: number, andShow?: boolean) => void;
   /** What is on screen, so the entry matching it can be marked. */
   activeLabel: string | null;
 }) {
@@ -62,6 +63,8 @@ export function QueueRail({
             <button
               type="button"
               onClick={() => onStage(index)}
+              onDoubleClick={() => onStage(index, true)}
+              title="Click to stage, double-click to put it on screen"
               className={`flex w-full items-baseline gap-2 rounded border px-2 py-1.5 text-left transition-colors focus-visible:focus-ring ${
                 isLive
                   ? "border-pulpitry-gold-dim bg-pulpitry-gold/10"

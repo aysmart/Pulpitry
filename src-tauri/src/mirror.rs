@@ -220,7 +220,11 @@ impl Mirror {
     pub fn stage(&self, live: Option<&LiveContent>) {
         let held = self.inner.lock();
         let Some(running) = held.as_ref() else { return };
-        running.desk.stage(live.map(shown_of).unwrap_or(Shown::Nothing));
+        // The wind position travels beside the text, so a screen mirroring a
+        // lexicon entry follows the operator down it rather than sitting on the
+        // first frame while the desk reads the fourth.
+        running.desk.stage(live.map(shown_of).unwrap_or(Shown::Nothing),
+                           live.map(|content| content.progress).unwrap_or(0.0));
     }
 
     pub fn state(&self) -> MirrorState {
@@ -361,7 +365,7 @@ mod tests {
     use crate::projector::{ScriptureLine, TextBlock};
 
     fn live(body: LiveBody, caption: &str) -> LiveContent {
-        LiveContent { body, caption: caption.into(), ids: Vec::new() }
+        LiveContent { body, caption: caption.into(), ids: Vec::new(), progress: 0.0 }
     }
 
     #[test]

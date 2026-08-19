@@ -59,25 +59,43 @@ const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E" +
   "%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' " +
   "stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E" +
-  "%3C/svg%3E\")";
+  '%3C/svg%3E")';
 
 /** Named so the settings screen and the renderer cannot disagree. */
 export const TEXTURES: Array<{ id: Texture; name: string; hint: string }> = [
   { id: "none", name: "None", hint: "Flat, as chosen" },
-  { id: "grain", name: "Grain", hint: "Fine film noise; stops a flat colour looking flat" },
-  { id: "linen", name: "Linen", hint: "A woven weave, very subtle at distance" },
+  {
+    id: "grain",
+    name: "Grain",
+    hint: "Fine film noise; stops a flat colour looking flat",
+  },
+  {
+    id: "linen",
+    name: "Linen",
+    hint: "A woven weave, very subtle at distance",
+  },
   { id: "dots", name: "Dots", hint: "A regular halftone field" },
-  { id: "vignette", name: "Vignette", hint: "Darkens the corners, pulling the eye to the words" },
+  {
+    id: "vignette",
+    name: "Vignette",
+    hint: "Darkens the corners, pulling the eye to the words",
+  },
 ];
 
 /** The layer that sits over the background, if the theme asks for one. */
-export function textureStyle(theme: ProjectorTheme): React.CSSProperties | null {
+export function textureStyle(
+  theme: ProjectorTheme,
+): React.CSSProperties | null {
   const strength = Math.min(1, Math.max(0, theme.textureStrength));
   if (theme.texture === "none" || strength === 0) return null;
 
   switch (theme.texture) {
     case "grain":
-      return { backgroundImage: GRAIN, opacity: strength * 0.4, mixBlendMode: "overlay" };
+      return {
+        backgroundImage: GRAIN,
+        opacity: strength * 0.4,
+        mixBlendMode: "overlay",
+      };
     case "linen":
       return {
         backgroundImage:
@@ -122,20 +140,55 @@ export function backgroundStyle(theme: ProjectorTheme): React.CSSProperties {
  * platforms — Palatino and Book Antiqua are the same design under two names,
  * as are Baskerville and Cambria closely enough for projection.
  */
-export const FONT_FAMILIES: Array<{ key: string; label: string; stack: string }> = [
-  { key: "sourceSerif", label: "Source Serif (bundled)", stack: '"Source Serif 4", ui-serif, Georgia, serif' },
-  { key: "georgia", label: "Georgia", stack: 'Georgia, "Times New Roman", serif' },
-  { key: "palatino", label: "Palatino", stack: 'Palatino, "Palatino Linotype", "Book Antiqua", serif' },
-  { key: "baskerville", label: "Baskerville", stack: 'Baskerville, Cambria, Georgia, serif' },
+export const FONT_FAMILIES: Array<{
+  key: string;
+  label: string;
+  stack: string;
+}> = [
+  {
+    key: "sourceSerif",
+    label: "Source Serif (bundled)",
+    stack: '"Source Serif 4", ui-serif, Georgia, serif',
+  },
+  {
+    key: "georgia",
+    label: "Georgia",
+    stack: 'Georgia, "Times New Roman", serif',
+  },
+  {
+    key: "palatino",
+    label: "Palatino",
+    stack: 'Palatino, "Palatino Linotype", "Book Antiqua", serif',
+  },
+  {
+    key: "baskerville",
+    label: "Baskerville",
+    stack: "Baskerville, Cambria, Georgia, serif",
+  },
   { key: "times", label: "Times", stack: '"Times New Roman", Times, serif' },
-  { key: "system", label: "System sans", stack: 'system-ui, -apple-system, "Segoe UI", sans-serif' },
-  { key: "helvetica", label: "Helvetica / Arial", stack: '"Helvetica Neue", Helvetica, Arial, sans-serif' },
-  { key: "verdana", label: "Verdana", stack: 'Verdana, Geneva, sans-serif' },
-  { key: "trebuchet", label: "Trebuchet", stack: '"Trebuchet MS", "Lucida Grande", sans-serif' },
+  {
+    key: "system",
+    label: "System sans",
+    stack: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+  },
+  {
+    key: "helvetica",
+    label: "Helvetica / Arial",
+    stack: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+  },
+  { key: "verdana", label: "Verdana", stack: "Verdana, Geneva, sans-serif" },
+  {
+    key: "trebuchet",
+    label: "Trebuchet",
+    stack: '"Trebuchet MS", "Lucida Grande", sans-serif',
+  },
 ];
 
 export function fontStack(key: string): string {
-  return FONT_FAMILIES.find((entry) => entry.key === key)?.stack ?? FONT_FAMILIES[0]!.stack;
+  return (
+    FONT_FAMILIES.find((entry) => entry.key === key)?.stack ??
+    FONT_FAMILIES[0]!.stack
+  );
 }
 
 /**
@@ -144,12 +197,23 @@ export function fontStack(key: string): string {
  * A long verse and a two-word one cannot share a size, so this steps down by
  * length. Expressed in vw so it holds at any projector resolution.
  */
-export function baseSize(body: string): number {
+export function baseSize(body: string, floor = 0): number {
   const length = body.length;
-  if (length < 90) return 7;
-  if (length < 200) return 5;
-  if (length < 400) return 3.6;
-  return 2.8;
+  const fitted = length < 90 ? 7 : length < 200 ? 5 : length < 400 ? 3.6 : 2.8;
+  /*
+   * `floor` is for text that is never expected to fit.
+   *
+   * The sizes above exist to make a passage fit one screen, which is the right
+   * trade when the alternative is clipping it. It is the wrong trade for a
+   * lexicon entry: that runs to thousands of characters, so the scale bottoms
+   * out at its smallest setting and puts three hundred words on a wall at a
+   * size nobody past the front row can read -- to fit something that was never
+   * going to fit.
+   *
+   * Those bodies are wound instead, so they can be set for reading and run off
+   * the bottom on purpose.
+   */
+  return Math.max(fitted, floor);
 }
 
 /** CSS for the scripture itself, given the theme. */
@@ -157,16 +221,24 @@ export function textStyle(
   theme: ProjectorTheme,
   body: string,
   /**
-   * `vw` for a real screen; `cqw` inside a 16:9 box, where it means the same
-   * proportion of the width and so previews the projector faithfully.
+   * Always `cqw` now: a fraction of the width of the box being drawn into.
+   *
+   * It used to be `vw` on the real screen and `cqw` in a preview, which is the
+   * same proportion only when the preview box is exactly the shape of the
+   * display. It never reliably was, so the wall and the two panes claiming to
+   * preview it wrapped at different points and showed different numbers of
+   * lines. One unit, measured against whatever box each surface actually has,
+   * removes the question.
    */
-  unit: "vw" | "cqw" = "vw",
+  unit: "cqw" = "cqw",
   /** Shrinks the outline, which is authored in px for a projector. */
   outlineScale = 1,
+  /** Smallest setting this body may be shrunk to; see [`baseSize`]. */
+  floor = 0,
 ): React.CSSProperties {
   const style: React.CSSProperties = {
     fontFamily: fontStack(theme.fontFamily),
-    fontSize: `${(baseSize(body) * theme.fontScale).toFixed(2)}${unit}`,
+    fontSize: `${(baseSize(body, floor) * theme.fontScale).toFixed(2)}${unit}`,
     color: theme.textColor,
   };
 
@@ -197,7 +269,10 @@ export function withAlpha(hex: string, alpha: number): string {
   const clean = hex.replace("#", "");
   const full =
     clean.length === 3
-      ? clean.split("").map((part) => part + part).join("")
+      ? clean
+          .split("")
+          .map((part) => part + part)
+          .join("")
       : clean.padEnd(6, "0").slice(0, 6);
   const value = Number.parseInt(full, 16);
   if (!Number.isFinite(value)) return `rgba(0,0,0,${alpha})`;
@@ -219,5 +294,7 @@ export const getTheme = () => invoke<ProjectorTheme>("get_theme");
 export const allowBackground = (path: string | null) =>
   invoke<void>("set_background", { path });
 
-export const onTheme = (handler: (theme: ProjectorTheme) => void): Promise<UnlistenFn> =>
+export const onTheme = (
+  handler: (theme: ProjectorTheme) => void,
+): Promise<UnlistenFn> =>
   listen<ProjectorTheme>(EVENT_THEME, (event) => handler(event.payload));

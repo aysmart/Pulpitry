@@ -91,6 +91,15 @@ pub struct LiveContent {
     /// anything that did not come from the verse library.
     #[serde(default)]
     pub ids: Vec<i64>,
+    /// How far through a long body it has been wound, 0 at the top and 1 at
+    /// the end.
+    ///
+    /// A fraction rather than a screen number, because every surface showing
+    /// this holds a different amount of text -- the projector, the second
+    /// display, a paired Castavox -- and a screen number is a place that exists
+    /// on one of them and not the others.
+    #[serde(default)]
+    pub progress: f32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -565,6 +574,9 @@ mod tests {
             },
             caption: "John 3:16-17 (KJV)".into(),
             ids: vec![26137, 26138],
+            // Nothing this short is ever wound; the field exists for a lexicon
+            // entry, which is the one body that outgrows a screen.
+            progress: 0.0,
         }
     }
 

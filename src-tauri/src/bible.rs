@@ -98,7 +98,24 @@ CREATE TABLE IF NOT EXISTS lexicon (
     translit    TEXT NOT NULL DEFAULT '',
     part        TEXT NOT NULL DEFAULT '',
     gloss       TEXT NOT NULL DEFAULT '',
-    definition  TEXT NOT NULL DEFAULT ''
+    definition  TEXT NOT NULL DEFAULT '',
+    -- Thayer's, where there is one. Greek New Testament only.
+    thayer      TEXT NOT NULL DEFAULT ''
+);
+
+/*
+ * Which build of a bundled resource is in the tables above.
+ *
+ * The interlinear and the lexicon were guarded on row count alone, which
+ * answers "has this ever been imported" and not "is this the current text".
+ * They are the same count either way, so a correction to the words themselves
+ * -- 2,218 Thayer's entries reaching the operator with a literal `&#x27;` in
+ * the middle of a sentence -- would have landed on new installations only, and
+ * never on anybody who already had the app.
+ */
+CREATE TABLE IF NOT EXISTS imports (
+    name        TEXT PRIMARY KEY,
+    fingerprint TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS verse_embeddings (
@@ -125,6 +142,59 @@ pub struct Translation {
     pub name: String,
     pub year: i64,
     pub verse_count: i64,
+}
+
+/// A stable fingerprint of a bundled resource, so a corrected one reimports.
+///
+/// FNV-1a over the bytes, with the length mixed in. Hand-rolled in six lines
+/// because the only requirement is that the same file gives the same answer on
+/// every machine and for ever: `DefaultHasher` is explicitly not stable across
+/// Rust releases, and a hash that changes when the toolchain does would rewrite
+/// half a million rows on somebody's Sunday morning for no reason. It is not a
+/// checksum -- nothing here is defending against a tampered resource, only
+/// noticing that the text changed.
+fn fingerprint(raw: &str) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in raw.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{:016x}-{}", hash, raw.len())
+}
+
+/// The fingerprint of the resource that filled a table, if one is recorded.
+///
+/// Missing on any database built before `imports` existed, which reads as "not
+/// current" and costs those installations one reimport.
+fn imported_mark(connection: &Connection, name: &str) -> Option<String> {
+    connection
+        .query_row("SELECT fingerprint FROM imports WHERE name = ?1", params![name], |row| {
+            row.get(0)
+        })
+        .optional()
+        .ok()
+        .flatten()
+}
+
+/// Columns added after a table first shipped.
+///
+/// `CREATE TABLE IF NOT EXISTS` does nothing at all to a table that already
+/// exists, so a new column has to be added by hand — and finding that out cost
+/// a release in which every launch logged "table lexicon has no column named
+/// thayer" and the lexicon silently stayed empty on every machine that had
+/// already run the previous version.
+///
+/// SQLite has no `ADD COLUMN IF NOT EXISTS`, so each is attempted and a
+/// complaint that it already exists is the expected outcome on every run after
+/// the first. Append only: removing an entry does not remove the column from
+/// anybody's database.
+fn migrate(connection: &Connection) {
+    for statement in ["ALTER TABLE lexicon ADD COLUMN thayer TEXT NOT NULL DEFAULT ''"] {
+        // A failure here is almost always "duplicate column name", which is
+        // success. Anything else surfaces when the query that needs the column
+        // runs, with a message naming the column rather than the migration.
+        let _ = connection.execute(statement, []);
+    }
 }
 
 /// One entry of `resources/translations.json`, written by scripts/build-bible.mjs.
@@ -194,6 +264,9 @@ pub struct LexiconEntry {
     /// The full entry, paragraphs separated by newlines. Plain text: the
     /// source is HTML and is stripped at build time rather than rendered.
     pub definition: String,
+    /// Thayer's, where there is one — Greek New Testament only, so every
+    /// Hebrew word and a good many Greek ones have none.
+    pub thayer: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -242,6 +315,7 @@ impl Library {
             )?;
         }
         connection.execute_batch(SCHEMA).context("could not prepare the verse library")?;
+        migrate(&connection);
         connection.pragma_update(None, "user_version", SCHEMA_VERSION)?;
 
         Ok(Self { connection: Mutex::new(connection) })
@@ -264,6 +338,7 @@ impl Library {
     pub(crate) fn in_memory() -> Result<Self> {
         let connection = Connection::open_in_memory()?;
         connection.execute_batch(SCHEMA)?;
+        migrate(&connection);
         Ok(Self { connection: Mutex::new(connection) })
     }
 
@@ -704,12 +779,13 @@ impl Library {
             .with_context(|| format!("could not decompress {}", path.display()))?;
 
         let expected = raw.lines().filter(|line| !line.trim().is_empty()).count() as i64;
+        let mark = fingerprint(&raw);
 
         {
             let connection = self.connection.lock();
             let held: i64 =
                 connection.query_row("SELECT COUNT(*) FROM interlinear", [], |row| row.get(0))?;
-            if held == expected {
+            if held == expected && imported_mark(&connection, "interlinear").as_deref() == Some(&mark) {
                 return Ok(0);
             }
         }
@@ -750,6 +826,13 @@ impl Library {
                 imported += 1;
             }
         }
+        // Recorded inside the transaction: a mark without the rows it
+        // describes would tell the next launch there is nothing to do.
+        transaction.execute(
+            "INSERT INTO imports(name, fingerprint) VALUES (?1, ?2)
+             ON CONFLICT(name) DO UPDATE SET fingerprint = excluded.fingerprint",
+            params!["interlinear", mark],
+        )?;
         transaction.commit()?;
 
         crate::log_line!("[bible] imported {imported} words of Greek and Hebrew");
@@ -800,9 +883,9 @@ impl Library {
         };
 
         for (sql, key) in [
-            ("SELECT strongs, lemma, translit, part, gloss, definition FROM lexicon WHERE strongs = ?1", trimmed.to_string()),
-            ("SELECT strongs, lemma, translit, part, gloss, definition FROM lexicon WHERE strongs = ?1 COLLATE NOCASE", trimmed.to_string()),
-            ("SELECT strongs, lemma, translit, part, gloss, definition FROM lexicon WHERE strongs = ?1 COLLATE NOCASE", base.clone()),
+            ("SELECT strongs, lemma, translit, part, gloss, definition, thayer FROM lexicon WHERE strongs = ?1", trimmed.to_string()),
+            ("SELECT strongs, lemma, translit, part, gloss, definition, thayer FROM lexicon WHERE strongs = ?1 COLLATE NOCASE", trimmed.to_string()),
+            ("SELECT strongs, lemma, translit, part, gloss, definition, thayer FROM lexicon WHERE strongs = ?1 COLLATE NOCASE", base.clone()),
             /*
              * Last: the first entry sharing this number, whatever its suffix.
              *
@@ -814,7 +897,7 @@ impl Library {
              * Ordered so the answer is stable rather than whichever row the
              * planner reached first: the same word gives the same entry twice.
              */
-            ("SELECT strongs, lemma, translit, part, gloss, definition FROM lexicon WHERE strongs LIKE ?1 || '%' ORDER BY strongs LIMIT 1", base.clone()),
+            ("SELECT strongs, lemma, translit, part, gloss, definition, thayer FROM lexicon WHERE strongs LIKE ?1 || '%' ORDER BY strongs LIMIT 1", base.clone()),
         ] {
             if key.is_empty() {
                 continue;
@@ -838,6 +921,7 @@ impl Library {
                 part: row.get(3)?,
                 gloss: row.get(4)?,
                 definition: row.get(5)?,
+                thayer: row.get(6)?,
             })
         })?;
         Ok(rows.next().transpose()?)
@@ -858,11 +942,12 @@ impl Library {
             .with_context(|| format!("could not decompress {}", path.display()))?;
 
         let expected = raw.lines().filter(|line| !line.trim().is_empty()).count() as i64;
+        let mark = fingerprint(&raw);
         {
             let connection = self.connection.lock();
             let held: i64 =
                 connection.query_row("SELECT COUNT(*) FROM lexicon", [], |row| row.get(0))?;
-            if held == expected {
+            if held == expected && imported_mark(&connection, "lexicon").as_deref() == Some(&mark) {
                 return Ok(0);
             }
         }
@@ -874,8 +959,8 @@ impl Library {
         let mut imported = 0i64;
         {
             let mut insert = transaction.prepare(
-                "INSERT INTO lexicon(strongs, lemma, translit, part, gloss, definition)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO lexicon(strongs, lemma, translit, part, gloss, definition, thayer)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             )?;
             for line in raw.lines() {
                 if line.trim().is_empty() {
@@ -894,10 +979,18 @@ impl Library {
                     // Paragraphs are marked rather than embedded, so a row
                     // stays a row. Put back on the way in.
                     fields[5].replace('¶', "\n"),
+                    fields.get(6).unwrap_or(&"").replace('¶', "\n"),
                 ])?;
                 imported += 1;
             }
         }
+        // Recorded inside the transaction: a mark without the rows it
+        // describes would tell the next launch there is nothing to do.
+        transaction.execute(
+            "INSERT INTO imports(name, fingerprint) VALUES (?1, ?2)
+             ON CONFLICT(name) DO UPDATE SET fingerprint = excluded.fingerprint",
+            params!["lexicon", mark],
+        )?;
         transaction.commit()?;
 
         crate::log_line!("[bible] imported {imported} lexicon entries");

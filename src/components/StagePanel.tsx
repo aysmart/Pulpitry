@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 import {
@@ -12,10 +14,15 @@ import {
 } from "../lib/projector";
 import { fontStack, type ProjectorTheme } from "../lib/theme";
 import { Backdrop } from "./Backdrop";
-import { presentableLabel, presentableText, type Presentable } from "../lib/usePresentation";
+import {
+  presentableLabel,
+  presentableText,
+  type Presentable,
+} from "../lib/usePresentation";
 import { EmptyState, Panel } from "./Panel";
 import { MediaTransport } from "./MediaTransport";
 import { SlideCanvas } from "./SlideCanvas";
+import type { Extent } from "./LiveBodyView";
 import { TickerBand } from "./TickerBand";
 import { VideoSurface } from "./VideoSurface";
 
@@ -30,12 +37,18 @@ function Stage({
   projectorOpen = false,
   audio = { muted: false, volume: 1 },
   command,
+  progress = 0,
+  onExtent,
 }: {
   body: string | null;
   /** A picture or clip, which fills the pane instead of the text layout. */
   asset?: { kind: "image" | "media"; path: string; looping: boolean } | null;
   /** A written slide, which is its own layout and must not be flattened. */
   slide?: { blocks: TextBlock[]; theme: ProjectorTheme } | null;
+  /** How far through a long slide it is wound, and how far it goes. Live
+   *  only. */
+  progress?: number;
+  onExtent?: (extent: Extent) => void;
   reference: string | null;
   tone: "preview" | "live";
   empty: string;
@@ -48,17 +61,32 @@ function Stage({
 }) {
   if (slide) {
     return (
-      <div className="flex h-full items-center justify-center p-3" data-selectable>
-        <SlideCanvas blocks={slide.blocks} theme={slide.theme} />
+      <div
+        className="flex h-full items-center justify-center p-3"
+        data-selectable
+      >
+        <SlideCanvas
+          blocks={slide.blocks}
+          theme={slide.theme}
+          progress={progress}
+          onExtent={onExtent}
+        />
       </div>
     );
   }
 
   if (asset) {
     return (
-      <div className="flex h-full items-center justify-center bg-pulpitry-ink" data-selectable>
+      <div
+        className="flex h-full items-center justify-center bg-pulpitry-ink"
+        data-selectable
+      >
         {asset.kind === "image" ? (
-          <img src={convertFileSrc(asset.path)} alt="" className="max-h-full max-w-full object-contain" />
+          <img
+            src={convertFileSrc(asset.path)}
+            alt=""
+            className="max-h-full max-w-full object-contain"
+          />
         ) : (
           <VideoSurface
             path={asset.path}
@@ -109,7 +137,9 @@ function Stage({
                         paintOrder: "stroke fill",
                       }
                     : {}),
-                  ...(theme.shadow ? { textShadow: "0 0.06em 0.14em rgba(0,0,0,0.55)" } : {}),
+                  ...(theme.shadow
+                    ? { textShadow: "0 0.06em 0.14em rgba(0,0,0,0.55)" }
+                    : {}),
                 }
               : undefined
           }
@@ -119,7 +149,11 @@ function Stage({
         {reference && (!theme || theme.showReference) ? (
           <p
             className={`text-center text-[12px] tracking-wide ${
-              theme ? "opacity-60" : tone === "live" ? "text-pulpitry-gold" : "text-pulpitry-muted"
+              theme
+                ? "opacity-60"
+                : tone === "live"
+                  ? "text-pulpitry-gold"
+                  : "text-pulpitry-muted"
             }`}
             style={theme ? { color: theme.textColor } : undefined}
           >
@@ -143,7 +177,8 @@ function liveSlide(body: LiveBody | undefined, theme: ProjectorTheme) {
 
 /** The picture or clip behind an item, if that is what it is. */
 function assetOf(item: Presentable | null) {
-  if (item?.kind === "image") return { kind: "image" as const, path: item.path, looping: false };
+  if (item?.kind === "image")
+    return { kind: "image" as const, path: item.path, looping: false };
   if (item?.kind === "media")
     return { kind: "media" as const, path: item.path, looping: item.looping };
   return null;
@@ -151,7 +186,8 @@ function assetOf(item: Presentable | null) {
 
 /** The same, for whatever the projector is currently showing. */
 function liveAsset(body: LiveBody | undefined) {
-  if (body?.kind === "image") return { kind: "image" as const, path: body.path, looping: false };
+  if (body?.kind === "image")
+    return { kind: "image" as const, path: body.path, looping: false };
   if (body?.kind === "media")
     return { kind: "media" as const, path: body.path, looping: body.looping };
   return null;
@@ -172,6 +208,7 @@ export function StagePanel({
   onDisplay,
   onClear,
   onStep,
+  onWind,
   onAdd,
   theme,
   canStepBack,
@@ -187,6 +224,8 @@ export function StagePanel({
   onDisplay: () => void;
   onClear: () => void;
   onStep: (forward: boolean) => void;
+  /** Winds what is live to a point in it, 0 at the top and 1 at the end. */
+  onWind: (progress: number) => void;
   onAdd: () => void;
   theme: ProjectorTheme;
   canStepBack: boolean;
@@ -205,19 +244,41 @@ export function StagePanel({
   };
   ticker: Ticker;
 }) {
+  /*
+   * How many screenfuls what is live takes, as the Live pane measured it.
+   *
+   * Held here rather than derived from the content, because it is a fact about
+   * layout -- the typeface, the theme's scale and the shape of the screen all
+   * decide it -- and the only place those are all true at once is the pane that
+   * renders the wall in miniature.
+   */
+  const [liveExtent, setLiveExtent] = useState<Extent>({
+    screenfuls: 1,
+    step: 1,
+  });
+
+  /*
+   * The stored position is a point in the text; the operator thinks in screens.
+   *
+   * The point is what every surface agrees on -- this preview, the projector,
+   * the second display, a paired Castavox -- because each of them shows a
+   * different amount of text and a screen number would mean a different place
+   * on each. But "2 of 6" is what an operator can act on, so the two are
+   * converted here, using what *this* surface measured.
+   *
+   * `step` is how much of the whole text one press moves on this surface, so
+   * the conversion is a division rather than a fraction of the press count. It
+   * has to be: the same press moves a different distance on a screen showing
+   * more text at once.
+   */
+  const lastScreen = Math.max(1, liveExtent.screenfuls - 1);
+  const liveScreen = Math.min(
+    lastScreen,
+    Math.round((live?.progress ?? 0) / (liveExtent.step || 1)),
+  );
+
   return (
     <div className="flex min-h-0 flex-col gap-2">
-      <Panel title="Preview" className="flex-1">
-        <Stage
-          body={preview ? presentableText(preview) : null}
-          asset={assetOf(preview)}
-          slide={slideOf(preview, theme)}
-          reference={preview ? presentableLabel(preview) : null}
-          tone="preview"
-          empty="Pick a verse from the Chapter panel to stage it."
-        />
-      </Panel>
-
       <div className="flex shrink-0 items-center gap-2">
         <button
           type="button"
@@ -227,10 +288,20 @@ export function StagePanel({
         >
           Display
         </button>
-        <button type="button" onClick={() => onStep(false)} disabled={!canStepBack} className={CONTROL}>
+        <button
+          type="button"
+          onClick={() => onStep(false)}
+          disabled={!canStepBack}
+          className={CONTROL}
+        >
           Prev
         </button>
-        <button type="button" onClick={() => onStep(true)} disabled={!canStepForward} className={CONTROL}>
+        <button
+          type="button"
+          onClick={() => onStep(true)}
+          disabled={!canStepForward}
+          className={CONTROL}
+        >
           Next
         </button>
         <button
@@ -242,12 +313,73 @@ export function StagePanel({
         >
           Add
         </button>
-        <button type="button" onClick={onClear} disabled={!live} className={CONTROL}>
+        <button
+          type="button"
+          onClick={onClear}
+          disabled={!live}
+          className={CONTROL}
+        >
           Clear
         </button>
       </div>
 
-      <Panel title="Live" accent="gold" className="flex-1" bodyClassName="relative [container-type:size]">
+      {/*
+        Winding controls, and only when there is something to wind.
+        
+        They appear for the one body that outgrows a screen -- a lexicon entry,
+        which runs to several hundred words. Every other body fits, and a pair
+        of permanently dead arrows beside Display would be four more pixels of
+        chrome for an operator to learn to ignore.
+        
+        The count is what the Live pane measured. It renders the same content in
+        the same proportions as the wall, so its answer is the wall's answer.
+      */}
+      {liveExtent.screenfuls > 1 ? (
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-[11px] text-pulpitry-muted">
+            This is taller than the screen — wind it as you read.
+          </span>
+          <span className="flex-1" />
+          <span className="text-[11px] text-pulpitry-muted tabular-nums">
+            {liveScreen + 1} of {liveExtent.screenfuls}
+          </span>
+          <button
+            type="button"
+            onClick={() => onWind((liveScreen - 1) * liveExtent.step)}
+            disabled={liveScreen === 0}
+            title="Back up a screenful"
+            className={CONTROL}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              onWind(
+                liveScreen + 1 >= lastScreen
+                  ? 1
+                  : (liveScreen + 1) / lastScreen,
+              )
+            }
+            disabled={liveScreen >= lastScreen}
+            title="Down a screenful"
+            className={CONTROL}
+          >
+            ↓
+          </button>
+        </div>
+      ) : null}
+
+      <Panel
+        title="Live"
+        accent="gold"
+        // The whole column. Preview moved out to sit beside the library, where
+        // the operator is choosing what to stage; Live belongs where they are
+        // watching what the congregation sees, and it had half the height for
+        // the more important half of the job.
+        className="flex-1"
+        bodyClassName="relative [container-type:size]"
+      >
         <Stage
           body={live ? bodyText(live.body) : null}
           asset={liveAsset(live?.body)}
@@ -259,6 +391,8 @@ export function StagePanel({
           projectorOpen={projectorOpen}
           audio={audio}
           command={media.command}
+          progress={live?.progress ?? 0}
+          onExtent={setLiveExtent}
         />
         {/* Shown here as well as on the wall, so the operator can see what the
             congregation is reading rather than trusting that it is there. */}
@@ -279,5 +413,48 @@ export function StagePanel({
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * What is staged next, beside the library that stages it.
+ *
+ * Split out of the stage column so that Live could have all of it. These two
+ * were stacked, which gave each of them half the height and put Preview -- a
+ * look ahead -- level in weight with the thing the congregation is actually
+ * reading. It also sat a long way from the library, so choosing a verse meant
+ * looking at one side of the screen and checking the result on the other.
+ *
+ * # It carries the theme, which it did not used to
+ *
+ * As a short pane under Live it drew plain text on the panel's own background,
+ * and that was defensible: it was a reminder of what was staged, and the pane
+ * beside it was already showing the real thing.
+ *
+ * It is not defensible now. This is a column the width of the wall's own
+ * proportions, and the whole reason to look at it is to know what the
+ * congregation will see -- so it renders the typeface, the colour and the
+ * backdrop they will actually get. A preview that looks nothing like the output
+ * is a preview of nothing.
+ */
+export function PreviewPanel({
+  preview,
+  theme,
+}: {
+  preview: Presentable | null;
+  theme: ProjectorTheme;
+}) {
+  return (
+    <Panel title="Preview">
+      <Stage
+        body={preview ? presentableText(preview) : null}
+        asset={assetOf(preview)}
+        slide={slideOf(preview, theme)}
+        reference={preview ? presentableLabel(preview) : null}
+        tone="preview"
+        empty="Pick a verse from the Chapter panel to stage it."
+        theme={theme}
+      />
+    </Panel>
   );
 }

@@ -1,7 +1,7 @@
 import type { TextBlock } from "../lib/projector";
 import type { ProjectorTheme } from "../lib/theme";
 import { Backdrop } from "./Backdrop";
-import { LiveBodyView } from "./LiveBodyView";
+import { LiveBodyView, type Extent } from "./LiveBodyView";
 
 /**
  * What a slide will look like on the wall.
@@ -11,9 +11,43 @@ import { LiveBodyView } from "./LiveBodyView";
  * will see. A stylised approximation would defeat the point of laying it out
  * at all.
  */
-export function SlideCanvas({ blocks, theme }: { blocks: TextBlock[]; theme: ProjectorTheme }) {
+export function SlideCanvas({
+  blocks,
+  theme,
+  progress = 0,
+  onExtent,
+}: {
+  blocks: TextBlock[];
+  theme: ProjectorTheme;
+  /** How far through a long slide it is wound, 0 to 1. */
+  progress?: number;
+  /** How far it runs. This box is 16:9, and so is the projector's own text
+   *  frame, so what it measures here is what the wall would. */
+  onExtent?: (extent: Extent) => void;
+}) {
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded border border-pulpitry-line [container-type:inline-size]">
+    <div
+      /*
+       * `size`, not `inline-size`.
+       *
+       * `inline-size` establishes containment on the width only, so `cqh` inside
+       * it is not resolvable and the browser falls back to the *viewport*
+       * height. The padding below is `py-[5cqh]`, so in this box it was taking
+       * 5% of the whole app window rather than 5% of the box -- a preview with
+       * several times the vertical padding the wall has, and therefore a
+       * different amount of room, a different wrap, and a different number of
+       * lines than the thing it claims to be previewing.
+       *
+       * The 16:9 ratio below gives the box a definite height, which is what
+       * `size` containment needs to resolve against.
+       */
+      className="relative w-full overflow-hidden rounded border border-pulpitry-line [container-type:size]"
+      // Fixed, not taken from the display. Every surface that shows the
+      // congregation's text is 16:9 -- this box, the Live pane, and the
+      // projector's own frame -- so the same words break in the same places on
+      // all of them.
+      style={{ aspectRatio: 16 / 9 }}
+    >
       <Backdrop theme={theme} playVideo={false} />
 
       <div className="absolute inset-0 flex flex-col items-center justify-center px-[6cqw] py-[5cqh]">
@@ -24,9 +58,10 @@ export function SlideCanvas({ blocks, theme }: { blocks: TextBlock[]; theme: Pro
           // The outline is authored in px against a ~1920px screen; at this
           // width the same value would swallow the letterforms.
           outlineScale={0.2}
+          progress={progress}
+          onExtent={onExtent}
         />
       </div>
     </div>
   );
 }
-

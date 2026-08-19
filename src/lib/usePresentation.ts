@@ -2,7 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 
 import { adjacentVerse, type Verse } from "./bible";
 import type { SongSection } from "./catalog";
-import { getLive, onLive, setLive, type LiveContent, type TextBlock } from "./projector";
+import {
+  getLive,
+  onLive,
+  setLive,
+  type LiveContent,
+  type TextBlock,
+} from "./projector";
 
 /**
  * Something the operator can stage and put on the projector.
@@ -13,9 +19,21 @@ import { getLive, onLive, setLive, type LiveContent, type TextBlock } from "./pr
  */
 export type Presentable =
   | { kind: "scripture"; verses: Verse[] }
-  | { kind: "lyric"; songId: number; title: string; index: number; sections: SongSection[] }
+  | {
+      kind: "lyric";
+      songId: number;
+      title: string;
+      index: number;
+      sections: SongSection[];
+    }
   | { kind: "image"; itemId: number; title: string; path: string }
-  | { kind: "media"; itemId: number; title: string; path: string; looping: boolean }
+  | {
+      kind: "media";
+      itemId: number;
+      title: string;
+      path: string;
+      looping: boolean;
+    }
   | { kind: "slide"; itemId: number; title: string; blocks: TextBlock[] };
 
 /** The section a lyric item currently points at. */
@@ -24,9 +42,11 @@ export function currentSection(item: Presentable): SongSection | null {
 }
 
 export function presentableText(item: Presentable): string {
-  if (item.kind === "scripture") return item.verses.map((verse) => verse.text).join(" ");
+  if (item.kind === "scripture")
+    return item.verses.map((verse) => verse.text).join(" ");
   // A slide is already written out; joining it is how a list summarises it.
-  if (item.kind === "slide") return item.blocks.map((block) => block.text).join(" ");
+  if (item.kind === "slide")
+    return item.blocks.map((block) => block.text).join(" ");
   // A picture has no text, and captioning it with its filename would put the
   // filename on the projector.
   if (item.kind === "image" || item.kind === "media") return "";
@@ -39,12 +59,15 @@ export function presentableLabel(item: Presentable): string {
     const label = currentSection(item)?.label;
     return label ? `${item.title} — ${label}` : item.title;
   }
-  if (item.kind === "image" || item.kind === "media" || item.kind === "slide") return item.title;
+  if (item.kind === "image" || item.kind === "media" || item.kind === "slide")
+    return item.title;
   const first = item.verses[0];
   if (!first) return "";
   const last = item.verses[item.verses.length - 1]!;
   const range =
-    first.verse === last.verse ? `${first.verse}` : `${first.verse}-${last.verse}`;
+    first.verse === last.verse
+      ? `${first.verse}`
+      : `${first.verse}-${last.verse}`;
   return `${first.book} ${first.chapter}:${range} (${first.translation})`;
 }
 
@@ -54,16 +77,36 @@ export function presentableIds(item: Presentable): number[] {
 
 export function toLiveContent(item: Presentable): LiveContent {
   if (item.kind === "slide") {
-    return { body: { kind: "richText", blocks: item.blocks }, caption: "", ids: [] };
+    /*
+     * The title, as scripture and lyrics both do.
+     *
+     * It was empty here, which cost nothing until a slide became the way an
+     * original-language word reaches the screen: staging ἀγάπη sent the
+     * transliteration and the gloss over the mirror with no title and no
+     * reference, so a paired Castavox drew two unlabelled lines and the stream
+     * showed a Greek word nobody could place.
+     */
+    return {
+      body: { kind: "richText", blocks: item.blocks },
+      caption: presentableLabel(item),
+      ids: [],
+      progress: 0,
+    };
   }
   if (item.kind === "image") {
-    return { body: { kind: "image", path: item.path }, caption: "", ids: [] };
+    return {
+      body: { kind: "image", path: item.path },
+      caption: "",
+      ids: [],
+      progress: 0,
+    };
   }
   if (item.kind === "media") {
     return {
       body: { kind: "media", path: item.path, looping: item.looping },
       caption: "",
       ids: [],
+      progress: 0,
     };
   }
   if (item.kind === "lyric") {
@@ -73,15 +116,20 @@ export function toLiveContent(item: Presentable): LiveContent {
       body: { kind: "lyric", lines: currentSection(item)?.lines ?? [] },
       caption: presentableLabel(item),
       ids: [],
+      progress: 0,
     };
   }
   return {
     body: {
       kind: "scripture",
-      lines: item.verses.map((verse) => ({ number: verse.verse, text: verse.text })),
+      lines: item.verses.map((verse) => ({
+        number: verse.verse,
+        text: verse.text,
+      })),
     },
     caption: presentableLabel(item),
     ids: presentableIds(item),
+    progress: 0,
   };
 }
 
@@ -119,7 +167,9 @@ export function usePresentation() {
     let active = true;
     let unlisten: (() => void) | undefined;
 
-    void getLive().then((current) => active && setLiveState(current)).catch(() => undefined);
+    void getLive()
+      .then((current) => active && setLiveState(current))
+      .catch(() => undefined);
     void onLive((next) => {
       if (!active) return;
       setLiveState(next);
@@ -189,11 +239,37 @@ export function usePresentation() {
     [show],
   );
 
-  const showVerse = useCallback((verse: Verse) => showVerses([verse]), [showVerses]);
+  const showVerse = useCallback(
+    (verse: Verse) => showVerses([verse]),
+    [showVerses],
+  );
   const showItem = useCallback((item: Presentable) => show(item), [show]);
 
   const clearLive = useCallback(() => {
     void setLive(null);
+  }, []);
+
+  /**
+   * Winds what is live to a point in it, from 0 at the top to 1 at the end.
+   *
+   * For the one body that does not fit on a screen: a lexicon entry runs to
+   * several hundred words, and the choice before this was between clipping it
+   * and shrinking it to a size nobody at the back can read.
+   *
+   * Takes a fraction rather than a number of screenfuls, because a screenful is
+   * a different amount of text on every surface showing this — the projector,
+   * the second display and a paired Castavox all differ, and a frame number
+   * that exists on one of them does not exist on the others. Whoever calls this
+   * converts, using the measurement it has.
+   */
+  const wind = useCallback((progress: number) => {
+    setLiveState((current) => {
+      if (!current) return current;
+      const next = { ...current, progress: Math.min(1, Math.max(0, progress)) };
+      if (next.progress === current.progress) return current;
+      void setLive(next);
+      return next;
+    });
   }, []);
 
   /**
@@ -220,7 +296,9 @@ export function usePresentation() {
         if (index < 0 || index >= preview.sections.length) return;
         next = { ...preview, index };
       } else {
-        const edge = forward ? preview.verses[preview.verses.length - 1] : preview.verses[0];
+        const edge = forward
+          ? preview.verses[preview.verses.length - 1]
+          : preview.verses[0];
         if (!edge) return;
         const verse = await adjacentVerse(
           edge.translation,
@@ -248,7 +326,8 @@ export function usePresentation() {
    * cannot be answered without a query, so it stays available.
    */
   const canStepBack =
-    preview?.kind === "scripture" || (preview?.kind === "lyric" && preview.index > 0);
+    preview?.kind === "scripture" ||
+    (preview?.kind === "lyric" && preview.index > 0);
   const canStepForward =
     preview?.kind === "scripture" ||
     (preview?.kind === "lyric" && preview.index < preview.sections.length - 1);
@@ -267,6 +346,7 @@ export function usePresentation() {
     showVerses,
     showItem,
     clearLive,
+    wind,
     step,
     canStepBack,
     canStepForward,

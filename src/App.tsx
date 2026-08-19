@@ -10,7 +10,7 @@ import { QueueRail } from "./components/QueueRail";
 import { ScripturePanel } from "./components/ScripturePanel";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SlidesFromSermon } from "./components/SlidesFromSermon";
-import { StagePanel } from "./components/StagePanel";
+import { PreviewPanel, StagePanel } from "./components/StagePanel";
 import { TopBar } from "./components/TopBar";
 import { TranscriptPanel } from "./components/TranscriptPanel";
 import {
@@ -23,7 +23,14 @@ import {
   type AudioDevice,
   type SettingsView,
 } from "./lib/api";
-import { libraryStatus, onLibraryStatus, type LibraryStatus, type Verse } from "./lib/bible";
+import {
+  lexiconEntry,
+  libraryStatus,
+  onLibraryStatus,
+  type LexiconEntry,
+  type LibraryStatus,
+  type Verse,
+} from "./lib/bible";
 import {
   closeProjector,
   listDisplays,
@@ -85,6 +92,7 @@ export default function App() {
     keyOf,
     display,
     clearLive,
+    wind,
     step,
     canStepBack,
     canStepForward,
@@ -101,12 +109,36 @@ export default function App() {
    */
   const [originalVerse, setOriginalVerse] = useState<Verse | null>(null);
 
+  /*
+   * The lexicon entry the operator last opened, held here rather than in the
+   * panel that opens it: the Original panel raises the question and the library
+   * tab answers it, so neither owns the answer.
+   *
+   * `lexiconAt` is a timestamp rather than a flag so that opening the same word
+   * twice still counts as an event, and the library still switches to it.
+   */
+  const [lexicon, setLexicon] = useState<LexiconEntry | null>(null);
+  const [lexiconLooking, setLexiconLooking] = useState(false);
+  const [lexiconAt, setLexiconAt] = useState(0);
+
+  const openLexicon = useCallback((strongs: string) => {
+    if (!strongs) return;
+    setLexiconLooking(true);
+    setLexiconAt(Date.now());
+    void lexiconEntry(strongs)
+      .then(setLexicon)
+      .catch(() => setLexicon(null))
+      .finally(() => setLexiconLooking(false));
+  }, []);
+
   useEffect(() => {
     if (preview?.kind !== "scripture") return;
     const first = preview.verses[0] ?? null;
     // Compared by id rather than by object: staging the same verse again --
     // stepping through a passage, re-showing it -- should not re-query.
-    setOriginalVerse((current) => (current?.id === first?.id ? current : first));
+    setOriginalVerse((current) =>
+      current?.id === first?.id ? current : first,
+    );
   }, [preview]);
 
   const { detections } = useDetections();
@@ -132,8 +164,14 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [displays, setDisplays] = useState<Display[]>([]);
-  const [projector, setProjector] = useState<ProjectorState>({ open: false, display: null });
-  const [second, setSecond] = useState<SecondState>({ open: false, display: null });
+  const [projector, setProjector] = useState<ProjectorState>({
+    open: false,
+    display: null,
+  });
+  const [second, setSecond] = useState<SecondState>({
+    open: false,
+    display: null,
+  });
 
   // The running order. Kept in the library rather than in state, so closing
   // the app mid-service does not cost the plan.
@@ -176,7 +214,9 @@ export default function App() {
       setLibrary(next);
     };
 
-    void libraryStatus().then(apply).catch(() => undefined);
+    void libraryStatus()
+      .then(apply)
+      .catch(() => undefined);
     void onLibraryStatus(apply).then((stop) => {
       if (active) unlisten = stop;
       else stop();
@@ -193,10 +233,12 @@ export default function App() {
   // the backend, which detects against whatever was saved.
   useEffect(() => {
     if (!settings || library.translations.length === 0) return;
-    const available = (id: string) => library.translations.some((entry) => entry.id === id);
+    const available = (id: string) =>
+      library.translations.some((entry) => entry.id === id);
     setTranslation((current) => {
       if (current && available(current)) return current;
-      if (settings.translation && available(settings.translation)) return settings.translation;
+      if (settings.translation && available(settings.translation))
+        return settings.translation;
       return library.translations[0]?.id ?? "";
     });
   }, [settings, library.translations]);
@@ -233,9 +275,11 @@ export default function App() {
     async (display?: number) => {
       setError(null);
       try {
-        setSecond(second.open && display === undefined
-          ? await closeSecond()
-          : await openSecond(display));
+        setSecond(
+          second.open && display === undefined
+            ? await closeSecond()
+            : await openSecond(display),
+        );
       } catch (err) {
         setError(describeError(err));
       }
@@ -247,9 +291,11 @@ export default function App() {
     async (display?: number) => {
       setError(null);
       try {
-        setProjector(projector.open && display === undefined
-          ? await closeProjector()
-          : await openProjector(display));
+        setProjector(
+          projector.open && display === undefined
+            ? await closeProjector()
+            : await openProjector(display),
+        );
         void refreshDisplays();
       } catch (err) {
         setError(describeError(err));
@@ -259,7 +305,9 @@ export default function App() {
   );
 
   const active =
-    status.state === "listening" || status.state === "starting" || status.state === "reconnecting";
+    status.state === "listening" ||
+    status.state === "starting" ||
+    status.state === "reconnecting";
 
   const toggleListening = useCallback(async () => {
     setError(null);
@@ -324,9 +372,7 @@ export default function App() {
       if (!settings) return;
       setSettings({ ...settings, inputDeviceId: id });
       try {
-        setSettings(
-          await saveSettings({ ...settings, inputDeviceId: id }),
-        );
+        setSettings(await saveSettings({ ...settings, inputDeviceId: id }));
         // The device is read when a session starts, so an in-progress session
         // has to be cycled for the change to take effect mid-service.
         if (active) {
@@ -530,105 +576,145 @@ export default function App() {
       */}
       <main className="flex min-h-0 flex-1 flex-col gap-2 p-2">
         <div className="grid min-h-0 flex-1 gap-2 [grid-template-columns:minmax(200px,0.7fr)_minmax(240px,0.9fr)_minmax(360px,1.5fr)_minmax(180px,0.6fr)]">
-        <TranscriptPanel
-          lines={lines}
-          interim={interim}
-          status={status}
-          onClear={clear}
-          onExport={() => void saveTranscript()}
-          onOpenHistory={() => setHistoryOpen(true)}
-          exporting={exporting}
-        />
-        <Panel
-          title="Detected"
-          actions={
-            detections.length + references.length + suggestions.length > 0 ? (
-              <span className="text-[11px] text-pulpitry-muted tabular-nums">
-                {detections.length + references.length + suggestions.length}
-              </span>
-            ) : undefined
-          }
-        >
-          <Detections
-            detections={detections}
-            references={references}
-            suggestions={suggestions}
-            onPreview={(verse, andShow) => (andShow ? showVerse(verse) : previewVerse(verse))}
-            previewVerseId={
-              preview?.kind === "scripture" ? (preview.verses[0]?.id ?? null) : null
+          <TranscriptPanel
+            lines={lines}
+            interim={interim}
+            status={status}
+            onClear={clear}
+            onExport={() => void saveTranscript()}
+            onOpenHistory={() => setHistoryOpen(true)}
+            exporting={exporting}
+          />
+          <Panel
+            title="Detected"
+            actions={
+              detections.length + references.length + suggestions.length > 0 ? (
+                <span className="text-[11px] text-pulpitry-muted tabular-nums">
+                  {detections.length + references.length + suggestions.length}
+                </span>
+              ) : undefined
             }
-            liveVerseId={live?.ids?.[0] ?? null}
-            listening={active}
-            index={semanticIndex}
-            assistEnabled={settings?.assistEnabled ?? false}
-          />
-        </Panel>
+          >
+            <Detections
+              detections={detections}
+              references={references}
+              suggestions={suggestions}
+              onPreview={(verse, andShow) =>
+                andShow ? showVerse(verse) : previewVerse(verse)
+              }
+              previewVerseId={
+                preview?.kind === "scripture"
+                  ? (preview.verses[0]?.id ?? null)
+                  : null
+              }
+              liveVerseId={live?.ids?.[0] ?? null}
+              listening={active}
+              index={semanticIndex}
+              assistEnabled={settings?.assistEnabled ?? false}
+            />
+          </Panel>
 
-        <StagePanel
-          preview={preview}
-          live={live}
-          onDisplay={display}
-          onClear={clearLive}
-          onStep={(forward) => void step(forward)}
-          onAdd={() => preview && schedule.add(preview)}
-          theme={settings?.projector ?? DEFAULT_THEME}
-          canStepBack={canStepBack}
-          canStepForward={canStepForward}
-          projectorOpen={projector.open}
-          audio={audio}
-          onAudioChange={changeAudio}
-          media={media}
-          ticker={ticker}
-        />
-        <Panel
-          title="Queue"
-          actions={
-            schedule.entries.length > 0 ? (
-              <span className="text-[11px] text-pulpitry-muted tabular-nums">
-                {schedule.entries.length}
-              </span>
-            ) : undefined
-          }
-        >
-          <QueueRail
-            entries={schedule.entries}
-            name={schedule.name}
-            onStage={(index) => void stageEntry(index)}
-            activeLabel={live?.caption || null}
+          <StagePanel
+            preview={preview}
+            live={live}
+            onDisplay={display}
+            onClear={clearLive}
+            onStep={(forward) => void step(forward)}
+            onWind={wind}
+            onAdd={() => preview && schedule.add(preview)}
+            theme={settings?.projector ?? DEFAULT_THEME}
+            canStepBack={canStepBack}
+            canStepForward={canStepForward}
+            projectorOpen={projector.open}
+            audio={audio}
+            onAudioChange={changeAudio}
+            media={media}
+            ticker={ticker}
           />
-        </Panel>
+          <Panel
+            title="Queue"
+            actions={
+              schedule.entries.length > 0 ? (
+                <span className="text-[11px] text-pulpitry-muted tabular-nums">
+                  {schedule.entries.length}
+                </span>
+              ) : undefined
+            }
+          >
+            <QueueRail
+              entries={schedule.entries}
+              name={schedule.name}
+              onStage={(index, andShow) => {
+                /*
+                 * The staged item, not `preview`: React has not re-rendered
+                 * between the click that staged it and the one that sends it, so
+                 * reading state here would put the *previous* item on screen --
+                 * in front of a congregation, once, with no obvious cause.
+                 */
+                void stageEntry(index).then((staged) => {
+                  if (andShow && staged) showItem(staged);
+                });
+              }}
+              activeLabel={live?.caption || null}
+            />
+          </Panel>
         </div>
 
-        {/* Fixed share of the height rather than a third of the width: a
-            chapter is read down, not across, and eight verses visible beats
-            three. */}
-        <div className="grid min-h-0 basis-[38%] gap-2 [grid-template-columns:1fr_minmax(240px,0.5fr)]">
-        <ScripturePanel
-          translation={translation}
-          translations={library.translations}
-          onSelectTranslation={selectTranslation}
-          onPreview={(verse, andShow) => (andShow ? showVerse(verse) : previewVerse(verse))}
-          onPreviewRange={(verses, andShow) => (andShow ? showVerses(verses) : previewVerses(verses))}
-          previewVerseIds={preview?.kind === "scripture" ? preview.verses.map((verse) => verse.id) : []}
-          liveVerseIds={live?.ids ?? []}
-          history={history}
-          schedule={schedule}
-          onStageEntry={stageEntry}
-          onPreviewItem={(item, andShow) => (andShow ? showItem(item) : previewItem(item))}
-          keyOf={keyOf}
-          previewKey={preview ? keyOf(preview) : null}
-          liveKey={liveKey}
-          theme={settings?.projector ?? DEFAULT_THEME}
-          onApplyTheme={applyTheme}
-          ticker={ticker}
-          onTickerChange={changeTicker}
-          onError={setError}
-          libraryReady={library.ready && Boolean(translation)}
-          libraryImporting={library.importing}
-          libraryError={library.error}
-        />
-
         {/*
+          Fixed share of the height rather than a third of the width: a chapter
+          is read down, not across, and eight verses visible beats three.
+
+          Three columns, left to right: the library, the original languages, and
+          what is staged next. Each is a step in the same movement — find the
+          verse, look into it, then check what will go up — so they read across
+          in the order the operator works.
+
+          Preview is given real width rather than the strip it started as. It
+          draws the projector's own theme and backdrop, and a themed slide
+          squeezed into a narrow column tells an operator nothing about what
+          will fit on the wall.
+
+          The count must match the children. This grid had two columns and three
+          panels for one build, and the third silently wrapped onto a second row
+          underneath the library rather than sitting beside it.
+        */}
+        <div className="grid min-h-0 basis-[38%] gap-2 [grid-template-columns:minmax(0,1fr)_minmax(0,0.8fr)_minmax(320px,0.95fr)]">
+          <ScripturePanel
+            translation={translation}
+            translations={library.translations}
+            onSelectTranslation={selectTranslation}
+            onPreview={(verse, andShow) =>
+              andShow ? showVerse(verse) : previewVerse(verse)
+            }
+            onPreviewRange={(verses, andShow) =>
+              andShow ? showVerses(verses) : previewVerses(verses)
+            }
+            previewVerseIds={
+              preview?.kind === "scripture"
+                ? preview.verses.map((verse) => verse.id)
+                : []
+            }
+            liveVerseIds={live?.ids ?? []}
+            history={history}
+            schedule={schedule}
+            onStageEntry={stageEntry}
+            onPreviewItem={(item, andShow) =>
+              andShow ? showItem(item) : previewItem(item)
+            }
+            keyOf={keyOf}
+            previewKey={preview ? keyOf(preview) : null}
+            liveKey={liveKey}
+            theme={settings?.projector ?? DEFAULT_THEME}
+            onApplyTheme={applyTheme}
+            ticker={ticker}
+            onTickerChange={changeTicker}
+            onError={setError}
+            libraryReady={library.ready && Boolean(translation)}
+            libraryImporting={library.importing}
+            libraryError={library.error}
+          />
+
+          {/*
           Beside the library rather than in the rail.
           
           A verse laid out word by word needs width -- cards wrap, and in a
@@ -636,9 +722,98 @@ export default function App() {
           belongs next to the thing it explains: an operator reading a chapter
           is the operator who wants to know what a word is doing in it.
         */}
-        <Panel title="Original">
           <OriginalPanel
             verse={originalVerse}
+            onOpenLexicon={openLexicon}
+            lexicon={lexicon}
+            lexiconLooking={lexiconLooking}
+            lexiconAt={lexiconAt}
+            onProjectLexiconText={(title, body, andShow) => {
+              /*
+               * A definition on the wall, under the word it defines.
+               *
+               * The heading is the word — a congregation reading a paragraph of
+               * Abbott-Smith needs to know which word it is about, and the name
+               * of the lexicon tells them nothing they can use. The body keeps
+               * its paragraph breaks, because sense numbering is most of what
+               * makes an entry readable at all.
+               */
+              const item = {
+                kind: "slide" as const,
+                itemId: -1,
+                title,
+                blocks: [
+                  {
+                    text: title,
+                    level: "heading" as const,
+                    align: "center" as const,
+                    bold: true,
+                    italic: false,
+                  },
+                  ...body
+                    .split("\n")
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                    .map((line) => ({
+                      text: line,
+                      // Left, not centred. A definition is prose and runs to
+                      // several lines; centred prose is read a line at a time
+                      // by somebody hunting for where each one starts.
+                      level: "body" as const,
+                      align: "left" as const,
+                      bold: false,
+                      italic: false,
+                    })),
+                ],
+              };
+              if (andShow) showItem(item);
+              else previewItem(item);
+            }}
+            onProjectLexicon={(entry, andShow) => {
+              /*
+               * The word, how to say it, and what it means. The definitions go
+               * up through `onProjectLexiconText`, a paragraph at a time; this
+               * is the word itself, which is what most of a service needs.
+               */
+              const item = {
+                kind: "slide" as const,
+                itemId: -1,
+                title: `${entry.lemma} — ${entry.strongs}`,
+                blocks: [
+                  {
+                    text: entry.lemma,
+                    level: "heading" as const,
+                    align: "center" as const,
+                    bold: true,
+                    italic: false,
+                  },
+                  ...(entry.transliteration
+                    ? [
+                        {
+                          text: entry.transliteration,
+                          level: "body" as const,
+                          align: "center" as const,
+                          bold: false,
+                          italic: true,
+                        },
+                      ]
+                    : []),
+                  ...(entry.gloss
+                    ? [
+                        {
+                          text: entry.gloss,
+                          level: "body" as const,
+                          align: "center" as const,
+                          bold: false,
+                          italic: false,
+                        },
+                      ]
+                    : []),
+                ],
+              };
+              if (andShow) showItem(item);
+              else previewItem(item);
+            }}
             onStage={(word, reference, andShow) => {
               /*
                * Three lines: the word, how to say it, what it means. Not the
@@ -660,22 +835,26 @@ export default function App() {
                     italic: false,
                   },
                   ...(word.transliteration
-                    ? [{
-                        text: word.transliteration,
-                        level: "body" as const,
-                        align: "center" as const,
-                        bold: false,
-                        italic: true,
-                      }]
+                    ? [
+                        {
+                          text: word.transliteration,
+                          level: "body" as const,
+                          align: "center" as const,
+                          bold: false,
+                          italic: true,
+                        },
+                      ]
                     : []),
                   ...(word.gloss
-                    ? [{
-                        text: word.gloss,
-                        level: "body" as const,
-                        align: "center" as const,
-                        bold: false,
-                        italic: false,
-                      }]
+                    ? [
+                        {
+                          text: word.gloss,
+                          level: "body" as const,
+                          align: "center" as const,
+                          bold: false,
+                          italic: false,
+                        },
+                      ]
                     : []),
                 ],
               };
@@ -683,7 +862,11 @@ export default function App() {
               else previewItem(item);
             }}
           />
-        </Panel>
+
+          <PreviewPanel
+            preview={preview}
+            theme={settings?.projector ?? DEFAULT_THEME}
+          />
         </div>
       </main>
 
@@ -707,7 +890,9 @@ export default function App() {
 
       {aboutOpen ? <AboutDialog onClose={() => setAboutOpen(false)} /> : null}
 
-      {slidesOpen ? <SlidesFromSermon onClose={() => setSlidesOpen(false)} /> : null}
+      {slidesOpen ? (
+        <SlidesFromSermon onClose={() => setSlidesOpen(false)} />
+      ) : null}
 
       {historyOpen ? (
         <HistoryDialog

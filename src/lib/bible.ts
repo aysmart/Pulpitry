@@ -111,6 +111,8 @@ export interface LexiconEntry {
   gloss: string;
   /** The full entry, paragraphs separated by newlines. Plain text. */
   definition: string;
+  /** Thayer's, where there is one. Greek New Testament only. */
+  thayer: string;
 }
 
 /** What a Strong's number means, or null where the lexicon has no entry. */
