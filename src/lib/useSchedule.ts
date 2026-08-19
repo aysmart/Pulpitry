@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { catalogList, catalogRemove, catalogSave, type Item, type PlanEntry } from "./catalog";
-import { defaultServiceName, entryFor, labelFor, resolveEntry } from "./schedule";
+import {
+  catalogList,
+  catalogRemove,
+  catalogSave,
+  type Item,
+  type PlanEntry,
+} from "./catalog";
+import {
+  defaultServiceName,
+  entryFor,
+  labelFor,
+  resolveEntry,
+} from "./schedule";
 import type { Presentable } from "./usePresentation";
 
 /** How long after the last edit the plan is written back. */
@@ -240,9 +251,13 @@ export function useSchedule(onError?: (message: string) => void) {
   );
 
   const removeAt = useCallback(
-    (index: number) => edit((current) => current.filter((_, at) => at !== index)),
+    (index: number) =>
+      edit((current) => current.filter((_, at) => at !== index)),
     [edit],
   );
+
+  /** Empties the running order, keeping the service itself. */
+  const clearEntries = useCallback(() => edit(() => []), [edit]);
 
   const move = useCallback(
     (index: number, delta: number) =>
@@ -260,7 +275,9 @@ export function useSchedule(onError?: (message: string) => void) {
   const relabel = useCallback(
     (index: number, label: string) =>
       edit((current) =>
-        current.map((entry, at) => (at === index ? { ...entry, label } : entry)),
+        current.map((entry, at) =>
+          at === index ? { ...entry, label } : entry,
+        ),
       ),
     [edit],
   );
@@ -274,7 +291,10 @@ export function useSchedule(onError?: (message: string) => void) {
       const entry = entries[index];
       if (!entry) return null;
       try {
-        const [staged, current] = await Promise.all([resolveEntry(entry), labelFor(entry)]);
+        const [staged, current] = await Promise.all([
+          resolveEntry(entry),
+          labelFor(entry),
+        ]);
         if (current && current !== entry.label) relabel(index, current);
         return staged;
       } catch (err) {
@@ -299,6 +319,7 @@ export function useSchedule(onError?: (message: string) => void) {
     add,
     addNote,
     removeAt,
+    clearEntries,
     move,
     relabel,
     stage,

@@ -37,13 +37,17 @@ export function Panel({
         {/* A panel whose tabs already name its contents passes an empty title
             rather than spending header width saying so twice. */}
         {title ? (
-          <h2 className={`text-[11px] tracking-[0.14em] uppercase ${ACCENT_TEXT[accent]}`}>
+          <h2
+            className={`text-[11px] tracking-[0.14em] uppercase ${ACCENT_TEXT[accent]}`}
+          >
             {title}
           </h2>
         ) : null}
         {actions}
       </header>
-      <div className={`min-h-0 flex-1 overflow-auto ${bodyClassName}`}>{children}</div>
+      <div className={`min-h-0 flex-1 overflow-auto ${bodyClassName}`}>
+        {children}
+      </div>
     </section>
   );
 }
@@ -52,7 +56,49 @@ export function Panel({
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-full items-center justify-center px-6 py-8 text-center">
-      <p className="max-w-[26ch] text-[13px] leading-relaxed text-pulpitry-muted">{children}</p>
+      <p className="max-w-[26ch] text-[13px] leading-relaxed text-pulpitry-muted">
+        {children}
+      </p>
     </div>
+  );
+}
+
+/**
+ * A count, and a way to empty the list it counts.
+ *
+ * Both lists that fill themselves during a service need this: detections
+ * accumulate for as long as somebody is preaching, and a running order is
+ * usually built before one and rarely survives it unchanged. Neither had any
+ * way back to empty except restarting the app.
+ *
+ * The control is absent when there is nothing to clear rather than disabled,
+ * because a header with a dead button in it invites a press that does nothing.
+ */
+export function PanelCount({
+  count,
+  onClear,
+  title,
+}: {
+  count: number;
+  onClear: () => void;
+  /** What the button says it will do, for the operator hovering it. */
+  title: string;
+}) {
+  if (count === 0) return null;
+
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="text-[11px] text-pulpitry-muted tabular-nums">
+        {count}
+      </span>
+      <button
+        type="button"
+        onClick={onClear}
+        title={title}
+        className="rounded px-1 text-[11px] text-pulpitry-muted transition-colors hover:bg-pulpitry-raised hover:text-pulpitry-text focus-visible:focus-ring"
+      >
+        Clear
+      </button>
+    </span>
   );
 }

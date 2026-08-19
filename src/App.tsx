@@ -5,7 +5,7 @@ import { AboutDialog } from "./components/AboutDialog";
 import { HistoryDialog } from "./components/HistoryDialog";
 import { Detections } from "./components/Detections";
 import { OriginalPanel } from "./components/OriginalPanel";
-import { Panel } from "./components/Panel";
+import { Panel, PanelCount } from "./components/Panel";
 import { QueueRail } from "./components/QueueRail";
 import { ScripturePanel } from "./components/ScripturePanel";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -141,9 +141,22 @@ export default function App() {
     );
   }, [preview]);
 
-  const { detections } = useDetections();
-  const { suggestions } = useSuggestions();
-  const { references } = useSpokenReferences();
+  const { detections, clear: clearDetections } = useDetections();
+  const { suggestions, clear: clearSuggestions } = useSuggestions();
+  const { references, clear: clearReferences } = useSpokenReferences();
+
+  /*
+   * Empties the Detected panel.
+   *
+   * All three sources, because the panel shows one list and an operator
+   * pressing Clear on it means the list -- leaving announced references behind
+   * while quotations vanished would read as a fault rather than a filter.
+   */
+  const clearHeard = useCallback(() => {
+    clearDetections();
+    clearSuggestions();
+    clearReferences();
+  }, [clearDetections, clearSuggestions, clearReferences]);
   const semanticIndex = useSemanticIndex();
 
   const [settings, setSettings] = useState<SettingsView | null>(null);
@@ -588,11 +601,13 @@ export default function App() {
           <Panel
             title="Detected"
             actions={
-              detections.length + references.length + suggestions.length > 0 ? (
-                <span className="text-[11px] text-pulpitry-muted tabular-nums">
-                  {detections.length + references.length + suggestions.length}
-                </span>
-              ) : undefined
+              <PanelCount
+                count={
+                  detections.length + references.length + suggestions.length
+                }
+                onClear={clearHeard}
+                title="Empty this list"
+              />
             }
           >
             <Detections
@@ -634,11 +649,11 @@ export default function App() {
           <Panel
             title="Queue"
             actions={
-              schedule.entries.length > 0 ? (
-                <span className="text-[11px] text-pulpitry-muted tabular-nums">
-                  {schedule.entries.length}
-                </span>
-              ) : undefined
+              <PanelCount
+                count={schedule.entries.length}
+                onClear={schedule.clearEntries}
+                title="Empty the running order"
+              />
             }
           >
             <QueueRail
@@ -655,6 +670,7 @@ export default function App() {
                   if (andShow && staged) showItem(staged);
                 });
               }}
+              onRemove={schedule.removeAt}
               activeLabel={live?.caption || null}
             />
           </Panel>

@@ -95,6 +95,20 @@ pub struct SpeechManager {
 }
 
 impl SpeechManager {
+    /// What this machine has actually been sustaining, if it has run long
+    /// enough to say.
+    ///
+    /// Seconds of work per second of audio, from settled decodes of real
+    /// speech. This is the figure worth showing an operator: the benchmark
+    /// beside it decodes a synthetic clip, and it turned out to report whatever
+    /// the clip length implied rather than anything about the hardware.
+    ///
+    /// `None` when nothing is running on this machine, or before a minute of
+    /// speech has gone through it.
+    pub fn sustained(&self) -> Option<f32> {
+        self.local.lock().as_ref().and_then(|engine| engine.sustained())
+    }
+
     pub fn new(
         app: AppHandle,
         detector: Arc<Detector>,

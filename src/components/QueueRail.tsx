@@ -27,6 +27,7 @@ export function QueueRail({
   entries,
   name,
   onStage,
+  onRemove,
   activeLabel,
 }: {
   entries: PlanEntry[];
@@ -34,6 +35,8 @@ export function QueueRail({
   name: string;
   /** Stages the entry. `andShow` sends it in the same gesture. */
   onStage: (index: number, andShow?: boolean) => void;
+  /** Takes one entry out of the running order without showing it. */
+  onRemove: (index: number) => void;
   /** What is on screen, so the entry matching it can be marked. */
   activeLabel: string | null;
 }) {
@@ -59,13 +62,24 @@ export function QueueRail({
         const isLive = activeLabel !== null && entry.label === activeLabel;
 
         return (
-          <li key={`${entry.label}-${index}`}>
+          /*
+           * The row and its remove control, side by side rather than nested.
+           *
+           * A button inside a button is invalid HTML whose inner clicks
+           * browsers deliver inconsistently -- the Original panel lost a whole
+           * feature to exactly that, so the two controls are siblings and the
+           * staging one takes the remaining width.
+           */
+          <li
+            key={`${entry.label}-${index}`}
+            className="group flex items-stretch gap-1"
+          >
             <button
               type="button"
               onClick={() => onStage(index)}
               onDoubleClick={() => onStage(index, true)}
               title="Click to stage, double-click to put it on screen"
-              className={`flex w-full items-baseline gap-2 rounded border px-2 py-1.5 text-left transition-colors focus-visible:focus-ring ${
+              className={`flex min-w-0 flex-1 items-baseline gap-2 rounded border px-2 py-1.5 text-left transition-colors focus-visible:focus-ring ${
                 isLive
                   ? "border-pulpitry-gold-dim bg-pulpitry-gold/10"
                   : "border-transparent hover:border-pulpitry-line hover:bg-pulpitry-raised"
@@ -83,6 +97,19 @@ export function QueueRail({
               >
                 {entry.label}
               </span>
+            </button>
+
+            {/* Shown on hover and on keyboard focus. A running order is read
+                far more often than it is edited, and a column of crosses down
+                the side of it is noise during the one hour it matters. */}
+            <button
+              type="button"
+              onClick={() => onRemove(index)}
+              title="Take this out of the running order"
+              aria-label={`Remove ${entry.label} from the running order`}
+              className="shrink-0 rounded px-1.5 text-[13px] leading-none text-pulpitry-muted opacity-0 transition-opacity hover:bg-pulpitry-raised hover:text-pulpitry-text focus-visible:opacity-100 focus-visible:focus-ring group-hover:opacity-100"
+            >
+              &times;
             </button>
           </li>
         );

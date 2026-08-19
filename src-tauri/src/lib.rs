@@ -316,7 +316,28 @@ struct SpeechSpeed {
 }
 
 #[tauri::command]
-async fn measure_speech(app: AppHandle) -> CommandResult<SpeechSpeed> {
+async fn measure_speech(
+    app: AppHandle,
+    manager: State<'_, Arc<SpeechManager>>,
+) -> CommandResult<SpeechSpeed> {
+    /*
+     * What this machine has actually done beats what a benchmark says it might.
+     *
+     * The benchmark decodes a synthetic clip, and it turned out to report
+     * whatever the clip length implied rather than anything about the hardware:
+     * whisper pads every decode to a thirty-second window, so the same laptop
+     * reads 16x from one second of audio and 422x from twenty-nine, having done
+     * identical work. It also decodes silence, which whisper short-circuits, so
+     * the decoder -- the part a processor without a GPU is slowest at -- never
+     * runs.
+     *
+     * A session that has been running has real speech behind it, at the lengths
+     * the preacher actually speaks in. When there is one, it answers.
+     */
+    if let Some(factor) = manager.inner().sustained() {
+        return Ok(SpeechSpeed { factor, detail: whisper::describe_speed(factor) });
+    }
+
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let model = settings::load(&app).map(|s| s.speech_model).unwrap_or_default();
 
