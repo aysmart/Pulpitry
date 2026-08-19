@@ -4,7 +4,9 @@ import { listen } from "@tauri-apps/api/event";
 import { AboutDialog } from "./components/AboutDialog";
 import { HistoryDialog } from "./components/HistoryDialog";
 import { Detections } from "./components/Detections";
+import { OriginalPanel } from "./components/OriginalPanel";
 import { Panel } from "./components/Panel";
+import { QueueRail } from "./components/QueueRail";
 import { ScripturePanel } from "./components/ScripturePanel";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SlidesFromSermon } from "./components/SlidesFromSermon";
@@ -488,7 +490,7 @@ export default function App() {
         now, permanently visible beside the transcript that produced them.
       */}
       <main className="flex min-h-0 flex-1 flex-col gap-2 p-2">
-        <div className="grid min-h-0 flex-1 gap-2 [grid-template-columns:minmax(220px,0.8fr)_minmax(260px,1fr)_minmax(380px,1.5fr)]">
+        <div className="grid min-h-0 flex-1 gap-2 [grid-template-columns:minmax(200px,0.7fr)_minmax(240px,0.9fr)_minmax(360px,1.5fr)_minmax(180px,0.6fr)]">
         <TranscriptPanel
           lines={lines}
           interim={interim}
@@ -539,12 +541,29 @@ export default function App() {
           media={media}
           ticker={ticker}
         />
+        <Panel
+          title="Queue"
+          actions={
+            schedule.entries.length > 0 ? (
+              <span className="text-[11px] text-pulpitry-muted tabular-nums">
+                {schedule.entries.length}
+              </span>
+            ) : undefined
+          }
+        >
+          <QueueRail
+            entries={schedule.entries}
+            name={schedule.name}
+            onStage={(index) => void stageEntry(index)}
+            activeLabel={live?.caption || null}
+          />
+        </Panel>
         </div>
 
         {/* Fixed share of the height rather than a third of the width: a
             chapter is read down, not across, and eight verses visible beats
             three. */}
-        <div className="flex min-h-0 basis-[38%] flex-col">
+        <div className="grid min-h-0 basis-[38%] gap-2 [grid-template-columns:1fr_minmax(240px,0.5fr)]">
         <ScripturePanel
           translation={translation}
           translations={library.translations}
@@ -569,6 +588,20 @@ export default function App() {
           libraryImporting={library.importing}
           libraryError={library.error}
         />
+
+        {/*
+          Beside the library rather than in the rail.
+          
+          A verse laid out word by word needs width -- cards wrap, and in a
+          narrow rail every one of them would be a column one word wide. It also
+          belongs next to the thing it explains: an operator reading a chapter
+          is the operator who wants to know what a word is doing in it.
+        */}
+        <Panel title="Original">
+          <OriginalPanel
+            verse={preview?.kind === "scripture" ? (preview.verses[0] ?? null) : null}
+          />
+        </Panel>
         </div>
       </main>
 

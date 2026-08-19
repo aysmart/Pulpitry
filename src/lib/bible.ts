@@ -79,3 +79,25 @@ export function formatReference(verse: Verse, wholeChapter = false): string {
     ? `${verse.book} ${verse.chapter}`
     : `${verse.book} ${verse.chapter}:${verse.verse}`;
 }
+
+/** One word of the Greek or Hebrew behind a verse. */
+export interface OriginalWord {
+  original: string;
+  transliteration: string;
+  gloss: string;
+  /** Disambiguated Strong's — `G0025`, `H1254A`. */
+  strongs: string;
+  morphology: string;
+  lemma: string;
+}
+
+/**
+ * The original language behind one verse, in reading order.
+ *
+ * Empty where there is none, which is not a fault: versification differences
+ * and the Apocrypha both produce verses the interlinear does not cover, and an
+ * operator who opened the panel on one should see nothing rather than a
+ * complaint.
+ */
+export const originalWords = (book: number, chapter: number, verse: number) =>
+  invoke<OriginalWord[]>("original_words", { book, chapter, verse });
