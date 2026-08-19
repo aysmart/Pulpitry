@@ -3,6 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 
 import { AboutDialog } from "./components/AboutDialog";
 import { HistoryDialog } from "./components/HistoryDialog";
+import { Detections } from "./components/Detections";
+import { Panel } from "./components/Panel";
 import { ScripturePanel } from "./components/ScripturePanel";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SlidesFromSermon } from "./components/SlidesFromSermon";
@@ -28,6 +30,7 @@ import {
   closeSecond,
   secondState,
   projectorState,
+  bodyText,
   type Display,
   type ProjectorState,
   type SecondState,
@@ -426,7 +429,66 @@ export default function App() {
         onRefreshDisplays={() => void refreshDisplays()}
       />
 
-      <main className="grid min-h-0 flex-1 gap-2 p-2 [grid-template-columns:minmax(240px,0.95fr)_minmax(380px,1.45fr)_minmax(320px,1.1fr)]">
+      {/*
+        The two controls that must never move.
+        
+        Putting something live and clearing the screen are the only actions
+        taken in a hurry, and until now both lived inside the stage panel --
+        which is fine while nothing else is happening, and wrong the moment a
+        photograph is on the wall through a prayer and the operator is looking
+        at the song library. A fixed strip means the hand knows where to go
+        without the eye having to find it.
+        
+        Clear is drawn as the louder of the two on purpose. Going live is a
+        decision somebody has already made; clearing is the one taken under
+        pressure.
+      */}
+      <div className="flex shrink-0 items-center gap-2 border-b border-pulpitry-line bg-pulpitry-surface px-3 py-1.5">
+        <button
+          type="button"
+          disabled={!preview}
+          onClick={() => display()}
+          className="rounded border border-pulpitry-teal/40 bg-pulpitry-teal/10 px-3 py-1 text-[12px] font-medium text-pulpitry-teal disabled:opacity-30 focus-visible:focus-ring"
+        >
+          Go live
+        </button>
+        <button
+          type="button"
+          disabled={!live}
+          onClick={() => clearLive()}
+          className="rounded border border-pulpitry-gold-dim bg-pulpitry-gold/10 px-3 py-1 text-[12px] font-medium text-pulpitry-gold disabled:opacity-30 focus-visible:focus-ring"
+        >
+          Clear the screen
+        </button>
+
+        <span className="ml-2 min-w-0 truncate text-[11.5px] text-pulpitry-muted">
+          {live ? (
+            <>
+              <span className="text-pulpitry-gold">On screen</span>{" "}
+              {live.caption || bodyText(live.body).slice(0, 80)}
+            </>
+          ) : (
+            "Nothing on screen"
+          )}
+        </span>
+      </div>
+
+      {/*
+        Two rows, because the operator does two different things.
+        
+        The top row is the decision: what was said, what scripture that turned
+        out to be, and what is on the wall. The bottom row is the search --
+        browsing a chapter, finding a song, picking a slide. Those were side by
+        side in three equal columns, which meant the thing being decided and the
+        thing being looked for competed for the same width and the eye had no
+        anchor.
+        
+        Detections were a tab inside the library, one click away from the
+        operator at the moment they were most needed. They are their own panel
+        now, permanently visible beside the transcript that produced them.
+      */}
+      <main className="flex min-h-0 flex-1 flex-col gap-2 p-2">
+        <div className="grid min-h-0 flex-1 gap-2 [grid-template-columns:minmax(220px,0.8fr)_minmax(260px,1fr)_minmax(380px,1.5fr)]">
         <TranscriptPanel
           lines={lines}
           interim={interim}
@@ -436,6 +498,31 @@ export default function App() {
           onOpenHistory={() => setHistoryOpen(true)}
           exporting={exporting}
         />
+        <Panel
+          title="Detected"
+          actions={
+            detections.length + references.length + suggestions.length > 0 ? (
+              <span className="text-[11px] text-pulpitry-muted tabular-nums">
+                {detections.length + references.length + suggestions.length}
+              </span>
+            ) : undefined
+          }
+        >
+          <Detections
+            detections={detections}
+            references={references}
+            suggestions={suggestions}
+            onPreview={(verse, andShow) => (andShow ? showVerse(verse) : previewVerse(verse))}
+            previewVerseId={
+              preview?.kind === "scripture" ? (preview.verses[0]?.id ?? null) : null
+            }
+            liveVerseId={live?.ids?.[0] ?? null}
+            listening={active}
+            index={semanticIndex}
+            assistEnabled={settings?.assistEnabled ?? false}
+          />
+        </Panel>
+
         <StagePanel
           preview={preview}
           live={live}
@@ -452,6 +539,12 @@ export default function App() {
           media={media}
           ticker={ticker}
         />
+        </div>
+
+        {/* Fixed share of the height rather than a third of the width: a
+            chapter is read down, not across, and eight verses visible beats
+            three. */}
+        <div className="flex min-h-0 basis-[38%] flex-col">
         <ScripturePanel
           translation={translation}
           translations={library.translations}
@@ -472,16 +565,11 @@ export default function App() {
           ticker={ticker}
           onTickerChange={changeTicker}
           onError={setError}
-          detections={detections}
-          references={references}
-          suggestions={suggestions}
-          semanticIndex={semanticIndex}
-          assistEnabled={settings?.assistEnabled ?? false}
-          listening={active}
           libraryReady={library.ready && Boolean(translation)}
           libraryImporting={library.importing}
           libraryError={library.error}
         />
+        </div>
       </main>
 
       <footer className="flex h-7 shrink-0 items-center gap-2 border-t border-pulpitry-line bg-pulpitry-surface px-3 text-[11.5px]">

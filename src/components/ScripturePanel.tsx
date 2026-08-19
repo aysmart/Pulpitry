@@ -2,13 +2,8 @@ import { useState } from "react";
 
 import type { Translation, Verse } from "../lib/bible";
 import { presentableLabel, presentableText, type Presentable } from "../lib/usePresentation";
-import type { Detection } from "../lib/useDetections";
-import type { SpokenReference } from "../lib/useSpokenReferences";
 import { ChapterNavigator } from "./ChapterNavigator";
-import { Detections } from "./Detections";
 import type { ProjectorTheme } from "../lib/theme";
-import type { IndexStatus } from "../lib/useSemanticIndex";
-import type { Suggestion } from "../lib/useSuggestions";
 import type { Ticker } from "../lib/projector";
 import type { ScheduleController } from "../lib/useSchedule";
 import { MediaLibrary } from "./MediaLibrary";
@@ -24,12 +19,6 @@ const TABS = [
   "Songs",
   "Media",
   "Slides",
-  // One tab, three origins. They were two, and splitting them split the
-  // operator's attention at the moment they had least of it -- the question is
-  // always "do I put this on the wall?", and answering it should not mean
-  // looking in two places and comparing timestamps. See Detections.tsx for how
-  // the distinction is kept.
-  "Detected",
   "Schedule",
   "History",
   "Themes",
@@ -60,12 +49,6 @@ export function ScripturePanel({
   ticker,
   onTickerChange,
   onError,
-  detections,
-  references,
-  suggestions,
-  semanticIndex,
-  assistEnabled,
-  listening,
   libraryReady,
   libraryImporting,
   libraryError,
@@ -89,12 +72,6 @@ export function ScripturePanel({
   ticker: Ticker;
   onTickerChange: (next: Partial<Ticker>) => void;
   onError: (message: string) => void;
-  detections: Detection[];
-  references: SpokenReference[];
-  suggestions: Suggestion[];
-  semanticIndex: IndexStatus;
-  assistEnabled: boolean;
-  listening: boolean;
   libraryReady: boolean;
   libraryImporting: string | null;
   libraryError: string | null;
@@ -111,7 +88,7 @@ export function ScripturePanel({
       title=""
       accent="teal"
       bodyClassName={
-        tab === "Detected" || tab === "History" ? "" : "overflow-hidden"
+        tab === "History" ? "" : "overflow-hidden"
       }
       actions={
         <div className="flex flex-wrap justify-end gap-0">
@@ -127,12 +104,6 @@ export function ScripturePanel({
               }`}
             >
               {name}
-              {name === "Detected" &&
-              detections.length + references.length + suggestions.length > 0 ? (
-                <span className="ml-1 text-pulpitry-teal tabular-nums">
-                  {detections.length + references.length + suggestions.length}
-                </span>
-              ) : null}
               {name === "Schedule" && schedule.entries.length > 0 ? (
                 <span className="ml-1 text-pulpitry-teal tabular-nums">
                   {schedule.entries.length}
@@ -279,19 +250,6 @@ export function ScripturePanel({
         )
       ) : null}
 
-      {tab === "Detected" ? (
-        <Detections
-          detections={detections}
-          references={references}
-          suggestions={suggestions}
-          onPreview={onPreview}
-          previewVerseId={previewVerseIds[0] ?? null}
-          liveVerseId={liveVerseIds[0] ?? null}
-          listening={listening}
-          index={semanticIndex}
-          assistEnabled={assistEnabled}
-        />
-      ) : null}
     </Panel>
   );
 }
