@@ -23,7 +23,7 @@ import {
   type AudioDevice,
   type SettingsView,
 } from "./lib/api";
-import { libraryStatus, onLibraryStatus, type LibraryStatus } from "./lib/bible";
+import { libraryStatus, onLibraryStatus, type LibraryStatus, type Verse } from "./lib/bible";
 import {
   closeProjector,
   listDisplays,
@@ -89,6 +89,26 @@ export default function App() {
     canStepBack,
     canStepForward,
   } = usePresentation();
+  /*
+   * The verse the Original panel is showing, held rather than derived.
+   *
+   * It used to read `preview`, which erased itself: clicking a word stages that
+   * word, `preview` stops being scripture, and the panel that produced the word
+   * emptied on the click. The operator lost the verse by using it.
+   *
+   * So it follows scripture and ignores everything else. Staging a word, a
+   * song or a slide leaves it alone; staging a different verse moves it.
+   */
+  const [originalVerse, setOriginalVerse] = useState<Verse | null>(null);
+
+  useEffect(() => {
+    if (preview?.kind !== "scripture") return;
+    const first = preview.verses[0] ?? null;
+    // Compared by id rather than by object: staging the same verse again --
+    // stepping through a passage, re-showing it -- should not re-query.
+    setOriginalVerse((current) => (current?.id === first?.id ? current : first));
+  }, [preview]);
+
   const { detections } = useDetections();
   const { suggestions } = useSuggestions();
   const { references } = useSpokenReferences();
@@ -618,7 +638,7 @@ export default function App() {
         */}
         <Panel title="Original">
           <OriginalPanel
-            verse={preview?.kind === "scripture" ? (preview.verses[0] ?? null) : null}
+            verse={originalVerse}
             onStage={(word, reference, andShow) => {
               /*
                * Three lines: the word, how to say it, what it means. Not the
