@@ -463,6 +463,25 @@ export default function App() {
           Clear the screen
         </button>
 
+        {/*
+          The reason "Go live" can look broken.
+          
+          Sending works whether or not a projector window is open -- the content
+          is stored either way -- but with no window there is nothing to see, so
+          the operator presses it, nothing happens anywhere, and concludes the
+          button is dead. It is not; there is simply no screen to send to. Said
+          here, with the fix beside it.
+        */}
+        {!projector.open ? (
+          <button
+            type="button"
+            onClick={() => void toggleProjector()}
+            className="rounded border border-pulpitry-gold-dim px-2 py-1 text-[11.5px] text-pulpitry-gold focus-visible:focus-ring"
+          >
+            No projector open — open one
+          </button>
+        ) : null}
+
         <span className="ml-2 min-w-0 truncate text-[11.5px] text-pulpitry-muted">
           {live ? (
             <>
@@ -600,6 +619,49 @@ export default function App() {
         <Panel title="Original">
           <OriginalPanel
             verse={preview?.kind === "scripture" ? (preview.verses[0] ?? null) : null}
+            onStage={(word, reference, andShow) => {
+              /*
+               * Three lines: the word, how to say it, what it means. Not the
+               * Strong's number and not the morphology -- those are how the
+               * operator knows they have the right word, and a congregation
+               * reading "V-AAI-3S" has been shown our workings rather than the
+               * point.
+               */
+              const item = {
+                kind: "slide" as const,
+                itemId: -1,
+                title: `${word.original} — ${reference}`,
+                blocks: [
+                  {
+                    text: word.original,
+                    level: "heading" as const,
+                    align: "center" as const,
+                    bold: true,
+                    italic: false,
+                  },
+                  ...(word.transliteration
+                    ? [{
+                        text: word.transliteration,
+                        level: "body" as const,
+                        align: "center" as const,
+                        bold: false,
+                        italic: true,
+                      }]
+                    : []),
+                  ...(word.gloss
+                    ? [{
+                        text: word.gloss,
+                        level: "body" as const,
+                        align: "center" as const,
+                        bold: false,
+                        italic: false,
+                      }]
+                    : []),
+                ],
+              };
+              if (andShow) showItem(item);
+              else previewItem(item);
+            }}
           />
         </Panel>
         </div>

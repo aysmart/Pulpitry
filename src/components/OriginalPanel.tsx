@@ -6,12 +6,17 @@ import { EmptyState } from "./Panel";
 /**
  * The Greek or Hebrew behind whatever is staged.
  *
- * # For the operator, never the wall
+ * # One word at a time, never the apparatus
  *
- * A congregation is not reading morphology codes, and an interlinear projected
- * is a distraction wearing the clothes of scholarship. This panel has no way to
- * put anything on screen, deliberately — it is a reference, the same as having
- * a lexicon open beside the desk.
+ * A word can go on the wall, because a preacher expounding ἀγάπη is a preacher
+ * whose congregation benefits from seeing it. What does not go on the wall is
+ * the morphology code and the Strong's number: those are the operator's tools
+ * for knowing they have the right word, and projecting them is a distraction
+ * wearing the clothes of scholarship.
+ *
+ * So the card shows five things and stages three — the original, how to say it,
+ * and what it means. Clicking stages; double-clicking sends, the same gesture
+ * as everywhere else in the desk.
  *
  * # Why the whole verse rather than a lookup
  *
@@ -28,7 +33,21 @@ import { EmptyState } from "./Panel";
  * "in/ beginning" is how the language actually works, and flattening it would
  * discard the thing an interlinear exists to show.
  */
-export function OriginalPanel({ verse }: { verse: Verse | null }) {
+export function OriginalPanel({
+  verse,
+  onStage,
+}: {
+  verse: Verse | null;
+  /**
+   * Stages one word as a slide. `andShow` sends it in the same gesture.
+   *
+   * A slide rather than a kind of its own: the projector already knows how to
+   * draw text blocks, and an original-language word is three lines of text. A
+   * new body kind would mean teaching the projector, the mirror and the second
+   * display about something they can already render.
+   */
+  onStage: (word: OriginalWord, reference: string, andShow?: boolean) => void;
+}) {
   const [words, setWords] = useState<OriginalWord[]>([]);
   const [looking, setLooking] = useState(false);
 
@@ -70,9 +89,13 @@ export function OriginalPanel({ verse }: { verse: Verse | null }) {
   return (
     <div className="flex flex-wrap gap-1.5 p-2">
       {words.map((word, at) => (
-        <div
+        <button
           key={`${word.strongs}-${at}`}
-          className="flex min-w-[86px] flex-col gap-0.5 rounded border border-pulpitry-line px-2 py-1.5"
+          type="button"
+          onClick={() => onStage(word, `${verse.book} ${verse.chapter}:${verse.verse}`)}
+          onDoubleClick={() => onStage(word, `${verse.book} ${verse.chapter}:${verse.verse}`, true)}
+          title="Click to stage this word, double-click to put it on screen"
+          className="flex min-w-[86px] flex-col gap-0.5 rounded border border-pulpitry-line px-2 py-1.5 text-left transition-colors hover:border-pulpitry-teal/40 hover:bg-pulpitry-raised focus-visible:focus-ring"
         >
           {/* The original is the largest thing in the card, because it is what
               somebody opened this to read. */}
@@ -95,7 +118,7 @@ export function OriginalPanel({ verse }: { verse: Verse | null }) {
               <span className="text-[10px] text-pulpitry-muted/70">{word.morphology}</span>
             ) : null}
           </span>
-        </div>
+        </button>
       ))}
     </div>
   );
