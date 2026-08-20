@@ -24,6 +24,7 @@ import {
   DEFAULT_THEME,
   getTheme,
   onTheme,
+  referenceStyle,
   type ProjectorTheme,
 } from "./lib/theme";
 import { Backdrop } from "./components/Backdrop";
@@ -166,9 +167,12 @@ function Projector() {
                   progress={content.progress}
                 />
                 {theme.showReference && content.caption ? (
+                  /* Its own typeface, size and colour, set by the theme. The
+                     margin is in cqh like everything else in this frame, so it
+                     holds its proportion whatever the screen is. */
                   <p
-                    className="mt-[4vh] text-center text-[clamp(0.9rem,1.6vw,1.8rem)] tracking-wide opacity-60"
-                    style={{ color: theme.textColor }}
+                    className="mt-[4cqh] text-center tracking-wide opacity-60"
+                    style={referenceStyle(theme)}
                   >
                     {content.caption}
                   </p>

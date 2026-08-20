@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { catalogList, catalogRemove, catalogSave, newItem, type Item } from "../lib/catalog";
-import { SAMPLE_TEMPLATES, TEMPLATE_GROUPS, TEMPLATE_SAMPLE } from "../lib/templates";
-import type { ProjectorTheme } from "../lib/theme";
+import {
+  catalogList,
+  catalogRemove,
+  catalogSave,
+  newItem,
+  type Item,
+} from "../lib/catalog";
+import {
+  SAMPLE_TEMPLATES,
+  TEMPLATE_GROUPS,
+  TEMPLATE_SAMPLE,
+} from "../lib/templates";
+import { DEFAULT_THEME, type ProjectorTheme } from "../lib/theme";
 import { DisplaySettings } from "./DisplaySettings";
 import { SlideCanvas } from "./SlideCanvas";
 
@@ -135,7 +145,11 @@ export function TemplateLibrary({
         saved.find((item) => item.title.toLowerCase() === title.toLowerCase());
       await catalogSave(
         existing
-          ? { ...existing, title, body: { kind: "template", theme: editing.theme } }
+          ? {
+              ...existing,
+              title,
+              body: { kind: "template", theme: editing.theme },
+            }
           : newItem(title, { kind: "template", theme: editing.theme }),
       );
       // Putting it straight on the projector: nobody builds a look in order to
@@ -162,9 +176,12 @@ export function TemplateLibrary({
   // sorted first — a plain stringify would quietly depend on Rust and
   // TypeScript declaring the fields in the same order.
   const stable = (candidate: ProjectorTheme) =>
-    JSON.stringify(Object.entries(candidate).sort(([a], [b]) => a.localeCompare(b)));
+    JSON.stringify(
+      Object.entries(candidate).sort(([a], [b]) => a.localeCompare(b)),
+    );
   const current = stable(theme);
-  const isCurrent = (candidate: ProjectorTheme) => stable(candidate) === current;
+  const isCurrent = (candidate: ProjectorTheme) =>
+    stable(candidate) === current;
 
   if (editing) {
     return (
@@ -175,14 +192,20 @@ export function TemplateLibrary({
             placeholder="Name this theme"
             autoFocus
             aria-label="Theme name"
-            onChange={(event) => setEditing({ ...editing, name: event.target.value })}
+            onChange={(event) =>
+              setEditing({ ...editing, name: event.target.value })
+            }
             className="min-w-0 flex-1 rounded border border-pulpitry-line bg-pulpitry-raised px-2 py-1.5 text-[12.5px] text-pulpitry-text outline-none placeholder:text-pulpitry-muted focus-visible:focus-ring"
           />
           <button
             type="button"
             onClick={() => void save()}
             disabled={!editing.name.trim()}
-            title={editing.name.trim() ? "Keep it, and put it on the projector" : "Name it first"}
+            title={
+              editing.name.trim()
+                ? "Keep it, and put it on the projector"
+                : "Name it first"
+            }
             className="rounded bg-pulpitry-gold px-2.5 py-1.5 text-[12.5px] text-pulpitry-ink disabled:opacity-40 focus-visible:focus-ring"
           >
             Save
@@ -231,6 +254,26 @@ export function TemplateLibrary({
         <span className="min-w-0 flex-1 truncate text-[11px] text-pulpitry-muted">
           Click a theme to use it. Copy one to make it yours.
         </span>
+        {/*
+          Three ways in, and they are genuinely different starting points.
+          
+          Adjust opens on whatever is on the projector now, which is the
+          mid-service tweak. Copy, on a tile, opens on that theme. New opens on
+          the defaults -- and that was the one missing: an operator building a
+          look for their own room had to begin from somebody else's and undo it,
+          which is a worse starting point than a blank one and reads as though
+          starting fresh were not allowed.
+        */}
+        <button
+          type="button"
+          onClick={() =>
+            setEditing({ id: null, name: "", theme: DEFAULT_THEME })
+          }
+          title="Start a theme from the defaults"
+          className="shrink-0 rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1.5 text-[12.5px] text-pulpitry-text hover:border-pulpitry-gold-dim hover:text-pulpitry-gold focus-visible:focus-ring"
+        >
+          New
+        </button>
         <button
           type="button"
           onClick={() => setEditing({ id: null, name: "", theme })}
@@ -244,7 +287,9 @@ export function TemplateLibrary({
       <div className="min-h-0 flex-1 overflow-auto p-2">
         {saved.length > 0 ? (
           <>
-            <p className="mb-1.5 text-[11px] tracking-wide text-pulpitry-muted uppercase">Yours</p>
+            <p className="mb-1.5 text-[11px] tracking-wide text-pulpitry-muted uppercase">
+              Yours
+            </p>
             <div className="mb-3 grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-2">
               {saved.map((item) =>
                 item.body.kind === "template" ? (
@@ -254,10 +299,16 @@ export function TemplateLibrary({
                     hint={`Apply ${item.title}`}
                     theme={item.body.theme}
                     current={isCurrent(item.body.theme)}
-                    onApply={() => item.body.kind === "template" && onApply(item.body.theme)}
+                    onApply={() =>
+                      item.body.kind === "template" && onApply(item.body.theme)
+                    }
                     onEdit={() =>
                       item.body.kind === "template" &&
-                      setEditing({ id: item.id, name: item.title, theme: item.body.theme })
+                      setEditing({
+                        id: item.id,
+                        name: item.title,
+                        theme: item.body.theme,
+                      })
                     }
                     onRemove={() => item.id !== null && void remove(item.id)}
                   />
@@ -273,17 +324,25 @@ export function TemplateLibrary({
               {group}
             </p>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-2">
-              {SAMPLE_TEMPLATES.filter((preset) => preset.group === group).map((preset) => (
-                <Tile
-                  key={preset.id}
-                  name={preset.name}
-                  hint={preset.hint}
-                  theme={preset.theme}
-                  current={isCurrent(preset.theme)}
-                  onApply={() => onApply(preset.theme)}
-                  onEdit={() => setEditing({ id: null, name: preset.name, theme: preset.theme })}
-                />
-              ))}
+              {SAMPLE_TEMPLATES.filter((preset) => preset.group === group).map(
+                (preset) => (
+                  <Tile
+                    key={preset.id}
+                    name={preset.name}
+                    hint={preset.hint}
+                    theme={preset.theme}
+                    current={isCurrent(preset.theme)}
+                    onApply={() => onApply(preset.theme)}
+                    onEdit={() =>
+                      setEditing({
+                        id: null,
+                        name: preset.name,
+                        theme: preset.theme,
+                      })
+                    }
+                  />
+                ),
+              )}
             </div>
           </section>
         ))}

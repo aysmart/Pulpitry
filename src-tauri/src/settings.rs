@@ -161,6 +161,16 @@ pub struct ProjectorTheme {
     /// How strongly the texture reads, 0 to 1.
     pub texture_strength: f32,
     pub show_reference: bool,
+
+    /// Typeface for the reference line. Empty follows the scripture's.
+    ///
+    /// Empty rather than a copy, so a theme that never touches this keeps
+    /// tracking the scripture when its typeface changes later.
+    pub reference_font_family: String,
+    /// Multiplies the reference's size. 1.0 is what it has always been.
+    pub reference_scale: f32,
+    /// Colour for the reference line. Empty follows the scripture's.
+    pub reference_color: String,
 }
 
 impl Default for ProjectorTheme {
@@ -182,6 +192,11 @@ impl Default for ProjectorTheme {
             texture: "none".into(),
             texture_strength: 0.35,
             show_reference: true,
+            // Empty and 1.0: the reference looks exactly as it did before it
+            // was adjustable, so no existing theme is changed by this existing.
+            reference_font_family: String::new(),
+            reference_scale: 1.0,
+            reference_color: String::new(),
         }
     }
 }

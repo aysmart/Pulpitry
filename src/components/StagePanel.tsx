@@ -147,15 +147,35 @@ function Stage({
           {body}
         </p>
         {reference && (!theme || theme.showReference) ? (
+          /*
+           * The operator's typeface and colour, but not their size.
+           *
+           * Size is the one thing this pane deliberately does not follow. It is
+           * a few inches across, and a reference set faithfully small here
+           * would be unreadable to the person who has to check it -- so 12px is
+           * the legible base and the operator's scale moves it relative to
+           * that. The wall is where the real size is judged, and the wall gets
+           * it exactly.
+           */
           <p
-            className={`text-center text-[12px] tracking-wide ${
+            className={`text-center tracking-wide ${
               theme
                 ? "opacity-60"
                 : tone === "live"
                   ? "text-pulpitry-gold"
                   : "text-pulpitry-muted"
             }`}
-            style={theme ? { color: theme.textColor } : undefined}
+            style={
+              theme
+                ? {
+                    fontFamily: fontStack(
+                      theme.referenceFontFamily || theme.fontFamily,
+                    ),
+                    color: theme.referenceColor || theme.textColor,
+                    fontSize: `${(12 * (theme.referenceScale || 1)).toFixed(1)}px`,
+                  }
+                : { fontSize: "12px" }
+            }
           >
             {reference}
           </p>

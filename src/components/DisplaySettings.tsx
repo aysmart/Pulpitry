@@ -1,6 +1,11 @@
 import { open } from "@tauri-apps/plugin-dialog";
 
-import { allowBackground, FONT_FAMILIES, TEXTURES, type ProjectorTheme } from "../lib/theme";
+import {
+  allowBackground,
+  FONT_FAMILIES,
+  TEXTURES,
+  type ProjectorTheme,
+} from "../lib/theme";
 
 import { Slider, Swatch } from "./Controls";
 
@@ -25,18 +30,26 @@ export function DisplaySettings({
   onError: (message: string) => void;
   showThemesHint?: boolean;
 }) {
-  const set = <K extends keyof ProjectorTheme>(key: K, value: ProjectorTheme[K]) =>
-    onChange({ ...theme, [key]: value });
+  const set = <K extends keyof ProjectorTheme>(
+    key: K,
+    value: ProjectorTheme[K],
+  ) => onChange({ ...theme, [key]: value });
 
   const pickBackground = async (kind: "image" | "video") => {
     try {
       const path = await open({
-        title: kind === "image" ? "Choose a background image" : "Choose a background video",
+        title:
+          kind === "image"
+            ? "Choose a background image"
+            : "Choose a background video",
         multiple: false,
         directory: false,
         filters: [
           kind === "image"
-            ? { name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"] }
+            ? {
+                name: "Images",
+                extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"],
+              }
             : { name: "Video", extensions: ["mp4", "mov", "m4v", "webm"] },
         ],
       });
@@ -52,7 +65,8 @@ export function DisplaySettings({
   };
 
   // A gradient has no file behind it, so it must not offer to name one.
-  const usingMedia = theme.backgroundKind === "image" || theme.backgroundKind === "video";
+  const usingMedia =
+    theme.backgroundKind === "image" || theme.backgroundKind === "video";
 
   return (
     <div className="flex flex-col gap-3">
@@ -85,7 +99,11 @@ export function DisplaySettings({
       </div>
 
       <div className="flex gap-3">
-        <Swatch label="Text" value={theme.textColor} onChange={(value) => set("textColor", value)} />
+        <Swatch
+          label="Text"
+          value={theme.textColor}
+          onChange={(value) => set("textColor", value)}
+        />
         <Swatch
           label="Outline"
           value={theme.outlineColor}
@@ -113,15 +131,98 @@ export function DisplaySettings({
         <span className="text-[13px] text-pulpitry-text">Soft drop shadow</span>
       </label>
 
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={theme.showReference}
-          onChange={(event) => set("showReference", event.target.checked)}
-          className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-        />
-        <span className="text-[13px] text-pulpitry-text">Show the reference beneath</span>
-      </label>
+      {/*
+        The reference, and how it is set.
+        
+        Its own group rather than another checkbox in a list, because it is its
+        own piece of typography: the verse is what the congregation reads and
+        "John 3:16 (KJV)" is a citation beneath it, which a service sheet or a
+        broadcast lower third would happily set in another face or the church's
+        accent colour. The controls only appear once it is being shown -- three
+        dead fields under an unticked box are three things to ignore.
+      */}
+      <div className="flex flex-col gap-2 border-t border-pulpitry-line pt-3">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={theme.showReference}
+            onChange={(event) => set("showReference", event.target.checked)}
+            className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+          />
+          <span className="text-[13px] text-pulpitry-text">
+            Show the reference beneath
+          </span>
+        </label>
+
+        {theme.showReference ? (
+          <>
+            <div className="flex gap-3">
+              <label className="flex flex-[2] flex-col gap-1">
+                <span className="text-[12px] text-pulpitry-muted">
+                  Reference typeface
+                </span>
+                <select
+                  value={theme.referenceFontFamily}
+                  onChange={(event) =>
+                    set("referenceFontFamily", event.target.value)
+                  }
+                  className={FIELD}
+                >
+                  {/* Empty rather than a copy of the scripture's: a theme left
+                      on this keeps following the typeface above when it is
+                      changed later, which a copy would silently stop doing. */}
+                  <option value="">Same as the scripture</option>
+                  {FONT_FAMILIES.map((entry) => (
+                    <option key={entry.key} value={entry.key}>
+                      {entry.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex flex-1 flex-col justify-end">
+                <Slider
+                  label="Reference size"
+                  value={theme.referenceScale}
+                  min={0.5}
+                  max={2}
+                  step={0.05}
+                  format={(value) => `${Math.round(value * 100)}%`}
+                  onChange={(value) => set("referenceScale", value)}
+                />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={theme.referenceColor !== ""}
+                onChange={(event) =>
+                  // Falling back to the scripture's colour rather than to black:
+                  // ticking this should start from what is already on screen, so
+                  // the first thing the operator sees is not a change they did
+                  // not ask for.
+                  set(
+                    "referenceColor",
+                    event.target.checked ? theme.textColor : "",
+                  )
+                }
+                className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+              />
+              <span className="text-[13px] text-pulpitry-text">
+                Give the reference its own colour
+              </span>
+            </label>
+
+            {theme.referenceColor !== "" ? (
+              <Swatch
+                label="Reference"
+                value={theme.referenceColor}
+                onChange={(value) => set("referenceColor", value)}
+              />
+            ) : null}
+          </>
+        ) : null}
+      </div>
 
       <div className="border-t border-pulpitry-line pt-3">
         <span className="text-[12px] text-pulpitry-muted">Background</span>
@@ -131,7 +232,8 @@ export function DisplaySettings({
               key={kind}
               type="button"
               onClick={() => {
-                if (kind === "color" || kind === "gradient") set("backgroundKind", kind);
+                if (kind === "color" || kind === "gradient")
+                  set("backgroundKind", kind);
                 else void pickBackground(kind);
               }}
               className={`flex-1 rounded border px-2 py-1.5 text-[12px] capitalize transition-colors focus-visible:focus-ring ${
@@ -146,7 +248,10 @@ export function DisplaySettings({
         </div>
 
         {usingMedia && theme.backgroundPath ? (
-          <p className="mt-1.5 truncate text-[11px] text-pulpitry-muted" title={theme.backgroundPath}>
+          <p
+            className="mt-1.5 truncate text-[11px] text-pulpitry-muted"
+            title={theme.backgroundPath}
+          >
             {theme.backgroundPath.split("/").pop()}
           </p>
         ) : null}
@@ -187,7 +292,9 @@ export function DisplaySettings({
               min={0}
               max={0.85}
               step={0.05}
-              format={(value) => (value === 0 ? "off" : `${Math.round(value * 100)}%`)}
+              format={(value) =>
+                value === 0 ? "off" : `${Math.round(value * 100)}%`
+              }
               onChange={(value) => set("backgroundDim", value)}
             />
           )}
@@ -231,7 +338,8 @@ export function DisplaySettings({
 
       {showThemesHint ? (
         <p className="border-t border-pulpitry-line pt-3 text-[11px] text-pulpitry-muted">
-          Whole looks live in the Themes tab, where you can build and keep your own.
+          Whole looks live in the Themes tab, where you can build and keep your
+          own.
         </p>
       ) : null}
     </div>

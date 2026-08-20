@@ -22,6 +22,22 @@ export interface ProjectorTheme {
   /** How strongly the texture reads, 0 to 1. */
   textureStrength: number;
   showReference: boolean;
+
+  /* -- the reference line, which is its own piece of typography -- */
+
+  /**
+   * Typeface for the reference. Empty follows the scripture's.
+   *
+   * Empty rather than a copy of `fontFamily`, so a theme that never touches
+   * this keeps following the scripture when the scripture's own typeface is
+   * changed later. A copy would silently stop tracking it.
+   */
+  referenceFontFamily: string;
+  /** Multiplies the reference's size. 1 is what it has always been. */
+  referenceScale: number;
+  /** Colour for the reference. Empty follows the scripture's, for the same
+   *  reason the typeface does. */
+  referenceColor: string;
 }
 
 export type BackgroundKind = "color" | "gradient" | "image" | "video";
@@ -45,6 +61,11 @@ export const DEFAULT_THEME: ProjectorTheme = {
   texture: "none",
   textureStrength: 0.35,
   showReference: true,
+  // Empty and 1: the reference looks exactly as it did before it was
+  // adjustable, so an existing theme is unchanged by this existing.
+  referenceFontFamily: "",
+  referenceScale: 1,
+  referenceColor: "",
 };
 
 /**
@@ -190,6 +211,40 @@ export function fontStack(key: string): string {
     FONT_FAMILIES[0]!.stack
   );
 }
+
+/**
+ * How the reference beneath the words is set.
+ *
+ * # Why it is not simply the scripture, smaller
+ *
+ * It is a different thing being said. The verse is what the congregation is
+ * reading; "John 3:16 (KJV)" is a citation, and a service sheet or a broadcast
+ * lower third would set it in another face, or another weight, or the accent
+ * colour of the church's branding. Following the scripture is the sensible
+ * default and was the only option; it should not have been the only option.
+ *
+ * An empty family or colour means "follow the scripture", and is stored empty
+ * rather than as a copy so that changing the scripture's typeface later still
+ * moves the reference with it.
+ *
+ * `unit` is the same choice the body makes: a fraction of the width of the box
+ * being drawn into, so every surface showing this agrees.
+ */
+export function referenceStyle(
+  theme: ProjectorTheme,
+  unit: "cqw" = "cqw",
+): React.CSSProperties {
+  return {
+    fontFamily: fontStack(theme.referenceFontFamily || theme.fontFamily),
+    color: theme.referenceColor || theme.textColor,
+    // 1.6 is the size the reference has always been drawn at, so a scale of 1
+    // changes nothing anywhere.
+    fontSize: `${(REFERENCE_SIZE * (theme.referenceScale || 1)).toFixed(2)}${unit}`,
+  };
+}
+
+/** The reference's size before the operator's scale, as a fraction of width. */
+const REFERENCE_SIZE = 1.6;
 
 /**
  * Base type size, before the operator's scale.
