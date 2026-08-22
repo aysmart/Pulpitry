@@ -58,14 +58,30 @@ export function ChapterNavigator({
   const [error, setError] = useState<string | null>(null);
   const [focusVerse, setFocusVerse] = useState<number | null>(null);
 
+  /*
+   * The translation being read, which is not always the one being detected in.
+   *
+   * Detection searches `settings.translation` and nothing else -- changing it
+   * also clears the suppression list -- so a panel that switched it every time
+   * somebody clicked a cross-translation detection would quietly retarget
+   * detection mid-sermon. Click one Yoruba match during an English service and
+   * the English stops being found.
+   *
+   * So following a staged verse changes only what is *shown*. The operator's
+   * working translation changes when the operator changes it, from the picker
+   * below, and never as a side effect of clicking a verse.
+   */
+  const [viewing, setViewing] = useState(translation);
+  useEffect(() => setViewing(translation), [translation]);
+
   const listRef = useRef<HTMLDivElement>(null);
   // Where a shift-click measures from.
   const anchor = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!translation) return;
+    if (!viewing) return;
     let active = true;
-    void listBooks(translation)
+    void listBooks(viewing)
       .then((loaded) => {
         if (!active) return;
         setBooks(loaded);
@@ -75,12 +91,12 @@ export function ChapterNavigator({
     return () => {
       active = false;
     };
-  }, [translation]);
+  }, [viewing]);
 
   useEffect(() => {
-    if (!translation || books.length === 0) return;
+    if (!viewing || books.length === 0) return;
     let active = true;
-    void getChapter(translation, bookNumber, chapter)
+    void getChapter(viewing, bookNumber, chapter)
       .then((loaded) => {
         if (!active) return;
         setVerses(loaded);
@@ -90,7 +106,7 @@ export function ChapterNavigator({
     return () => {
       active = false;
     };
-  }, [translation, bookNumber, chapter, books.length]);
+  }, [viewing, bookNumber, chapter, books.length]);
 
   /*
    * Follow what is staged — but only when it changes.
@@ -107,6 +123,9 @@ export function ChapterNavigator({
   const followedId = follow?.id ?? null;
   useEffect(() => {
     if (!follow) return;
+    // Including the translation: the point is to show what is on the wall, and
+    // the same reference reads differently in another version.
+    if (follow.translation) setViewing(follow.translation);
     setBookNumber(follow.bookNumber);
     setChapter(follow.chapter);
     setResults(null);
@@ -150,7 +169,7 @@ export function ChapterNavigator({
       }
       setError(null);
       try {
-        const reference = await resolveReference(translation, text);
+        const reference = await resolveReference(viewing, text);
         if (reference) {
           setResults(null);
           setBookNumber(reference.bookNumber);
@@ -158,7 +177,7 @@ export function ChapterNavigator({
           if (reference.verse !== null) {
             setFocusVerse(reference.verse);
             const chapterVerses = await getChapter(
-              translation,
+              viewing,
               reference.bookNumber,
               reference.chapter,
             );
@@ -172,12 +191,12 @@ export function ChapterNavigator({
           }
           return;
         }
-        setResults(await searchVerses(translation, text));
+        setResults(await searchVerses(viewing, text));
       } catch (err) {
         setError(describeError(err));
       }
     },
-    [query, translation, onPreview, onPreviewRange],
+    [query, viewing, onPreview, onPreviewRange],
   );
 
   const rows = results ?? verses;
@@ -216,8 +235,13 @@ export function ChapterNavigator({
             className="min-w-0 flex-1 rounded border border-pulpitry-line bg-pulpitry-raised px-2 py-1.5 text-[12.5px] text-pulpitry-text outline-none placeholder:text-pulpitry-muted focus-visible:focus-ring"
           />
           <select
-            value={translation}
-            onChange={(event) => onSelectTranslation(event.target.value)}
+            value={viewing}
+            onChange={(event) => {
+              // A deliberate pick is both: it is what to read and what to
+              // detect in. Only following a staged verse is view-only.
+              setViewing(event.target.value);
+              onSelectTranslation(event.target.value);
+            }}
             aria-label="Translation"
             className="rounded border border-pulpitry-line bg-pulpitry-raised px-1.5 py-1.5 text-[12px] text-pulpitry-text outline-none focus-visible:focus-ring"
           >
