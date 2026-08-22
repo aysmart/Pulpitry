@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { AboutDialog } from "./components/AboutDialog";
 import { HistoryDialog } from "./components/HistoryDialog";
@@ -49,6 +48,7 @@ import { exportTranscript } from "./lib/exportTranscript";
 import { DEFAULT_THEME } from "./lib/theme";
 import { useDetections } from "./lib/useDetections";
 import { usePresentation } from "./lib/usePresentation";
+import { useUpdate } from "./lib/useUpdate";
 import { useAudio } from "./lib/useAudio";
 import { useMedia } from "./lib/useMedia";
 import { useSchedule } from "./lib/useSchedule";
@@ -178,33 +178,18 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
 
   /*
-   * A newer version, when there is one.
+   * A newer version, checked once when the window opens.
    *
-   * Held rather than shown as a notice, because notices clear themselves after
-   * six seconds and this is not a confirmation -- it is a thing to act on when
-   * the service is over. It stays until the operator opens it or dismisses it.
+   * Never on a timer and never while a service is running: a check costs
+   * nothing but a download does, and an application that decided to update
+   * itself mid-sermon would be worse than one that is out of date.
+   *
+   * `settings` is null for the first moments of a launch, which reads as off --
+   * so a church that turned this off is never asked, and everybody else is
+   * asked a moment later when settings arrive.
    */
-  const [update, setUpdate] = useState<{ version: string; url: string } | null>(
-    null,
-  );
+  const update = useUpdate(settings?.updateCheck ?? false);
 
-  useEffect(() => {
-    let stop: (() => void) | undefined;
-    let active = true;
-    void listen<{ version: string; url: string }>(
-      "update:available",
-      (event) => {
-        if (active) setUpdate(event.payload);
-      },
-    ).then((off) => {
-      if (active) stop = off;
-      else off();
-    });
-    return () => {
-      active = false;
-      stop?.();
-    };
-  }, []);
   const [error, setError] = useState<string | null>(null);
   const [displays, setDisplays] = useState<Display[]>([]);
   const [projector, setProjector] = useState<ProjectorState>({
@@ -583,25 +568,33 @@ export default function App() {
         */}
         {/* Beside the projector warning and above the fold, but quiet: an
             operator mid-service should be able to ignore it, and an operator
-            packing up should not have to go looking for it. */}
-        {update ? (
+            packing up should not have to go looking for it. Nothing downloads
+            until it is pressed. */}
+        {update.version ? (
           <span className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => void openUrl(update.url)}
-              title="Open the download page"
-              className="rounded border border-pulpitry-teal/50 px-2 py-1 text-[11.5px] text-pulpitry-teal focus-visible:focus-ring"
+              onClick={update.install}
+              disabled={update.progress !== null}
+              title="Download it and restart"
+              className="rounded border border-pulpitry-teal/50 px-2 py-1 text-[11.5px] text-pulpitry-teal disabled:opacity-60 focus-visible:focus-ring"
             >
-              Version {update.version} is out
+              {update.progress === null
+                ? `Version ${update.version} is out — install it`
+                : update.progress >= 1
+                  ? "Restarting\u2026"
+                  : `Downloading\u2026 ${Math.round(update.progress * 100)}%`}
             </button>
-            <button
-              type="button"
-              onClick={() => setUpdate(null)}
-              aria-label="Dismiss"
-              className="rounded px-1 text-[12px] leading-none text-pulpitry-muted hover:text-pulpitry-text focus-visible:focus-ring"
-            >
-              &times;
-            </button>
+            {update.progress === null ? (
+              <button
+                type="button"
+                onClick={update.dismiss}
+                aria-label="Dismiss"
+                className="rounded px-1 text-[12px] leading-none text-pulpitry-muted hover:text-pulpitry-text focus-visible:focus-ring"
+              >
+                &times;
+              </button>
+            ) : null}
           </span>
         ) : null}
 

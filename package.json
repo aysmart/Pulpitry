@@ -1,7 +1,7 @@
 {
   "name": "pulpitry",
   "productName": "Pulpitry",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Live speech transcription, Bible verse detection, and worship presentation for church services.",
   "private": true,
   "type": "module",
@@ -20,6 +20,8 @@
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.2",
     "@tauri-apps/plugin-opener": "^2.5.2",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",

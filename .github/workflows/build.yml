@@ -251,7 +251,21 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib
 
       - name: Package
-        run: npx tauri build --target ${{ matrix.target }}
+        env:
+          # Signs the update artifacts. Without it `createUpdaterArtifacts`
+          # fails the build rather than shipping unsigned ones, which is the
+          # right way round: an updater that installs whatever a manifest points
+          # at is a way onto every machine in every church running this.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        # `createUpdaterArtifacts` is passed here rather than kept in
+        # tauri.conf.json, because with it set every build demands the signing
+        # key -- including a developer's local one, which then fails with a
+        # message about a private key nobody expected to need. CI has the key;
+        # a laptop does not and should not.
+        run: >
+          npx tauri build --target ${{ matrix.target }}
+          --config '{"bundle":{"createUpdaterArtifacts":true}}'
 
       # Unsigned. Signing needs certificates this repository does not carry;
       # see the release job below for what has to be added before these are
@@ -350,6 +364,75 @@ jobs:
           SmartScreen will warn.
           FALLBACK
           fi
+
+      # The manifest the installed applications read.
+      #
+      # Built from the signatures the bundler just produced, and published to a
+      # tag that never moves -- `pulpitry-latest` -- so the URL compiled into
+      # every copy of the application stays valid for ever. Versioned tags carry
+      # the installers; this one carries only the answer to "is there a newer
+      # one".
+      #
+      # It is published to the downloads repository rather than to a service of
+      # ours, which is two promises at once: the check reaches GitHub rather
+      # than us, as the privacy policy says, and there is nothing of ours to be
+      # down at the moment a church tries to update.
+      - name: Assemble the update manifest 📜
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          notes=$(head -c 400 notes.md | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+
+          platforms=""
+          add() {
+            local key="$1" file="$2"
+            [ -f "$file.sig" ] || return 0
+            local sig
+            sig=$(cat "$file.sig")
+            local name
+            name=$(basename "$file")
+            platforms="${platforms}    \"${key}\": { \"signature\": \"${sig}\", \"url\": \"https://github.com/aysmart/castavox-downloads/releases/download/pulpitry-${GITHUB_REF_NAME}/${name}\" },\n"
+          }
+
+          # Tauri names these per platform; only the ones this run produced are
+          # listed, so a partial matrix cannot advertise a download that is not
+          # there.
+          for f in out/*.tar.gz out/*.zip out/*.AppImage out/*-setup.exe out/*.msi; do
+            [ -e "$f" ] || continue
+            case "$f" in
+              *.app.tar.gz|*macos*.tar.gz) add "darwin-aarch64" "$f" ;;
+              *.AppImage)                  add "linux-x86_64" "$f" ;;
+              *-setup.exe|*.msi|*.zip)     add "windows-x86_64" "$f" ;;
+            esac
+          done
+
+          if [ -z "$platforms" ]; then
+            echo "No signed artifacts; publishing no manifest." >&2
+            exit 0
+          fi
+
+          printf '{\n  "version": "%s",\n  "notes": %s,\n  "pub_date": "%s",\n  "platforms": {\n%s  }\n}\n' \
+            "$version" "$notes" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(printf "$platforms" | sed '$ s/,$//')" \
+            > latest.json
+          cat latest.json
+
+      - name: Publish the manifest 📜
+        if: hashFiles('latest.json') != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: aysmart/castavox-downloads
+          token: ${{ secrets.DOWNLOADS_TOKEN }}
+          # A tag that never moves, so the URL inside every installed copy stays
+          # valid. The asset is replaced on each release.
+          tag_name: pulpitry-latest
+          name: Pulpitry — latest
+          files: latest.json
+          prerelease: true
+          body: |
+            The manifest installed copies of Pulpitry read to find out whether a
+            newer version exists. Not a download: the installers are on the
+            versioned releases.
 
       - name: Publish 🚀
         uses: softprops/action-gh-release@v2

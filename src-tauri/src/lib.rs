@@ -1,6 +1,6 @@
 // Six modules now live in castavox-core, shared with Castavox rather than
 // copied into it. Named here so the rest of this file reads unchanged.
-use castavox_core::{audio, checkin, embed, exports, node, transcripts, update, whisper};
+use castavox_core::{audio, checkin, embed, exports, node, transcripts, whisper};
 
 mod assist;
 mod bible;
@@ -314,10 +314,6 @@ struct SpeechSpeed {
     factor: f32,
     detail: String,
 }
-
-/// Emitted when a newer version has been published. Carries the version and
-/// where to get it; the window decides whether and how to mention it.
-const EVENT_UPDATE: &str = "update:available";
 
 /// Where a check-in goes. The broker, which derives the country at its edge and
 /// discards the address before anything is written down.
@@ -1052,6 +1048,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .menu(menu::build)
         .on_menu_event(|app, event| menu::chose(app, event.id().as_ref()))
@@ -1111,36 +1109,6 @@ pub fn run() {
             // Before the rest of the setup, so the fetch is under way while the
             // verse library imports.
             provision_local_model(app.handle());
-
-            /*
-             * A look for a newer version, unless this church turned it off.
-             *
-             * Emitted as an event rather than shown from here: the window is
-             * the only thing that knows whether it is in the middle of a
-             * service, and a dialogue in front of a congregation would be the
-             * worst possible way to mention a release.
-             */
-            {
-                let stored = settings::load(app.handle()).unwrap_or_default();
-                if let Ok(dir) = app.path().app_data_dir() {
-                    let handle = app.handle().clone();
-                    update::look(
-                        stored.update_check,
-                        &dir,
-                        "pulpitry",
-                        env!("CARGO_PKG_VERSION"),
-                        move |newer| {
-                            let _ = handle.emit(
-                                EVENT_UPDATE,
-                                serde_json::json!({
-                                    "version": newer.version,
-                                    "url": newer.url,
-                                }),
-                            );
-                        },
-                    );
-                }
-            }
 
             /*
              * The once-a-day check-in, if this church switched it on.

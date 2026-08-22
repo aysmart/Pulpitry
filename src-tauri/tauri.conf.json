@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Pulpitry",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "identifier": "com.pulpitry.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -80,6 +80,17 @@
         "depends": [
           "alsa-lib"
         ]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/aysmart/castavox-downloads/releases/download/pulpitry-latest/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZCMkY5OTYzRDIwMDFENTUKUldSVkhRRFNZNWt2YXdtMXV1cU9lb1BCOUYxUWwvdytVK09KYmdFcld3ZDRZcFY1bHBraCs5Z0wK",
+      "windows": {
+        "installMode": "passive"
       }
     }
   }
