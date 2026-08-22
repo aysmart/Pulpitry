@@ -26,6 +26,7 @@ export function ChapterNavigator({
   onPreviewRange,
   previewVerseIds,
   liveVerseIds,
+  follow,
 }: {
   translation: string;
   translations: Translation[];
@@ -34,6 +35,19 @@ export function ChapterNavigator({
   onPreviewRange: (verses: Verse[], andShow?: boolean) => void;
   previewVerseIds: number[];
   liveVerseIds: number[];
+  /**
+   * The verse to bring into view, or null.
+   *
+   * Whatever is staged: a detection the operator clicked, an entry taken from
+   * the running order, or the verse Prev and Next just moved to. The panel
+   * follows it — book, chapter, and the verse itself scrolled to and lit.
+   *
+   * Why it matters beyond tidiness: the Original panel shows the Greek or
+   * Hebrew for whatever is staged, so an operator who wants a word from a
+   * detected verse needs the chapter list on that verse too. Before this they
+   * had to find it by hand while the sentence they were following moved on.
+   */
+  follow: Verse | null;
 }) {
   const [books, setBooks] = useState<Book[]>([]);
   const [bookNumber, setBookNumber] = useState(1);
@@ -78,13 +92,51 @@ export function ChapterNavigator({
     };
   }, [translation, bookNumber, chapter, books.length]);
 
+  /*
+   * Follow what is staged — but only when it changes.
+   *
+   * Keyed on the verse id, so an operator who deliberately browses to Romans
+   * while John 3:16 is live is left where they went. Only a *new* verse being
+   * staged moves the panel; without that this would yank the chapter list back
+   * every time it rendered, which is a worse panel than one that never follows
+   * at all.
+   *
+   * Results are cleared because a search list is showing instead of the
+   * chapter, and navigating underneath it would happen where nobody can see it.
+   */
+  const followedId = follow?.id ?? null;
+  useEffect(() => {
+    if (!follow) return;
+    setBookNumber(follow.bookNumber);
+    setChapter(follow.chapter);
+    setResults(null);
+    setFocusVerse(follow.verse);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followedId]);
+
   // Bring a referenced verse into view once its chapter has rendered.
   useEffect(() => {
     if (focusVerse === null || results) return;
-    const target = listRef.current?.querySelector(`[data-verse="${focusVerse}"]`);
+
+    /*
+     * Wait for the chapter that actually contains it.
+     *
+     * `verses` lags the pickers by a fetch, so for one render it still holds
+     * the chapter being left. Verse 16 exists in most chapters, so without this
+     * the panel scrolls to the wrong verse 16, clears the request, and is then
+     * sitting still when the right chapter arrives — which looks exactly like
+     * the feature not working.
+     */
+    const here = verses[0];
+    if (!here || here.bookNumber !== bookNumber || here.chapter !== chapter)
+      return;
+
+    const target = listRef.current?.querySelector(
+      `[data-verse="${focusVerse}"]`,
+    );
     target?.scrollIntoView({ block: "center" });
     setFocusVerse(null);
-  }, [focusVerse, verses, results]);
+  }, [focusVerse, verses, results, bookNumber, chapter]);
 
   const currentBook = books.find((book) => book.number === bookNumber);
 
@@ -170,7 +222,11 @@ export function ChapterNavigator({
             className="rounded border border-pulpitry-line bg-pulpitry-raised px-1.5 py-1.5 text-[12px] text-pulpitry-text outline-none focus-visible:focus-ring"
           >
             {translations.map((entry) => (
-              <option key={entry.id} value={entry.id} title={`${entry.name} (${entry.year})`}>
+              <option
+                key={entry.id}
+                value={entry.id}
+                title={`${entry.name} (${entry.year})`}
+              >
                 {entry.id}
               </option>
             ))}
@@ -203,13 +259,14 @@ export function ChapterNavigator({
             }}
             className="rounded border border-pulpitry-line bg-pulpitry-raised px-1.5 py-1.5 text-[12px] text-pulpitry-text outline-none focus-visible:focus-ring"
           >
-            {Array.from({ length: currentBook?.chapters ?? 1 }, (_, index) => index + 1).map(
-              (number) => (
-                <option key={number} value={number}>
-                  {number}
-                </option>
-              ),
-            )}
+            {Array.from(
+              { length: currentBook?.chapters ?? 1 },
+              (_, index) => index + 1,
+            ).map((number) => (
+              <option key={number} value={number}>
+                {number}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -248,7 +305,9 @@ export function ChapterNavigator({
                   isLive ? "text-pulpitry-gold" : "text-pulpitry-muted"
                 }`}
               >
-                {results ? `${verse.book} ${verse.chapter}:${verse.verse}` : verse.verse}
+                {results
+                  ? `${verse.book} ${verse.chapter}:${verse.verse}`
+                  : verse.verse}
               </span>
               <span className="text-[12.5px] leading-snug">{verse.text}</span>
             </button>

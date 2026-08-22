@@ -1,7 +1,11 @@
 import { useState } from "react";
 
 import type { Translation, Verse } from "../lib/bible";
-import { presentableLabel, presentableText, type Presentable } from "../lib/usePresentation";
+import {
+  presentableLabel,
+  presentableText,
+  type Presentable,
+} from "../lib/usePresentation";
 import { ChapterNavigator } from "./ChapterNavigator";
 import type { ProjectorTheme } from "../lib/theme";
 import type { Ticker } from "../lib/projector";
@@ -37,6 +41,7 @@ export function ScripturePanel({
   onPreviewRange,
   previewVerseIds,
   liveVerseIds,
+  follow,
   history,
   schedule,
   onStageEntry,
@@ -60,6 +65,8 @@ export function ScripturePanel({
   onPreviewRange: (verses: Verse[], andShow?: boolean) => void;
   previewVerseIds: number[];
   liveVerseIds: number[];
+  /** The staged verse the chapter list should follow. */
+  follow: Verse | null;
   history: Presentable[];
   schedule: ScheduleController;
   onStageEntry: (index: number) => Promise<Presentable | null>;
@@ -87,9 +94,7 @@ export function ScripturePanel({
       // would only take width the seventh tab needs.
       title=""
       accent="teal"
-      bodyClassName={
-        tab === "History" ? "" : "overflow-hidden"
-      }
+      bodyClassName={tab === "History" ? "" : "overflow-hidden"}
       actions={
         <div className="flex flex-wrap justify-end gap-0">
           {TABS.map((name) => (
@@ -132,6 +137,7 @@ export function ScripturePanel({
             onPreviewRange={onPreviewRange}
             previewVerseIds={previewVerseIds}
             liveVerseIds={liveVerseIds}
+            follow={follow}
           />
         )
       ) : null}
@@ -148,7 +154,11 @@ export function ScripturePanel({
       ) : null}
 
       {tab === "Themes" ? (
-        <TemplateLibrary theme={theme} onApply={onApplyTheme} onError={onError} />
+        <TemplateLibrary
+          theme={theme}
+          onApply={onApplyTheme}
+          onError={onError}
+        />
       ) : null}
 
       {tab === "Slides" ? (
@@ -189,7 +199,11 @@ export function ScripturePanel({
                 onError={onError}
               />
             ) : (
-              <TickerPanel ticker={ticker} theme={theme} onChange={onTickerChange} />
+              <TickerPanel
+                ticker={ticker}
+                theme={theme}
+                onChange={onTickerChange}
+              />
             )}
           </div>
         </div>
@@ -227,7 +241,9 @@ export function ScripturePanel({
 
       {tab === "History" ? (
         history.length === 0 ? (
-          <EmptyState>Verses you put on the projector will collect here.</EmptyState>
+          <EmptyState>
+            Verses you put on the projector will collect here.
+          </EmptyState>
         ) : (
           <div className="flex flex-col p-1">
             {history.map((item) => (
@@ -249,7 +265,6 @@ export function ScripturePanel({
           </div>
         )
       ) : null}
-
     </Panel>
   );
 }

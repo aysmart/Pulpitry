@@ -710,7 +710,10 @@ export default function App() {
                 ? preview.verses.map((verse) => verse.id)
                 : []
             }
+            /* The same verse the Original panel follows, so the chapter list and
+             the Greek beside it are never looking at different places. */
             liveVerseIds={live?.ids ?? []}
+            follow={originalVerse}
             history={history}
             schedule={schedule}
             onStageEntry={stageEntry}
