@@ -282,6 +282,22 @@ jobs:
             ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/deb/*.deb
             ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/rpm/*.rpm
             ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/appimage/*.AppImage
+            # The updater's own artifacts, which are not the installers.
+            #
+            # Listing the installers explicitly is deliberate -- it is what
+            # keeps a stray file out of a release -- but it means anything new
+            # has to be added here or it never leaves this job. The first run
+            # with signing enabled produced every signature and uploaded none
+            # of them, so the manifest step found nothing and published
+            # nothing. The build was green throughout.
+            #
+            # macOS updates from a tarball rather than the disk image; the
+            # other platforms update from the installer they already ship.
+            ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+            ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
+            ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/msi/*.msi.sig
+            ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/nsis/*.exe.sig
+            ${{ env.TARGET_ROOT }}/${{ matrix.target }}/release/bundle/appimage/*.AppImage.sig
 
   # Publishing, which happens somewhere else on purpose.
   #
@@ -408,7 +424,9 @@ jobs:
           done
 
           if [ -z "$platforms" ]; then
-            echo "No signed artifacts; publishing no manifest." >&2
+            # Loud, because silence is what let the first attempt look green
+            # while shipping an updater that could never find anything.
+            echo "::warning::No signed artifacts found in out/ — no update manifest published. Installed copies will not see this release."
             exit 0
           fi
 
