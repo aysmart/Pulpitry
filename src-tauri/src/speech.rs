@@ -253,9 +253,32 @@ impl SpeechManager {
                     if !self.is_current(generation) {
                         break;
                     }
+                    /*
+                     * Keep whatever the bridge said, if it said anything.
+                     *
+                     * It reports its own reasons -- "the speech service closed
+                     * the connection (1006)", "Deepgram rejected the connection
+                     * (403)" -- and those arrive as status updates while it is
+                     * running. Then it exits, and this replaced every one of
+                     * them with "stopped unexpectedly".
+                     *
+                     * So an operator whose church network blocks the speech
+                     * service, and an operator whose subscription is refused,
+                     * and an operator with no microphone all saw exactly the
+                     * same sentence and retried against it for ever. The reason
+                     * was in the log the whole time, which is no use to somebody
+                     * in a service, and no use to us either when they write in.
+                     */
+                    let carried = {
+                        let held = self.status.lock();
+                        held.detail.clone().filter(|d| !d.trim().is_empty())
+                    };
                     self.set_status(
                         "reconnecting",
-                        Some("Transcription stopped unexpectedly — reconnecting".into()),
+                        Some(carried.map_or_else(
+                            || "Transcription stopped unexpectedly — reconnecting".to_string(),
+                            |reason| format!("{reason} — reconnecting"),
+                        )),
                         None,
                     );
                 }
@@ -422,10 +445,26 @@ impl SpeechManager {
             env.insert("CASTAVOX_SPEECH_REGION".to_string(), settings.azure_region.clone());
         }
 
+        /*
+         * The proxy this network requires, if it requires one.
+         *
+         * Node reads neither the Windows proxy setting nor the registry it
+         * lives in, so without this the bridge is the only thing on a filtered
+         * church network that cannot reach anything -- while the browser beside
+         * it works and the licence activated minutes earlier.
+         *
+         * Nothing is inserted when there is no proxy, so the ordinary case
+         * launches with exactly the environment it always had.
+         */
+        if let Some(proxy) = castavox_core::proxy::https_proxy() {
+            crate::log_line!("[speech] using the system proxy at {proxy}");
+            env.insert("HTTPS_PROXY".to_string(), proxy);
+        }
+
         // Checked before anything else is set up, so a machine without Node
         // says so plainly rather than failing somewhere further in.
-        let node = crate::node::find()
-            .ok_or_else(|| anyhow!("{}", crate::node::missing_message(&crate::node::status())))?;
+        let node = castavox_core::node::find()
+            .ok_or_else(|| anyhow!("{}", castavox_core::node::missing_message(&castavox_core::node::status())))?;
 
         let script = self
             .app
@@ -437,7 +476,15 @@ impl SpeechManager {
             .app
             .shell()
             .command(&node.path)
-            .args([script.as_os_str()])
+            // Before the script, because Node reads its own options first.
+            // Empty on every runtime that does not understand it, so an older
+            // Node is launched exactly as it always was.
+            .args(
+                castavox_core::node::system_ca_args(&node)
+                    .into_iter()
+                    .map(std::ffi::OsString::from)
+                    .chain(std::iter::once(script.as_os_str().to_os_string())),
+            )
             .envs(env)
             .spawn()
             .map_err(|e| {
