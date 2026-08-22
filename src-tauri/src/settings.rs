@@ -21,6 +21,11 @@ const KEYCHAIN_HOSTED_ACCOUNT: &str = "hosted-device-token";
 /// Azure AI Foundry's inference API is versioned by query string.
 pub const DEFAULT_ASSIST_API_VERSION: &str = "2024-05-01-preview";
 
+/// Serde default for a flag that is on unless a settings file says otherwise.
+fn yes() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -103,6 +108,20 @@ pub struct Settings {
     /// signal `provision_local_model` acts on at startup. It is only ever empty
     /// once.
     pub speech_model: String,
+    /// Whether to look, once a day, for a newer version.
+    ///
+    /// **On**, unlike the check-in, and separate from it for a reason: the
+    /// check-in is opt-in and most churches will never switch it on, which
+    /// makes it exactly the wrong channel for this — the churches least likely
+    /// to opt in are the ones least likely to be watching a downloads page.
+    ///
+    /// It is defensible on by default because it sends nothing: a plain read of
+    /// a public list of releases, identical from every installation, and it does
+    /// not reach our servers at all. An operator who wants a machine that
+    /// touches nothing can still turn it off, which is why this exists.
+    #[serde(default = "yes")]
+    pub update_check: bool,
+
     /// Whether this installation sends the once-a-day check-in.
     ///
     /// Off, and only the operator turns it on. The privacy policy tells
@@ -230,6 +249,7 @@ impl Default for Settings {
             mirror_enabled: false,
             mirror_pairings: Vec::new(),
             // Off. Only an operator turns this on.
+            update_check: true,
             check_in: false,
             semantic_enabled: true,
             // Measured against the full 31,102-verse index, and against the

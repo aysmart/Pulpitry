@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { AboutDialog } from "./components/AboutDialog";
 import { HistoryDialog } from "./components/HistoryDialog";
@@ -175,6 +176,35 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+
+  /*
+   * A newer version, when there is one.
+   *
+   * Held rather than shown as a notice, because notices clear themselves after
+   * six seconds and this is not a confirmation -- it is a thing to act on when
+   * the service is over. It stays until the operator opens it or dismisses it.
+   */
+  const [update, setUpdate] = useState<{ version: string; url: string } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let active = true;
+    void listen<{ version: string; url: string }>(
+      "update:available",
+      (event) => {
+        if (active) setUpdate(event.payload);
+      },
+    ).then((off) => {
+      if (active) stop = off;
+      else off();
+    });
+    return () => {
+      active = false;
+      stop?.();
+    };
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [displays, setDisplays] = useState<Display[]>([]);
   const [projector, setProjector] = useState<ProjectorState>({
@@ -551,6 +581,30 @@ export default function App() {
           button is dead. It is not; there is simply no screen to send to. Said
           here, with the fix beside it.
         */}
+        {/* Beside the projector warning and above the fold, but quiet: an
+            operator mid-service should be able to ignore it, and an operator
+            packing up should not have to go looking for it. */}
+        {update ? (
+          <span className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => void openUrl(update.url)}
+              title="Open the download page"
+              className="rounded border border-pulpitry-teal/50 px-2 py-1 text-[11.5px] text-pulpitry-teal focus-visible:focus-ring"
+            >
+              Version {update.version} is out
+            </button>
+            <button
+              type="button"
+              onClick={() => setUpdate(null)}
+              aria-label="Dismiss"
+              className="rounded px-1 text-[12px] leading-none text-pulpitry-muted hover:text-pulpitry-text focus-visible:focus-ring"
+            >
+              &times;
+            </button>
+          </span>
+        ) : null}
+
         {!projector.open ? (
           <button
             type="button"

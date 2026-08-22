@@ -333,6 +333,7 @@ export function SettingsDialog({
   const [speed, setSpeed] = useState<string | null>(null);
   const [timing, setTiming] = useState(false);
 
+  const [updateCheck, setUpdateCheck] = useState(settings.updateCheck);
   const [checkIn, setCheckIn] = useState(settings.checkIn);
   const [semanticEnabled, setSemanticEnabled] = useState(
     settings.semanticEnabled,
@@ -435,6 +436,7 @@ export function SettingsDialog({
         assistEndpoint: assistEndpoint.trim(),
         assistModel: assistModel.trim(),
         assistApiVersion: assistApiVersion.trim(),
+        updateCheck,
         checkIn,
         semanticEnabled,
         semanticThreshold,
@@ -748,6 +750,25 @@ export function SettingsDialog({
             one we outgrew -- so the note says exactly what would be sent and,
             just as plainly, what would not.
           */}
+          <Section
+            title="New versions"
+            note="Once a day, Pulpitry asks the public download page whether a newer version has been published, and says so quietly if one has. The request carries nothing at all — no identifier, no version, nothing about this machine — and it does not reach our servers: the releases are on GitHub, which already serves every download. Switch it off for a machine that should touch nothing."
+          >
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={updateCheck}
+                onChange={(event) => setUpdateCheck(event.target.checked)}
+                className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+              />
+              <span className="text-[13px] text-pulpitry-text">
+                Tell me when a new version is out
+              </span>
+            </label>
+          </Section>
+
+          <div className="border-t border-pulpitry-line" />
+
           <Section
             title="Telling us this installation exists"
             note="Once a day, if you switch it on: a random identifier made on this machine, which application and version, your operating system, what kind of processor it has, and which transcription engine you chose. Your country is worked out from the connection and the address is discarded. Never your machine's name, never your address, and never a transcript, a verse or a filename — there is no field for any of those. It never delays anything, and if it cannot be sent nothing happens."
