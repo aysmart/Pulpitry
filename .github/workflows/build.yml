@@ -184,6 +184,39 @@ jobs:
           cache: true
           stripdown: true
 
+      # Shipped beside the executable, and this is not an optimisation.
+      #
+      # Building with the Vulkan backend puts a load-time import of vulkan-1.dll
+      # into the binary. On a machine with no Vulkan runtime -- an old laptop, a
+      # GPU whose driver predates it -- Windows refuses to start the process at
+      # all: "the code execution cannot proceed because vulkan-1.dll was not
+      # found". Not slower transcription. The application does not open.
+      #
+      # The loader is Apache-2.0 and meant to be redistributed for exactly this.
+      # With it present the process starts, the loader looks for a driver, finds
+      # none, and whisper falls back to the processor -- which is what those
+      # machines were always going to use.
+      - name: Ship the Vulkan loader
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $found = Get-ChildItem -Path "$env:VULKAN_SDK" -Filter vulkan-1.dll -Recurse -ErrorAction SilentlyContinue |
+                   Where-Object { $_.FullName -match 'x64|Bin' } |
+                   Select-Object -First 1
+          if (-not $found) {
+            $found = Get-ChildItem -Path "$env:SystemRoot\System32" -Filter vulkan-1.dll -ErrorAction SilentlyContinue |
+                     Select-Object -First 1
+          }
+          if (-not $found) {
+            # Loud. Shipping without it is the bug this step exists to prevent,
+            # and a silent skip would put it straight back.
+            Write-Error "vulkan-1.dll not found; the Windows build would not start on a machine without a Vulkan driver."
+            exit 1
+          }
+          New-Item -ItemType Directory -Force -Path src-tauri/resources | Out-Null
+          Copy-Item $found.FullName src-tauri/resources/vulkan-1.dll -Force
+          Write-Host "bundled $($found.FullName)"
+
       - name: Install dependencies
         run: npm ci
 
@@ -263,6 +296,10 @@ jobs:
         # key -- including a developer's local one, which then fails with a
         # message about a private key nobody expected to need. CI has the key;
         # a laptop does not and should not.
+        # No resource override: `resources/*` in tauri.conf.json already globs
+        # the directory the loader is copied into, and passing a resources array
+        # here would *replace* that list rather than add to it -- taking the
+        # speech sidecar and the embedder out of the bundle with it.
         run: >
           npx tauri build --target ${{ matrix.target }}
           --config '{"bundle":{"createUpdaterArtifacts":true}}'
