@@ -80,6 +80,14 @@ pub struct SpeechManager {
     /// instead of racing the one that replaced it.
     generation: AtomicU64,
     status: Mutex<SpeechStatus>,
+    /// The last thing the bridge printed before it stopped.
+    ///
+    /// It writes its reasons to stderr -- "[deepgram] 403: ...", a stack from a
+    /// module that would not load -- and those went only to the log file. When
+    /// the process then died without having emitted a structured message, the
+    /// operator was told "stopped unexpectedly" and the one line that said why
+    /// sat in a file nobody in a service is going to open.
+    last_output: Mutex<Option<String>>,
     session: Mutex<Option<Session>>,
     /// Kept for the life of the app rather than the session: the model it holds
     /// is expensive to load, and the operator can change which one they want.
@@ -121,6 +129,7 @@ impl SpeechManager {
             desired: AtomicBool::new(false),
             generation: AtomicU64::new(0),
             status: Mutex::new(SpeechStatus::idle()),
+            last_output: Mutex::new(None),
             session: Mutex::new(None),
             local: Mutex::new(None),
             leg: AtomicU64::new(0),
@@ -238,6 +247,9 @@ impl SpeechManager {
                 continue;
             }
 
+            // Each attempt speaks only for itself: a reason carried over from
+            // the last one would be reported against this one's failure.
+            *self.last_output.lock() = None;
             match self.spawn_session(generation) {
                 Ok((events, device)) => {
                     self.set_status("listening", None, Some(device));
@@ -272,7 +284,21 @@ impl SpeechManager {
                     let carried = {
                         let held = self.status.lock();
                         held.detail.clone().filter(|d| !d.trim().is_empty())
-                    };
+                    }
+                    // Then whatever it printed on its way out. Truncated,
+                    // because a stack trace on the status bar is not a message
+                    // -- but the first line of one usually names the fault.
+                    .or_else(|| {
+                        self.last_output.lock().clone().map(|line| {
+                            let first = line.lines().next().unwrap_or_default().trim().to_string();
+                            if first.chars().count() > 160 {
+                                first.chars().take(160).collect::<String>() + "…"
+                            } else {
+                                first
+                            }
+                        })
+                    })
+                    .filter(|d| !d.trim().is_empty());
                     self.set_status(
                         "reconnecting",
                         Some(carried.map_or_else(
@@ -546,13 +572,36 @@ impl SpeechManager {
                     let line = line.trim();
                     if !line.is_empty() {
                         crate::log_line!("[sidecar] {line}");
+                        // Kept as well as logged, so that a bridge which dies
+                        // without a structured message still has something to
+                        // say for itself on screen.
+                        *self.last_output.lock() = Some(line.to_string());
                     }
                 }
                 CommandEvent::Error(err) => {
                     crate::log_line!("[sidecar] error: {err}");
+                    *self.last_output.lock() = Some(err.to_string());
                 }
                 CommandEvent::Terminated(payload) => {
                     crate::log_line!("[sidecar] terminated: {payload:?}");
+                    /*
+                     * How it ended, when it said nothing on the way out.
+                     *
+                     * A process that is killed rather than failing -- by
+                     * antivirus, by a policy that will not run an unsigned
+                     * executable -- prints nothing at all, so there is no
+                     * stderr to carry and the operator was told only that
+                     * something stopped. The exit code is not an explanation,
+                     * but it is the difference between "it crashed" and "it was
+                     * killed", and that is the difference between two entirely
+                     * different things to go and check.
+                     */
+                    if self.last_output.lock().is_none() {
+                        *self.last_output.lock() = Some(match payload.code {
+                            Some(code) => format!("The speech engine stopped with code {code}"),
+                            None => "The speech engine was stopped by the system".to_string(),
+                        });
+                    }
                     return;
                 }
                 _ => {}
