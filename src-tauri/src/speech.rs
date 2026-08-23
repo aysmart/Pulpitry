@@ -492,11 +492,44 @@ impl SpeechManager {
         let node = castavox_core::node::find()
             .ok_or_else(|| anyhow!("{}", castavox_core::node::missing_message(&castavox_core::node::status())))?;
 
-        let script = self
-            .app
-            .path()
-            .resolve(SIDECAR_SCRIPT, tauri::path::BaseDirectory::Resource)
-            .map_err(|e| anyhow!("could not locate the speech sidecar: {e}"))?;
+        /*
+         * The script, in a form Node will accept.
+         *
+         * Resolving a resource on Windows can hand back the verbatim form,
+         * `\\?\C:\...`. Everything on the Rust side reads it happily, so the
+         * file is plainly there; Node checks the root of the path before it
+         * loads anything and cannot stat that one, and refuses the script with
+         * EISDIR on the drive letter. The process then dies before it has run a
+         * line, which is why this arrived as "stopped unexpectedly" and not as
+         * anything resembling a path problem.
+         */
+        let script = castavox_core::node::plain(
+            &self
+                .app
+                .path()
+                .resolve(SIDECAR_SCRIPT, tauri::path::BaseDirectory::Resource)
+                .map_err(|e| anyhow!("could not locate the speech sidecar: {e}"))?,
+        );
+
+        // Said plainly here rather than as a stack trace from Node, which is
+        // what a missing file used to look like.
+        if !script.is_file() {
+            return Err(anyhow!(
+                "the speech engine is missing from this installation ({}) -- reinstalling Pulpitry will replace it",
+                script.display()
+            ));
+        }
+
+        let args: Vec<String> = castavox_core::node::system_ca_args(&node);
+        // What was actually run. The one question the log could not answer,
+        // the last time a sidecar died at startup, was what it had been asked
+        // to do.
+        crate::log_line!(
+            "[speech] starting {} {} {}",
+            node.path.display(),
+            args.join(" "),
+            script.display()
+        );
 
         let (events, child) = self
             .app
@@ -506,8 +539,7 @@ impl SpeechManager {
             // Empty on every runtime that does not understand it, so an older
             // Node is launched exactly as it always was.
             .args(
-                castavox_core::node::system_ca_args(&node)
-                    .into_iter()
+                args.into_iter()
                     .map(std::ffi::OsString::from)
                     .chain(std::iter::once(script.as_os_str().to_os_string())),
             )
