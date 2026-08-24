@@ -27,15 +27,19 @@ use crate::settings::Settings;
 
 /// Roughly how much transcript to send.
 ///
-/// A long service runs past what a context window will take and past what is
-/// worth paying for. The middle is dropped rather than the end: a sermon states
-/// its subject early and concludes late, and losing either costs more than
-/// losing an illustration from the middle.
-/// Roughly 30,000 words: about four hours of speech, which is longer than any
-/// single service, so in practice a whole one is sent whole. The middle is
-/// still what gives way if something ever runs past it.
-const HEAD_WORDS: usize = 20_000;
-const TAIL_WORDS: usize = 10_000;
+/// The most that is sent as one request before the service is read in stretches
+/// instead.
+///
+/// Under this, one request gives the better summary: the model has the whole
+/// service in front of it and can see how the end answers the beginning. Over
+/// it, the service is read in stretches and the readings drawn together --
+/// which is slower and costs more, and loses nothing.
+///
+/// Nothing being lost is the point. This used to send the first 30,000 words
+/// and the last 15,000 and tell the model the middle had been dropped, which
+/// for a four-hour teaching session is most of the teaching. A summary of the
+/// first and last hours of a service is not a summary of the service.
+const SINGLE_PASS_WORDS: usize = 25_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -98,7 +102,6 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
         castavox_core::assistant::Route::Own { deployment: &deployment, key }
     };
 
-    let excerpt = excerpt(transcript);
 
     /*
      * Strict JSON, asked for and retried without.
@@ -114,18 +117,261 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
      * were all written out here as well, identically, in Castavox. They are in
      * castavox-core now, where a fix reaches both.
      */
-    let content = castavox_core::assistant::complete(
-        &client,
-        &route,
-        body(settings, &excerpt, false),
-        true,
-    )
-    .map_err(|failure| advise(&failure, hosted))?;
+    /*
+     * One request where the whole service fits, stretches where it does not.
+     *
+     * The word count decides the first attempt and the model decides the
+     * second: a deployment with a small context refuses a transcript this
+     * thinks is comfortable, and the honest response to that refusal is to
+     * read the service in pieces, not to send less of it.
+     */
+    let whole = transcript.split_whitespace().count();
+    // How long it took and how much was sent, on the way out as well as the way
+    // in: a failure that arrives in two seconds and one that arrives in sixty
+    // are different faults, and guessing which from the clock on two separate
+    // attempts is how an afternoon goes on the wrong one.
+    let started = std::time::Instant::now();
+    crate::log_line!("[summarise] asking about {whole} words");
+    let _timing = TimeIt { started, words: whole };
+    let content = if whole > SINGLE_PASS_WORDS {
+        crate::log_line!("[summarise] {whole} words: reading in stretches");
+        in_stretches(&client, &route, settings, transcript, hosted, CHUNK_WORDS, CHUNK_OVERLAP)?
+    } else {
+        match castavox_core::assistant::complete(
+            &client,
+            &route,
+            body(settings, transcript, false),
+            true,
+        ) {
+            Ok(content) => content,
+            Err(failure) if worth_splitting(&failure) => {
+                // How small the pieces need to be depends on what was wrong
+                // with the whole: too much to read, or one phrase in it.
+                let (size, overlap) = if refused_by_filter(&failure) {
+                    (FILTER_WORDS, FILTER_OVERLAP)
+                } else {
+                    (CHUNK_WORDS, CHUNK_OVERLAP)
+                };
+                crate::log_line!("[summarise] refused whole; reading in stretches instead");
+                in_stretches(&client, &route, settings, transcript, hosted, size, overlap)?
+            }
+            Err(failure) => return Err(advise(&failure, hosted)),
+        }
+    };
 
     if content.trim().is_empty() {
         bail!("The model returned nothing to read. Try again in a moment.");
     }
     read(&content)
+}
+
+/// How much of a transcript goes into one stretch, and how much each shares
+/// with the one before it.
+///
+/// 12,000 words is around 16,000 tokens: inside the context of every deployment
+/// these ship against, with room for the notes to come back. The overlap is
+/// four hundred words, a couple of minutes of speech -- enough that a passage
+/// read at the end of one stretch is still there when the next one expounds it.
+const CHUNK_WORDS: usize = 12_000;
+const CHUNK_OVERLAP: usize = 400;
+
+/// The same, when the reason for splitting is the safety filter rather than
+/// length.
+///
+/// Length wants the largest stretch that fits; the filter wants the smallest
+/// stretch that isolates whatever it objected to. Splitting a 969-word service
+/// into one 12,000-word stretch and sending it again is sending the same
+/// request twice, which is what happened the first time this was tried.
+///
+/// Three hundred words is a couple of minutes of speech: small enough that a
+/// refused stretch costs little, large enough to still be worth summarising.
+const FILTER_WORDS: usize = 300;
+const FILTER_OVERLAP: usize = 40;
+
+/// The whole service, in stretches, then drawn back together.
+///
+/// The alternative -- and what this replaces -- was to send the beginning and
+/// the end and admit the middle had been dropped. For a forty-minute sermon
+/// that never happened. For a four-hour teaching session it is most of the
+/// teaching, and a summary of the first and last hours is not a summary of the
+/// service.
+///
+/// Each stretch is read for notes, in order and told where it sits in the
+/// whole. The notes are then given to the same instructions that would have
+/// read the transcript, so the summary that comes out has the shape it always
+/// had -- it has simply been assembled from readings rather than one.
+fn in_stretches(
+    client: &reqwest::blocking::Client,
+    route: &castavox_core::assistant::Route,
+    settings: &Settings,
+    transcript: &str,
+    hosted: bool,
+    size: usize,
+    overlap: usize,
+) -> Result<String> {
+    let stretches = castavox_core::assistant::chunks(transcript, size, overlap);
+    if stretches.is_empty() {
+        bail!("There is not enough here to summarise yet.");
+    }
+    crate::log_line!("[summarise] reading {} stretches", stretches.len());
+
+    let mut notes: Vec<String> = Vec::with_capacity(stretches.len());
+    let mut refused = 0usize;
+    for (index, stretch) in stretches.iter().enumerate() {
+        crate::log_line!("[summarise] stretch {} of {}", index + 1, stretches.len());
+        match castavox_core::assistant::complete(
+            client,
+            route,
+            notes_body(settings, stretch, index + 1, stretches.len()),
+            false,
+        ) {
+            Ok(content) if !content.trim().is_empty() => notes.push(content),
+            Ok(_) => {}
+            /*
+             * One stretch refused is not the service lost.
+             *
+             * The filter objects to a phrase, and a phrase sits in one stretch.
+             * Refusing the whole summary because six minutes of a four-hour
+             * session contained a mishearing serves nobody -- so that stretch
+             * is stepped over, said to be missing, and the rest is summarised.
+             * A summary with a stated gap is worth having; no summary is not.
+             */
+            Err(failure) if refused_by_filter(&failure) => {
+                crate::log_line!("[summarise] the model would not read stretch {} of {}", index + 1, stretches.len());
+                refused += 1;
+                notes.push(format!(
+                    "--- This stretch of the service could not be read: the model's safety filter \
+                     blocked its own summary of it, most often because scripture was quoted at \
+                     length. Its content is missing from what follows. ---"
+                ));
+            }
+            Err(failure) => return Err(advise(&failure, hosted)),
+        }
+    }
+
+    // Every stretch refused means the objection is to the service throughout,
+    // and there is nothing left to summarise from.
+    if refused == stretches.len() {
+        return Err(anyhow!(
+            "The model's safety filter blocked every part of its summary of this service. It objects most often to scripture quoted at length, which it treats as copyrighted text. There is nothing wrong with your recording."
+        ));
+    }
+    if refused > 0 {
+        crate::log_line!("[summarise] {refused} of {} stretches were refused", stretches.len());
+    }
+
+    if notes.is_empty() {
+        bail!("The model returned nothing to read. Try again in a moment.");
+    }
+
+    /*
+     * Drawing the notes together, and again if there are too many of them.
+     *
+     * Notes are a fraction of the words they came from, so for any real service
+     * they fit in one request. A service long enough that they do not is
+     * exactly the one that must not fail here, so the notes are condensed in
+     * pairs and offered again. Bounded, because a loop that cannot make
+     * progress must stop rather than spend a church's tokens discovering that.
+     */
+    for _ in 0..3 {
+        match castavox_core::assistant::complete(
+            client,
+            route,
+            body(settings, &joined(&notes), false),
+            true,
+        ) {
+            Ok(content) => return Ok(content),
+            Err(failure) if refused_on_length(&failure) && notes.len() > 1 => {
+                crate::log_line!("[summarise] {} sets of notes is still too much", notes.len());
+                notes = condensed(client, route, settings, &notes, hosted)?;
+            }
+            Err(failure) => return Err(advise(&failure, hosted)),
+        }
+    }
+
+    bail!("This service was too long to summarise in one piece. Summarising it in parts will work.")
+}
+
+/// Notes from consecutive stretches, labelled so their order is not guessed at.
+fn joined(notes: &[String]) -> String {
+    notes
+        .iter()
+        .enumerate()
+        .map(|(i, note)| format!("--- Notes from part {} of {} ---\n{}", i + 1, notes.len(), note))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+/// Half as many sets of notes, by reading them in pairs.
+fn condensed(
+    client: &reqwest::blocking::Client,
+    route: &castavox_core::assistant::Route,
+    settings: &Settings,
+    notes: &[String],
+    hosted: bool,
+) -> Result<Vec<String>> {
+    let mut out = Vec::with_capacity(notes.len().div_ceil(2));
+    for (index, pair) in notes.chunks(2).enumerate() {
+        if pair.len() == 1 {
+            out.push(pair[0].clone());
+            continue;
+        }
+        let merged = format!("{}\n\n{}", pair[0], pair[1]);
+        let content = castavox_core::assistant::complete(
+            client,
+            route,
+            notes_body(settings, &merged, index + 1, notes.len().div_ceil(2)),
+            false,
+        )
+        .map_err(|failure| advise(&failure, hosted))?;
+        out.push(content);
+    }
+    Ok(out)
+}
+
+/// Says how long the attempt took, whichever way it ended.
+struct TimeIt {
+    started: std::time::Instant,
+    words: usize,
+}
+
+impl Drop for TimeIt {
+    fn drop(&mut self) {
+        crate::log_line!(
+            "[summarise] {} words took {:.1}s",
+            self.words,
+            self.started.elapsed().as_secs_f32()
+        );
+    }
+}
+
+/// Whether the model read the request and would not accept it on length.
+fn refused_on_length(failure: &castavox_core::assistant::Failure) -> bool {
+    matches!(
+        failure,
+        castavox_core::assistant::Failure::Refused { payload, .. }
+            if castavox_core::assistant::is_too_long_refusal(payload)
+    )
+}
+
+/// Whether the model's safety filter objected.
+fn refused_by_filter(failure: &castavox_core::assistant::Failure) -> bool {
+    matches!(
+        failure,
+        castavox_core::assistant::Failure::Refused { payload, .. }
+            if castavox_core::assistant::is_filtered_refusal(payload)
+    )
+}
+
+/// Whether asking again in smaller pieces is worth doing.
+///
+/// Both reasons are answered the same way and for the same reason: the model
+/// judges the whole request at once, so a request it will not take whole it may
+/// well take in parts. Too long is obvious. The filter is less so -- it objects
+/// to a phrase, and splitting the service means only the stretch containing
+/// that phrase is refused instead of the entire afternoon's teaching.
+fn worth_splitting(failure: &castavox_core::assistant::Failure) -> bool {
+    refused_on_length(failure) || refused_by_filter(failure)
 }
 
 /// Turns a failure into the one sentence the operator can act on.
@@ -139,6 +385,44 @@ fn advise(failure: &castavox_core::assistant::Failure, hosted: bool) -> anyhow::
 
     crate::log_line!("[summarise] {failure}");
 
+    /*
+     * Length first, before anything about reaching anybody.
+     *
+     * A four-hour teaching session produced a 27,000-word transcript, the
+     * deployment refused it on length, and the branch below told the operator
+     * the assistant could not be reached and to try again in a moment. It was
+     * reached. It read the whole request and would not accept it, and it would
+     * have refused identically every time they tried. Sending a church to check
+     * a network that was never at fault is worse than saying nothing.
+     */
+    if let Failure::Refused { payload, .. } = failure {
+        /*
+         * Our own broker's sentence, when it has one.
+         *
+         * The rule elsewhere is that a payload never reaches the screen: it can
+         * be a page of somebody else's HTML and none of it is actionable. This
+         * is the exception, and it is one because the broker composed it for
+         * this operator -- it knows the model refused and why, which is knowledge
+         * that exists nowhere on this side. Recognised by its own shape, so a
+         * reply from anything else still goes nowhere near the screen.
+         */
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) {
+            if value.get("error").and_then(|e| e.as_str()) == Some("assistant_failed") {
+                if let Some(message) = value.get("message").and_then(|m| m.as_str()) {
+                    if !message.trim().is_empty() {
+                        return anyhow!("{message}");
+                    }
+                }
+            }
+        }
+
+        if castavox_core::assistant::is_too_long_refusal(payload) {
+            return anyhow!(
+                "The service was too long for the model to read in one go. Your transcript is safe. Summarising a shorter stretch of it will work -- or a model with a larger context window will take the whole thing."
+            );
+        }
+    }
+
     match failure {
         Failure::Unreachable(_) => anyhow!(
             "The assistant could not be reached. Check the internet connection and try again."
@@ -146,13 +430,29 @@ fn advise(failure: &castavox_core::assistant::Failure, hosted: bool) -> anyhow::
         Failure::Unexpected(_) => {
             anyhow!("The model could not answer that just now. Try again in a moment.")
         }
+        Failure::Refused { status, .. } if status.is_server_error() => {
+            /*
+             * 502, 503, 504: the request never reached a model.
+             *
+             * A gateway between here and the model failed or timed out, which
+             * is the one case where "try again shortly" is honest advice --
+             * nothing about the request was wrong and nothing the operator can
+             * change will help. Worth its own sentence, because it is otherwise
+             * indistinguishable from the model declining, which is not
+             * something waiting fixes.
+             */
+            anyhow!(
+                "The summarising service is not answering just now ({}). Your transcript is safe -- try again in a few minutes.",
+                status.as_u16()
+            )
+        }
         Failure::Refused { status, .. } => {
             // What is worth saying is the one thing they can do about it, and
             // that depends on whose deployment it is. A church on a
             // subscription has no endpoint and no key to check.
             if hosted {
                 return anyhow!(
-                    "The assistant could not be reached just now. Your transcript is safe -- try again in a moment."
+                    "The model would not answer that just now. Your transcript is safe -- try again in a moment."
                 );
             }
             // A 404 from Foundry almost never means the deployment is missing.
@@ -167,6 +467,22 @@ fn advise(failure: &castavox_core::assistant::Failure, hosted: bool) -> anyhow::
     }
 }
 
+/// How long the summary may run, given how long the service was.
+///
+/// Four hours of teaching has several times as much in it worth writing down as
+/// a forty-minute sermon, and a fixed budget either cuts the long one short or
+/// invites the short one to pad. The ceiling is 16,000 because that is what the
+/// deployments this ships against actually allow; asking for more is refused,
+/// and a refusal costs the operator their summary.
+fn reply_budget(excerpt: &str) -> usize {
+    match excerpt.split_whitespace().count() {
+        0..=2_999 => 4_000,
+        3_000..=9_999 => 8_000,
+        10_000..=19_999 => 12_000,
+        _ => 16_000,
+    }
+}
+
 /// The request body, with or without the parameter not every model accepts.
 fn body(settings: &Settings, excerpt: &str, strict_json: bool) -> serde_json::Value {
     let mut body = serde_json::json!({
@@ -174,12 +490,16 @@ fn body(settings: &Settings, excerpt: &str, strict_json: bool) -> serde_json::Va
         // Low, not zero: the summary is prose and should read as prose, but the
         // topics and the title must not drift on a re-run of the same service.
         "temperature": 0.3,
-        // Room to be thorough. A summary worth reading instead of the service
-        // runs to well over a thousand words once it has main points, the
-        // passages, the illustrations and the application -- and a budget that
-        // cuts it off mid-sentence arrives as a JSON parse failure rather than
-        // as the length problem it actually is.
-        "max_tokens": 8000,
+        // Room to be thorough, and more of it for a longer service. A summary
+        // worth reading instead of the service runs to well over a thousand
+        // words once it has main points, the passages, the illustrations and
+        // the application -- and a budget that cuts it off mid-sentence arrives
+        // as a JSON parse failure rather than as the length problem it is.
+        //
+        // A flat 8,000 was set for a sermon and then asked to carry a
+        // four-hour teaching session, which has several times as much in it
+        // worth writing down.
+        "max_tokens": reply_budget(excerpt),
         "messages": [
             { "role": "system", "content": SYSTEM },
             { "role": "user", "content": excerpt },
@@ -192,6 +512,54 @@ fn body(settings: &Settings, excerpt: &str, strict_json: bool) -> serde_json::Va
     body
 }
 
+/// One stretch of the service, read for notes rather than summarised.
+fn notes_body(settings: &Settings, stretch: &str, part: usize, of: usize) -> serde_json::Value {
+    serde_json::json!({
+        "model": settings.assist_model.trim(),
+        "temperature": 0.3,
+        // Generous: these notes are the only record of this stretch that the
+        // final summary will ever see, so anything they leave out is gone.
+        "max_tokens": 8000,
+        "messages": [
+            { "role": "system", "content": NOTES },
+            {
+                "role": "user",
+                "content": format!("Part {part} of {of} of one service.\n\n{stretch}"),
+            },
+        ],
+    })
+}
+
+/// What to do with a stretch of a service that is being read in pieces.
+///
+/// Deliberately not a summary. A summary of a stretch throws away the detail
+/// the final summary needs, and no later step can recover it -- so this asks
+/// for full notes and lets the drawing-together be the thing that condenses.
+const NOTES: &str = "\
+You are given one consecutive stretch of the transcript of a single church \
+service or teaching session, produced by automatic speech recognition. It will \
+contain mishearings, especially of names and places; read past them.
+
+This is not the whole service. Do not write an introduction or a conclusion for \
+it, do not speculate about what came before or after, and do not describe it as \
+though it were complete.
+
+Take detailed notes on this stretch alone, in the order things were said. Keep:
+
+- every point made, and the reasoning used to make it
+- every scripture reference, quoted or alluded to, and what was said about it \
+  (the reference and the point made; not the wording of the passage itself)
+- illustrations, stories and examples, briefly but recognisably
+- anything the hearers were asked to do
+- sentences worth preserving in the speaker's own words, quoted exactly
+- announcements, and anything else that is not teaching
+
+Notes, not prose: brevity in the wording, not in what is covered. Err towards \
+keeping something rather than dropping it -- these notes are all that will be \
+seen of this stretch when the summary is written, so whatever you leave out is \
+lost. If a passage is too garbled to be sure of, note that rather than \
+guessing at it.";
+
 const SYSTEM: &str = "\
 You are given the transcript of a sermon or teaching, produced by automatic \
 speech recognition. It will contain mishearings, especially of names and \
@@ -200,8 +568,13 @@ places; read past them.
 Write the summary a capable assistant would write if handed this transcript \
 and asked to do a thorough job. Someone who missed the service should be able \
 to read it and know what was taught, how it was argued, and what they were \
-asked to do -- not merely what the subject was. Length follows the material: a \
-forty-minute exposition deserves several hundred words and often more. Never \
+asked to do -- not merely what the subject was. Length follows the material, \
+and follows it the whole way: a forty-minute exposition deserves several \
+hundred words and often more, while a teaching session of three, four or five \
+hours deserves several thousand and a section for each movement of it. Do not \
+compress hours into the same page you would give a sermon -- work through the \
+material in the order it was taught, and let the summary be as long as the \
+teaching requires. Never \
 pad, and never cut something the speaker clearly laboured over.
 
 Reply with JSON only, with exactly these keys:
@@ -228,8 +601,11 @@ they genuinely developed.
 
   ## Passages
   A bulleted list of the scripture actually expounded, each reference in \
-**bold**, then an em dash and what was drawn from it. Where a verse was quoted \
-and the wording matters, put it on its own line beneath as a > blockquote.
+**bold**, then an em dash and what was drawn from it. Name the passage; do not \
+reproduce it. Anyone reading this has a Bible, and the reference is what they \
+need. Where the speaker's own handling of a particular phrase is the point, say \
+which phrase and what they made of it, in your words rather than by quoting the \
+translation at length.
 
   ## Illustrations
   Any story, image, analogy or example used, as a bulleted list: what it was, \
@@ -244,8 +620,9 @@ said; never add your own.
 > blockquote. Omit if nothing stood out.
 
 Formatting. Use **bold** for the thing being named and *italic* for emphasis \
-and for the speaker's phrases quoted inline. Use > blockquotes for scripture \
-and for direct quotations of more than a few words. Use a table only where the \
+and for the speaker's phrases quoted inline. Use > blockquotes for what the \
+speaker themselves said, not for scripture: a summary cites the reference and \
+lets the reader open their own Bible at it. Use a table only where the \
 speaker genuinely set things side by side. A --- rule may separate major \
 sections. Always put a heading on its own line. No images, no code blocks, no \
 links. Do not put a heading above the opening paragraph, and do not repeat the \
@@ -256,20 +633,6 @@ the speaker did not raise, and do not smooth over a passage they left \
 unresolved. Where the recognition is too garbled to be sure, say so in passing \
 rather than guessing. If the transcript is too fragmentary to summarise \
 honestly, say that in the summary instead of inventing content.";
-
-/// The head and tail of a long transcript, joined with a note.
-fn excerpt(transcript: &str) -> String {
-    let words: Vec<&str> = transcript.split_whitespace().collect();
-    if words.len() <= HEAD_WORDS + TAIL_WORDS {
-        return transcript.to_string();
-    }
-
-    let head = words[..HEAD_WORDS].join(" ");
-    let tail = words[words.len() - TAIL_WORDS..].join(" ");
-    // Said rather than hidden: a model told that a passage is continuous will
-    // write a summary that claims the middle followed from the beginning.
-    format!("{head}\n\n[... the middle of this transcript has been omitted for length ...]\n\n{tail}")
-}
 
 /// Reads the model's reply, tolerating the ways it dresses JSON up.
 fn read(content: &str) -> Result<Description> {
@@ -335,6 +698,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_notes_are_labelled_so_their_order_is_not_guessed_at() {
+        let notes = vec!["first".to_string(), "second".to_string(), "third".to_string()];
+        let text = joined(&notes);
+        assert!(text.contains("part 1 of 3"), "{text}");
+        assert!(text.contains("part 3 of 3"), "{text}");
+        assert!(
+            text.find("first").unwrap() < text.find("third").unwrap(),
+            "the service was reassembled out of order"
+        );
+    }
+
+    #[test]
+    fn a_longer_service_is_given_a_longer_summary() {
+        let words = |n: usize| (0..n).map(|i| format!("w{i}")).collect::<Vec<_>>().join(" ");
+        assert_eq!(reply_budget(&words(500)), 4_000);
+        assert_eq!(reply_budget(&words(5_000)), 8_000);
+        assert_eq!(reply_budget(&words(15_000)), 12_000);
+        // The four-hour teaching session this was written for.
+        assert_eq!(reply_budget(&words(27_000)), 16_000);
+    }
+
+    #[test]
+    fn the_budget_never_asks_for_more_than_deployments_allow() {
+        let enormous = (0..90_000).map(|i| format!("w{i}")).collect::<Vec<_>>().join(" ");
+        assert!(reply_budget(&enormous) <= 16_000, "would be refused for asking too much");
+    }
+
+    #[test]
     fn the_strict_parameter_is_the_only_difference_between_the_two_bodies() {
         let mut settings = Settings::default();
         settings.assist_model = "gpt-4o-mini".into();
@@ -396,22 +787,25 @@ mod tests {
     }
 
     #[test]
-    fn a_long_transcript_keeps_its_beginning_and_its_end() {
-        // Past HEAD + TAIL, which is about four hours of speech -- longer than
-        // any real service, so this is the safety valve rather than the norm.
-        let words: Vec<String> = (0..40_000).map(|i| format!("w{i}")).collect();
-        let excerpt = excerpt(&words.join(" "));
-
-        assert!(excerpt.contains("w0"), "the opening states the subject");
-        assert!(excerpt.contains("w39999"), "the conclusion is where it lands");
-        assert!(excerpt.contains("omitted"), "and the gap is admitted to");
-        assert!(!excerpt.contains(" w25000 "), "the middle is what gives way");
+    fn a_short_transcript_is_sent_whole() {
+        let text = "For God so loved the world.";
+        let sent = body(&Settings::default(), text, false);
+        assert_eq!(sent["messages"][1]["content"], text, "the transcript was altered on its way out");
     }
 
     #[test]
-    fn a_short_transcript_is_sent_whole() {
-        let text = "For God so loved the world.";
-        assert_eq!(excerpt(text), text);
+    fn a_service_too_long_for_one_request_still_keeps_every_word() {
+        // The property that matters: the stretches together contain the whole
+        // service. Nothing is dropped for length any more.
+        let words: Vec<String> = (0..60_000).map(|i| format!("w{i}")).collect();
+        let stretches = castavox_core::assistant::chunks(&words.join(" "), CHUNK_WORDS, CHUNK_OVERLAP);
+        assert!(stretches.len() > 1, "a five-hour service should be read in stretches");
+        for word in [&words[0], &words[30_000], &words[59_999]] {
+            assert!(
+                stretches.iter().any(|s| s.split_whitespace().any(|w| w == word)),
+                "{word} is in no stretch -- the middle was dropped again"
+            );
+        }
     }
 
     /*
