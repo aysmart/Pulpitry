@@ -191,6 +191,8 @@ function ScrollingBlocks({
 }) {
   const box = useRef<HTMLDivElement | null>(null);
   const [extent, setExtent] = useState<Extent>({ screenfuls: 1, step: 1 });
+  /** The size the text was actually set at, once it had been fitted. */
+  const [fit, setFit] = useState(READABLE);
 
   // After layout rather than after paint: the scroll position is set from the
   // same measurement, and a frame showing the top of a wound entry is a frame
@@ -200,6 +202,25 @@ function ScrollingBlocks({
     if (!element) return;
 
     const measure = () => {
+      /*
+       * As large as fits, and only then wound.
+       *
+       * The size arrives here as a guess from the length of the text, and for
+       * a short entry that guess is the *largest* setting -- under ninety
+       * characters gets 7cqw, and a heading a further 1.4 times that. A brief
+       * lexicon entry is short, so it was being set enormous, overflowing a
+       * frame it would have fitted at any sane size, and the winding below
+       * dutifully broke three lines of English across two screens. Small texts
+       * paginated precisely because they were small.
+       *
+       * So shrink to fit first, no further than READABLE. Anything that fits
+       * is one screenful and stays one; the several-hundred-word entries this
+       * winding was built for still cannot fit at READABLE, and still wind.
+       */
+      const chosen = fitted(element, style.fontSize);
+      element.style.setProperty("--fit", `${chosen.toFixed(2)}cqw`);
+      setFit((current) => (current === chosen ? current : chosen));
+
       const overflow = Math.max(0, element.scrollHeight - element.clientHeight);
 
       /*
@@ -265,6 +286,7 @@ function ScrollingBlocks({
       ref={box}
       // No scrollbar: this is a wall, and the operator is the scrollbar.
       className="flex max-h-full w-full flex-col gap-[0.4em] overflow-hidden"
+      style={{ "--fit": `${fit.toFixed(2)}cqw` } as CSSProperties}
     >
       {blocks.map((block, index) => (
         <p
@@ -276,9 +298,9 @@ function ScrollingBlocks({
             fontStyle: block.italic ? "italic" : "normal",
             textAlign: block.align,
             fontSize:
-              block.level === "heading" && typeof style.fontSize === "string"
-                ? `calc(${style.fontSize} * 1.4)`
-                : style.fontSize,
+              block.level === "heading"
+                ? "calc(var(--fit) * 1.4)"
+                : "var(--fit)",
           }}
         >
           {block.text}
@@ -286,6 +308,50 @@ function ScrollingBlocks({
       ))}
     </div>
   );
+}
+
+/** Coarse enough that two surfaces measuring the same words agree on a size. */
+const FIT_STEP = 0.1;
+
+/**
+ * The largest size at which this text still fits its box, down to READABLE.
+ *
+ * Measured rather than guessed, because whether words fit depends on the
+ * typeface, the box and where the lines break, and none of that is knowable
+ * from a character count.
+ *
+ * The result is rounded down to a coarse step so that the desk and the wall --
+ * the same layout at different sizes -- land on the same number rather than on
+ * two that differ by a hair and by one whole line.
+ */
+function fitted(element: HTMLElement, guessed: CSSProperties["fontSize"]): number {
+  const guess =
+    typeof guessed === "string" ? Number.parseFloat(guessed) : Number.NaN;
+  if (!Number.isFinite(guess) || guess <= READABLE) return READABLE;
+
+  const apply = (value: number) =>
+    element.style.setProperty("--fit", `${value.toFixed(2)}cqw`);
+  const fits = () => element.scrollHeight <= element.clientHeight + 0.5;
+
+  // If it will not fit even set small, it is one of the long ones: leave it at
+  // READABLE and let the winding below do its job.
+  apply(READABLE);
+  if (!fits()) return READABLE;
+
+  let low = READABLE;
+  let high = guess;
+  let best = READABLE;
+  for (let i = 0; i < 10; i += 1) {
+    const mid = (low + high) / 2;
+    apply(mid);
+    if (fits()) {
+      best = mid;
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+  return Math.max(READABLE, Math.floor(best / FIT_STEP) * FIT_STEP);
 }
 
 /**
