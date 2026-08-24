@@ -3,9 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { describeError, generateSlides, type DraftSlide } from "../lib/api";
 import { catalogSave } from "../lib/catalog";
+import { open } from "@tauri-apps/plugin-dialog";
 import {
   exportSummary,
   getSession,
+  importSession,
   listSessions,
   removeSession,
   retitleSession,
@@ -80,6 +82,8 @@ export function HistoryDialog({
   const [loadingLines, setLoadingLines] = useState(false);
   const [canSummarise, setCanSummarise] = useState(false);
   const [slides, setSlides] = useState<DraftSlide[] | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
   const [makingSlides, setMakingSlides] = useState(false);
   const [keptSlides, setKeptSlides] = useState(0);
   const [summarising, setSummarising] = useState(false);
@@ -107,6 +111,36 @@ export function HistoryDialog({
   }, []);
 
   // The search runs in SQLite, so it is asked for rather than filtered here:
+  /**
+   * Adds a service from a transcript file the church already has.
+   *
+   * A transcript that was recorded before Pulpitry, taken down by hand, or
+   * exported from a service that has since been deleted. It lands as an
+   * ordinary past service, so summarising, exporting and slides all work on it
+   * exactly as they do on one that was heard live.
+   */
+  const addFromFile = useCallback(async () => {
+    setImportError(null);
+    const picked = await open({
+      multiple: false,
+      filters: [{ name: "Transcript", extensions: ["txt", "md", "text"] }],
+    });
+    // Cancelling is not a failure and needs no message.
+    if (typeof picked !== "string") return;
+
+    setImporting(true);
+    try {
+      const added = await importSession(picked);
+      setSessions((current) => [added, ...current.filter((s) => s.id !== added.id)]);
+      setSelectedId(added.id);
+      setQuery("");
+    } catch (error) {
+      setImportError(describeError(error));
+    } finally {
+      setImporting(false);
+    }
+  }, []);
+
   // the transcript being searched is far larger than the list being shown.
   const search = query.trim();
   useEffect(() => {
@@ -316,14 +350,34 @@ export function HistoryDialog({
               Every service is saved as it is transcribed.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-1.5 text-[12px] text-pulpitry-text transition-colors hover:border-pulpitry-muted focus-visible:focus-ring"
-          >
-            Close
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={addFromFile}
+              disabled={importing}
+              title="Add a past service from a transcript file"
+              className="rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-1.5 text-[12px] text-pulpitry-text transition-colors hover:border-pulpitry-muted disabled:opacity-50 focus-visible:focus-ring"
+            >
+              {importing ? "Adding…" : "Add from file…"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-1.5 text-[12px] text-pulpitry-text transition-colors hover:border-pulpitry-muted focus-visible:focus-ring"
+            >
+              Close
+            </button>
+          </div>
         </header>
+
+        {importError ? (
+          <p
+            role="alert"
+            className="shrink-0 border-b border-pulpitry-line bg-pulpitry-raised px-5 py-2 text-[12px] text-pulpitry-gold"
+          >
+            {importError}
+          </p>
+        ) : null}
 
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(220px,290px)_1fr]">
           {/* The list. */}

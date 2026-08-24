@@ -624,6 +624,36 @@ fn history_retitle(
     transcripts.retitle(id, &title).map_err(to_message)
 }
 
+/// Adds a past service from a transcript file on disk.
+///
+/// The file is read here rather than in the web layer: a four-hour service is
+/// several hundred kilobytes of text, and moving it through the bridge as a
+/// string to hand straight back again is work for nothing. The frontend sends a
+/// path and gets the finished service.
+#[tauri::command]
+fn history_import(
+    transcripts: State<'_, Arc<Transcripts>>,
+    path: String,
+) -> CommandResult<Session> {
+    let file = std::path::Path::new(&path);
+    let text = std::fs::read_to_string(file)
+        .map_err(|error| format!("could not read that file: {error}"))?;
+
+    // The file's own name, which is what somebody who chose it expects to see.
+    let title = file
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().to_string())
+        .filter(|stem| !stem.trim().is_empty())
+        .unwrap_or_else(|| "Imported transcript".to_string());
+
+    let id = transcripts.import(&title, &text).map_err(to_message)?;
+    crate::log_line!("[history] imported {} into service {id}", file.display());
+    transcripts
+        .get(id)
+        .map_err(to_message)?
+        .ok_or_else(|| "the service was added but could not be read back".to_string())
+}
+
 #[tauri::command]
 fn history_remove(transcripts: State<'_, Arc<Transcripts>>, id: i64) -> CommandResult<()> {
     transcripts.remove(id).map_err(to_message)
@@ -1292,6 +1322,7 @@ pub fn run() {
             history_get,
             history_lines,
             history_retitle,
+            history_import,
             history_remove,
             summary_available,
             summarise_session,

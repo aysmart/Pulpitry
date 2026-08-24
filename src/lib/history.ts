@@ -51,6 +51,16 @@ export const retitleSession = (id: number, title: string) =>
 
 export const removeSession = (id: number) => invoke<void>("history_remove", { id });
 
+/**
+ * Adds a past service from a transcript file.
+ *
+ * The path goes down and the finished service comes back; the file is read on
+ * the other side, because a four-hour service is several hundred kilobytes and
+ * carrying it through the bridge to hand straight back is work for nothing.
+ */
+export const importSession = (path: string) =>
+  invoke<Session>("history_import", { path });
+
 /** Whether the assistant is set up well enough to be offered. */
 export const summaryAvailable = () => invoke<boolean>("summary_available");
 
