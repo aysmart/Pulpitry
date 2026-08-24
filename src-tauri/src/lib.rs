@@ -716,6 +716,9 @@ async fn generate_slides(app: AppHandle, source: String) -> CommandResult<Vec<sl
 ///
 /// Stores what comes back, so it is asked once per service rather than once per
 /// time somebody opens it.
+/// What a summary is doing, while it is doing it.
+const EVENT_SUMMARY_PROGRESS: &str = "summary-progress";
+
 #[tauri::command]
 async fn summarise_session(
     app: AppHandle,
@@ -757,9 +760,20 @@ async fn summarise_session(
     let transcript =
         lines.into_iter().map(|line| line.text).collect::<Vec<_>>().join(" ");
 
-    // Off the UI thread: one request against an hour of speech.
+    /*
+     * Off the UI thread, and saying what it is doing while it is there.
+     *
+     * A four-hour service is several requests, any of which may wait out a
+     * busy model, so this can run for minutes. Without a word from it the
+     * dialog looks frozen and the operator presses Summarise again -- which
+     * starts a second set of requests and makes the queue it is waiting on
+     * longer.
+     */
+    let reporter = app.clone();
     let described = tauri::async_runtime::spawn_blocking(move || {
-        summarise::describe(&settings, &key, &transcript)
+        summarise::describe(&settings, &key, &transcript, &|note: &str| {
+            let _ = reporter.emit(EVENT_SUMMARY_PROGRESS, note);
+        })
     })
     .await
     .map_err(|err| err.to_string())?

@@ -71,7 +71,12 @@ pub fn available(settings: &Settings, has_key: bool) -> bool {
 ///
 /// Blocking: callers run it off the UI thread. It is one request and can take
 /// the better part of a minute on a long service.
-pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Description> {
+pub fn describe(
+    settings: &Settings,
+    key: &str,
+    transcript: &str,
+    say: &dyn Fn(&str),
+) -> Result<Description> {
     if transcript.split_whitespace().count() < 50 {
         bail!("There is not enough here to summarise yet.");
     }
@@ -126,6 +131,16 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
      * read the service in pieces, not to send less of it.
      */
     let whole = transcript.split_whitespace().count();
+    /*
+     * A ceiling on the whole job, not on any one request.
+     *
+     * A long service is several requests, each of which may wait out a busy
+     * model, so the wall-clock time is no longer anything like the time one
+     * request takes. Without a limit an exhausted quota is indistinguishable
+     * from a hang, and the operator's only move is to press the button again --
+     * which starts the whole thing over and makes the quota worse.
+     */
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
     // How long it took and how much was sent, on the way out as well as the way
     // in: a failure that arrives in two seconds and one that arrives in sixty
     // are different faults, and guessing which from the clock on two separate
@@ -135,12 +150,12 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
     let _timing = TimeIt { started, words: whole };
     let content = if whole > SINGLE_PASS_WORDS {
         crate::log_line!("[summarise] {whole} words: reading in stretches");
-        in_stretches(&client, &route, settings, transcript, hosted, CHUNK_WORDS, CHUNK_OVERLAP)?
+        in_stretches(&client, &route, settings, transcript, hosted, CHUNK_WORDS, CHUNK_OVERLAP, say, deadline, whole)?
     } else {
         match castavox_core::assistant::complete(
             &client,
             &route,
-            body(settings, transcript, false),
+            body(settings, transcript, false, whole),
             true,
         ) {
             Ok(content) => content,
@@ -153,7 +168,7 @@ pub fn describe(settings: &Settings, key: &str, transcript: &str) -> Result<Desc
                     (CHUNK_WORDS, CHUNK_OVERLAP)
                 };
                 crate::log_line!("[summarise] refused whole; reading in stretches instead");
-                in_stretches(&client, &route, settings, transcript, hosted, size, overlap)?
+                in_stretches(&client, &route, settings, transcript, hosted, size, overlap, say, deadline, whole)?
             }
             Err(failure) => return Err(advise(&failure, hosted)),
         }
@@ -208,6 +223,9 @@ fn in_stretches(
     hosted: bool,
     size: usize,
     overlap: usize,
+    say: &dyn Fn(&str),
+    deadline: std::time::Instant,
+    service_words: usize,
 ) -> Result<String> {
     let stretches = castavox_core::assistant::chunks(transcript, size, overlap);
     if stretches.is_empty() {
@@ -219,6 +237,14 @@ fn in_stretches(
     let mut refused = 0usize;
     for (index, stretch) in stretches.iter().enumerate() {
         crate::log_line!("[summarise] stretch {} of {}", index + 1, stretches.len());
+        if std::time::Instant::now() > deadline {
+            bail!(
+                "The model is taking too long to answer -- it may be busy with other work. {} of {} parts of this service were read; your transcript is safe. Try again in a few minutes.",
+                index,
+                stretches.len()
+            );
+        }
+        say(&format!("Reading part {} of {}…", index + 1, stretches.len()));
         match castavox_core::assistant::complete(
             client,
             route,
@@ -273,17 +299,46 @@ fn in_stretches(
      * pairs and offered again. Bounded, because a loop that cannot make
      * progress must stop rather than spend a church's tokens discovering that.
      */
+    // Set once the filter has objected, and never unset: the second attempt
+    // trades the speaker's own wording for a summary that is allowed through.
+    let mut plain_prose = false;
+    say("Drawing the parts together…");
+    crate::log_line!("[summarise] {} words of notes from {} stretches",
+        notes.iter().map(|n| n.split_whitespace().count()).sum::<usize>(),
+        notes.len()
+    );
     for _ in 0..3 {
         match castavox_core::assistant::complete(
             client,
             route,
-            body(settings, &joined(&notes), false),
+            body(
+                settings,
+                &joined(&notes, service_words, plain_prose),
+                false,
+                service_words,
+            ),
             true,
         ) {
             Ok(content) => return Ok(content),
             Err(failure) if refused_on_length(&failure) && notes.len() > 1 => {
                 crate::log_line!("[summarise] {} sets of notes is still too much", notes.len());
                 notes = condensed(client, route, settings, &notes, hosted)?;
+            }
+            /*
+             * Refused for quoting, so asked again without quoting.
+             *
+             * The filter objects to scripture reproduced at length, and a
+             * summary of a service full of exposition will quote a great deal
+             * of it unless told plainly not to. That instruction is not in the
+             * ordinary request because a summary is better for having the
+             * speaker's own sentences in it; it goes in only when the first
+             * attempt has been blocked, which is the one occasion the trade is
+             * worth making.
+             */
+            Err(failure) if refused_by_filter(&failure) && !plain_prose => {
+                crate::log_line!("[summarise] blocked for quoting; asking again without quotation");
+                say("Asking again without quotations…");
+                plain_prose = true;
             }
             Err(failure) => return Err(advise(&failure, hosted)),
         }
@@ -293,13 +348,67 @@ fn in_stretches(
 }
 
 /// Notes from consecutive stretches, labelled so their order is not guessed at.
-fn joined(notes: &[String]) -> String {
-    notes
+fn joined(notes: &[String], service_words: usize, plain_prose: bool) -> String {
+    let body = notes
         .iter()
         .enumerate()
         .map(|(i, note)| format!("--- Notes from part {} of {} ---\n{}", i + 1, notes.len(), note))
         .collect::<Vec<_>>()
-        .join("\n\n")
+        .join("\n\n");
+
+    /*
+     * Said out loud, because the model cannot tell from what it is holding.
+     *
+     * These notes are a fraction of the service they came from, and a model
+     * given three pages of notes writes a summary for three pages of notes. It
+     * has to be told that behind them is a four-hour teaching session, and that
+     * the summary is expected to carry all of it.
+     */
+    let hours = (service_words as f32 / 9_000.0).max(0.5);
+    /*
+     * A length asked for in words, because everything softer was ignored.
+     *
+     * "Length follows the material" and "several thousand words" produced a
+     * 566-word summary of a 27,000-word teaching session -- barely longer than
+     * the 475 words it gave a nine-minute one. The budget was never the limit:
+     * 566 words is some 750 tokens against a ceiling of twelve thousand. The
+     * model was simply writing the length a summary is usually written at.
+     *
+     * A tenth of the service, which is a summary somebody who missed it can
+     * actually learn from, and a floor and ceiling so that neither a two-minute
+     * notice nor a day-long conference produces something absurd.
+     */
+    let target = (service_words / 10).clamp(300, 6_000);
+    /*
+     * Added only on the second attempt, after the filter has objected.
+     *
+     * A summary reads better for carrying a sentence the speaker actually
+     * said, so this is not asked for by default. But a blocked summary is
+     * worth nothing at all, and paraphrase is the price of getting one.
+     */
+    let quoting = if plain_prose {
+        "\n\nDo not quote anything. Not scripture, not the speaker, not a hymn: no sentence \
+         from the notes may appear word for word. Put everything in your own words, however \
+         plainly. A previous attempt at this summary was refused for reproducing copyrighted \
+         text, and paraphrase is what makes it publishable."
+    } else {
+        ""
+    };
+    format!(
+        "These are ordered notes taken from consecutive parts of ONE service of about \
+         {service_words} words -- roughly {hours:.1} hours of teaching. They are notes, not the \
+         service: everything in them was actually said, and much that was said is only \
+         summarised here.\n\n\
+         Write the summary of the whole service from them. It must cover every theme and every \
+         passage the notes contain, in the order they were taught, with a section for each \
+         movement of the teaching.\n\n\
+         Length: at least {target} words. That is not a target to approach and stop short of; \
+         it is the floor. A summary of {hours:.1} hours that runs to a few hundred words has \
+         left out most of what was taught, which is the one thing it must not do. If you find \
+         yourself summarising the notes, stop: expand them instead. Every theme in the notes \
+         earns its own paragraph, and a theme the speaker spent twenty minutes on earns \
+         more.{quoting}\n\n{body}"
+    )
 }
 
 /// Half as many sets of notes, by reading them in pairs.
@@ -424,6 +533,20 @@ fn advise(failure: &castavox_core::assistant::Failure, hosted: bool) -> anyhow::
     }
 
     match failure {
+        Failure::Unreachable(detail) if castavox_core::assistant::is_intercepted(detail) => {
+            /*
+             * The connection worked; something on the way inspected it.
+             *
+             * A school, office or hotel network may terminate HTTPS at an
+             * appliance and re-sign it. Telling an operator to check a
+             * connection that is working is the fault this application spent a
+             * day removing from everywhere else, and it would be a poor joke to
+             * leave it here.
+             */
+            anyhow!(
+                "Something on this network is inspecting secure connections, and this computer does not trust the certificate it is using. The connection itself is fine. A church or office firewall usually causes this: its certificate has to be installed on this machine, or use a different network."
+            )
+        }
         Failure::Unreachable(_) => anyhow!(
             "The assistant could not be reached. Check the internet connection and try again."
         ),
@@ -474,8 +597,8 @@ fn advise(failure: &castavox_core::assistant::Failure, hosted: bool) -> anyhow::
 /// invites the short one to pad. The ceiling is 16,000 because that is what the
 /// deployments this ships against actually allow; asking for more is refused,
 /// and a refusal costs the operator their summary.
-fn reply_budget(excerpt: &str) -> usize {
-    match excerpt.split_whitespace().count() {
+fn reply_budget(service_words: usize) -> usize {
+    match service_words {
         0..=2_999 => 4_000,
         3_000..=9_999 => 8_000,
         10_000..=19_999 => 12_000,
@@ -484,7 +607,16 @@ fn reply_budget(excerpt: &str) -> usize {
 }
 
 /// The request body, with or without the parameter not every model accepts.
-fn body(settings: &Settings, excerpt: &str, strict_json: bool) -> serde_json::Value {
+fn body(
+    settings: &Settings,
+    excerpt: &str,
+    strict_json: bool,
+    // How long the *service* was, which is not the length of what is being
+    // sent: the final request carries notes, and notes are a fraction of the
+    // words they came from. Sizing the reply by them gave a four-hour teaching
+    // session the budget meant for a sermon, and the summary came back short.
+    service_words: usize,
+) -> serde_json::Value {
     let mut body = serde_json::json!({
         "model": settings.assist_model.trim(),
         // Low, not zero: the summary is prose and should read as prose, but the
@@ -499,7 +631,7 @@ fn body(settings: &Settings, excerpt: &str, strict_json: bool) -> serde_json::Va
         // A flat 8,000 was set for a sermon and then asked to carry a
         // four-hour teaching session, which has several times as much in it
         // worth writing down.
-        "max_tokens": reply_budget(excerpt),
+        "max_tokens": reply_budget(service_words),
         "messages": [
             { "role": "system", "content": SYSTEM },
             { "role": "user", "content": excerpt },
@@ -510,6 +642,35 @@ fn body(settings: &Settings, excerpt: &str, strict_json: bool) -> serde_json::Va
         body["response_format"] = serde_json::json!({ "type": "json_object" });
     }
     body
+}
+
+/// The JSON object out of whatever the model actually said.
+///
+/// Straight parse first; failing that, the object out of the middle of whatever
+/// else was said. Without a response_format to compel it a model is free to
+/// open with "Here is the summary:", and throwing that away is cheaper than a
+/// failed summary of an hour of speech.
+fn json_of(text: &str) -> Result<serde_json::Value> {
+    let text = text.trim();
+    let text = text
+        .strip_prefix("```json")
+        .or_else(|| text.strip_prefix("```"))
+        .map(|rest| rest.trim_start())
+        .unwrap_or(text);
+    let text = text.strip_suffix("```").map(str::trim_end).unwrap_or(text);
+
+    match serde_json::from_str(text) {
+        Ok(value) => Ok(value),
+        Err(_) => {
+            let embedded = text
+                .find('{')
+                .zip(text.rfind('}'))
+                .filter(|(open, close)| close > open)
+                .map(|(open, close)| &text[open..=close])
+                .ok_or_else(|| anyhow!("the model did not return JSON at all"))?;
+            serde_json::from_str(embedded).context("the model did not return usable JSON")
+        }
+    }
 }
 
 /// One stretch of the service, read for notes rather than summarised.
@@ -649,19 +810,7 @@ fn read(content: &str) -> Result<Description> {
     // whatever else was said. Without a response_format to compel it, a model
     // is free to open with "Here is the summary:" -- and throwing that away is
     // cheaper than a failed summary of an hour of speech.
-    let value: serde_json::Value = match serde_json::from_str(text) {
-        Ok(value) => value,
-        Err(_) => {
-            let embedded = text
-                .find('{')
-                .zip(text.rfind('}'))
-                .filter(|(open, close)| close > open)
-                .map(|(open, close)| &text[open..=close])
-                .ok_or_else(|| anyhow!("the model did not return JSON at all"))?;
-            serde_json::from_str(embedded)
-                .context("the model did not return usable JSON")?
-        }
-    };
+    let value = json_of(text)?;
 
     let title = value.get("title").and_then(|v| v.as_str()).unwrap_or_default().trim().to_string();
     let summary =
@@ -700,7 +849,7 @@ mod tests {
     #[test]
     fn the_notes_are_labelled_so_their_order_is_not_guessed_at() {
         let notes = vec!["first".to_string(), "second".to_string(), "third".to_string()];
-        let text = joined(&notes);
+        let text = joined(&notes, 27_000, false);
         assert!(text.contains("part 1 of 3"), "{text}");
         assert!(text.contains("part 3 of 3"), "{text}");
         assert!(
@@ -711,18 +860,16 @@ mod tests {
 
     #[test]
     fn a_longer_service_is_given_a_longer_summary() {
-        let words = |n: usize| (0..n).map(|i| format!("w{i}")).collect::<Vec<_>>().join(" ");
-        assert_eq!(reply_budget(&words(500)), 4_000);
-        assert_eq!(reply_budget(&words(5_000)), 8_000);
-        assert_eq!(reply_budget(&words(15_000)), 12_000);
+        assert_eq!(reply_budget(500), 4_000);
+        assert_eq!(reply_budget(5_000), 8_000);
+        assert_eq!(reply_budget(15_000), 12_000);
         // The four-hour teaching session this was written for.
-        assert_eq!(reply_budget(&words(27_000)), 16_000);
+        assert_eq!(reply_budget(27_000), 16_000);
     }
 
     #[test]
     fn the_budget_never_asks_for_more_than_deployments_allow() {
-        let enormous = (0..90_000).map(|i| format!("w{i}")).collect::<Vec<_>>().join(" ");
-        assert!(reply_budget(&enormous) <= 16_000, "would be refused for asking too much");
+        assert!(reply_budget(90_000) <= 16_000, "would be refused for asking too much");
     }
 
     #[test]
@@ -730,8 +877,8 @@ mod tests {
         let mut settings = Settings::default();
         settings.assist_model = "gpt-4o-mini".into();
 
-        let strict = body(&settings, "a transcript", true);
-        let plain = body(&settings, "a transcript", false);
+        let strict = body(&settings, "a transcript", true, 2);
+        let plain = body(&settings, "a transcript", false, 2);
 
         assert_eq!(strict["response_format"]["type"], "json_object");
         assert!(plain.get("response_format").is_none(), "the fallback must not send it");
@@ -789,7 +936,7 @@ mod tests {
     #[test]
     fn a_short_transcript_is_sent_whole() {
         let text = "For God so loved the world.";
-        let sent = body(&Settings::default(), text, false);
+        let sent = body(&Settings::default(), text, false, 5);
         assert_eq!(sent["messages"][1]["content"], text, "the transcript was altered on its way out");
     }
 
@@ -842,7 +989,7 @@ mod tests {
         crate::log_line!("version:  {}", settings.assist_api_version);
         assert!(available(&settings, true), "the assistant is not fully configured");
 
-        let described = describe(&settings, &key, SERMON).expect("the model call failed");
+        let described = describe(&settings, &key, SERMON, &|_| {}).expect("the model call failed");
 
         crate::log_line!("\n--- title ---\n{}", described.title);
         crate::log_line!("\n--- summary (markdown) ---\n{}", described.summary);

@@ -4,6 +4,7 @@ import { Markdown } from "./Markdown";
 import { describeError, generateSlides, type DraftSlide } from "../lib/api";
 import { catalogSave } from "../lib/catalog";
 import { open } from "@tauri-apps/plugin-dialog";
+import { listen } from "@tauri-apps/api/event";
 import {
   exportSummary,
   getSession,
@@ -87,6 +88,16 @@ export function HistoryDialog({
   const [makingSlides, setMakingSlides] = useState(false);
   const [keptSlides, setKeptSlides] = useState(0);
   const [summarising, setSummarising] = useState(false);
+  /**
+   * What the summary is doing, while it is doing it.
+   *
+   * A four-hour service is read in several parts, any of which may wait out a
+   * busy model, so this runs for minutes. Silence for that long reads as a
+   * hang, and the operator's response to a hang is to press the button again --
+   * which starts a second set of requests and lengthens the queue the first is
+   * waiting in.
+   */
+  const [progress, setProgress] = useState<string | null>(null);
   const [exporting, setExporting] = useState<SummaryFormat | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [title, setTitle] = useState("");
@@ -219,6 +230,7 @@ export function HistoryDialog({
   const summarise = useCallback(async () => {
     if (!selected) return;
     setError(null);
+    setProgress(null);
     setSummarising(true);
     try {
       const described = await summariseSession(selected.id);
@@ -231,8 +243,19 @@ export function HistoryDialog({
       setError(describeError(err));
     } finally {
       setSummarising(false);
+      setProgress(null);
     }
   }, [selected, replace]);
+
+  // Reported from the Rust side as each part is read; see EVENT_SUMMARY_PROGRESS.
+  useEffect(() => {
+    const unlisten = listen<string>("summary-progress", (event) =>
+      setProgress(event.payload),
+    );
+    return () => {
+      void unlisten.then((stop) => stop());
+    };
+  }, []);
 
   /*
    * Slides from a service already preached.
@@ -571,7 +594,7 @@ export function HistoryDialog({
                         className="rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1 text-[11.5px] text-pulpitry-text transition-colors hover:border-pulpitry-muted disabled:opacity-50 focus-visible:focus-ring"
                       >
                         {summarising
-                          ? "Reading the transcript…"
+                          ? (progress ?? "Reading the transcript…")
                           : selected.summary
                             ? "Summarise again"
                             : "Summarise"}
@@ -624,7 +647,9 @@ export function HistoryDialog({
                   ) : (
                     <p className="mt-2 text-[12.5px] leading-relaxed text-pulpitry-muted">
                       {summarising
-                        ? "Reading the transcript. On a long service this takes a moment."
+                        ? (progress
+                            ? `${progress} A long service is read in parts, and the model may keep us waiting between them.`
+                            : "Reading the transcript. On a long service this takes a moment.")
                         : "Not summarised yet. The assistant will title it, say what was taught, and list the subjects raised."}
                     </p>
                   )}
