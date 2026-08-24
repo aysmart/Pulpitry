@@ -52,8 +52,30 @@ pub fn start(directory: &Path) -> Option<PathBuf> {
 /// Both, deliberately: the file is for the operator to send on, and stderr is
 /// still where a developer running from a terminal expects to see it.
 pub fn line(message: &str) {
-    eprintln!("{message}");
+    /*
+     * Written, not printed. `eprintln!` panics when the write fails.
+     *
+     * Stderr is not always there to be written to: a GUI application on
+     * Windows has no console at all, and a process whose parent has gone --
+     * a terminal closed, a launcher that exited -- is writing into a pipe
+     * with nobody on the other end, which fails with EPIPE.
+     *
+     * That panic was fatal rather than merely unfortunate, because the panic
+     * hook below reports panics by calling this function: the report panicked
+     * on the same broken stderr, and a panic inside a panic hook aborts the
+     * process. Pulpitry died with SIGABRT in the middle of summarising a
+     * service, and the crash report was six frames of the logger calling
+     * itself.
+     *
+     * A log line that cannot be written is not worth a process.
+     */
+    let _ = writeln!(std::io::stderr(), "{message}");
 
+    to_file(message);
+}
+
+/// The file half of [`line`], which is the half that must never fail.
+fn to_file(message: &str) {
     let Ok(mut slot) = FILE.lock() else { return };
     let Some(file) = slot.as_mut() else { return };
     let _ = writeln!(file, "[{}] {message}", stamp());
@@ -63,12 +85,62 @@ pub fn line(message: &str) {
 }
 
 /// A timestamp with no dependency on a date library.
+///
+/// Local time, which is the only kind an operator can compare against the clock
+/// on the wall. It was UTC, so every line in a British summer read an hour
+/// early -- and a log that disagrees with the clock is worse than one with no
+/// times in it, because it is believed. An afternoon went into re-reading
+/// failures as stale that had happened a minute earlier.
+///
+/// The offset comes from the platform rather than a crate: `localtime_r` is
+/// what every date library would call here anyway.
 fn stamp() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
-    let secs = now.as_secs();
-    let (h, m, s) = ((secs / 3600) % 24, (secs / 60) % 60, secs % 60);
+    let secs = now.as_secs() as i64 + local_offset(now.as_secs() as i64);
+    let secs = secs.rem_euclid(86_400);
+    let (h, m, s) = (secs / 3600, (secs / 60) % 60, secs % 60);
     format!("{h:02}:{m:02}:{s:02}")
+}
+
+/// Seconds this machine is ahead of UTC, at the given moment.
+///
+/// At the given moment, not in general: the offset changes twice a year and a
+/// log stamped with the wrong half of that is exactly as misleading as one
+/// stamped in UTC.
+#[cfg(unix)]
+fn local_offset(at: i64) -> i64 {
+    // SAFETY: `localtime_r` writes into a struct we own and reads a value we
+    // pass by pointer. It is the reentrant form precisely so that this is safe
+    // to call from any thread, which a logger has to be.
+    unsafe {
+        let mut out: libc::tm = std::mem::zeroed();
+        let time = at as libc::time_t;
+        if libc::localtime_r(&time, &mut out).is_null() {
+            return 0;
+        }
+        out.tm_gmtoff as i64
+    }
+}
+
+#[cfg(windows)]
+fn local_offset(_at: i64) -> i64 {
+    // SAFETY: the call fills a struct we own and reports failure in its return
+    // value, which is checked.
+    unsafe {
+        let mut zone: windows_sys::Win32::System::Time::TIME_ZONE_INFORMATION =
+            std::mem::zeroed();
+        match windows_sys::Win32::System::Time::GetTimeZoneInformation(&mut zone) {
+            // TIME_ZONE_ID_INVALID
+            0xFFFF_FFFF => 0,
+            // Bias is minutes *behind* UTC, and daylight saving is a further
+            // bias on top of it. 2 is TIME_ZONE_ID_DAYLIGHT.
+            id => {
+                let bias = zone.Bias + if id == 2 { zone.DaylightBias } else { zone.StandardBias };
+                -(bias as i64) * 60
+            }
+        }
+    }
 }
 
 /// Reports a panic to the log before the process goes.
@@ -82,7 +154,10 @@ pub fn catch_panics() {
             .location()
             .map(|at| format!("{}:{}", at.file(), at.line()))
             .unwrap_or_else(|| "somewhere".into());
-        line(&format!("PANIC at {where_}: {info}"));
+        // To the file only, and never through anything that can fail loudly:
+        // a panic raised while reporting a panic aborts the process, which is
+        // how a broken stderr turned a recoverable fault into a crash.
+        to_file(&format!("PANIC at {where_}: {info}"));
         previous(info);
     }));
 }

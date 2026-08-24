@@ -127,3 +127,12 @@ codegen-units = 1
 lto = true
 opt-level = "s"
 strip = true
+
+# For the log's timestamps only: the local offset from UTC, which std cannot
+# give and which every date library would ask the platform for anyway. Both are
+# already in the tree; naming them here costs nothing but says why they matter.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_Time"] }
