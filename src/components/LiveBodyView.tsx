@@ -154,9 +154,40 @@ function Composed({
    * "those slides with just a title show as broken" was.
    */
   if (layout === "section" && title?.kind === "text") {
+    const panel = panelStyle(theme);
     return (
       <div className={FRAME} style={frame}>
-        <Heading text={title.text} style={style} accent={accent} base={base} scale={2.1} />
+        {/*
+          The heading stands on a field of colour rather than on the backdrop.
+          One device, and the reason it is this one: a section marker is the
+          slide with the least on it, so it is the slide that most looks
+          unfinished when there is nothing but a line of type in the middle of
+          a frame. A field gives the words something to sit on.
+
+          The field is the panel colour, which is the accent's own tint, so it
+          is the brand's and not a colour this file chose.
+        */}
+        <div
+          className="w-full rounded-[0.1em] px-[0.7em] py-[0.55em]"
+          style={{ backgroundColor: panel.fill }}
+        >
+          <Heading
+            text={title.text}
+            style={style}
+            accent={accent}
+            base={base}
+            /*
+             * Falls away as the heading gets longer.
+             *
+             * A flat 2.1 is right for "Fear" and ruinous for "Recognizing The
+             * Difference Between Similar Patterns", which ran off the top of
+             * the frame and off the bottom at once. The guessed size already
+             * shrinks with the character count; multiplying it by a constant
+             * undoes exactly that, so the multiplier has to fall too.
+             */
+            scale={sectionScale(title.text)}
+          />
+        </div>
       </div>
     );
   }
@@ -209,11 +240,17 @@ function Composed({
               ))}
             </div>
             {/*
-              Fitted, never cropped, and this is the same lesson the backdrop
-              taught. A church's pictures are the graphics it already made:
-              cropping one to a tidy panel cuts the words off the top of it,
-              which is what "Every school run," became. Consistency between two
-              slides is not worth a headline sliced in half.
+              Fitted, never cropped, and given no device of its own.
+
+              A block behind it was tried, on the reasoning that a fitted
+              picture floats. It does not: a church's pictures are the graphics
+              it already made and they arrive with their own background, so
+              there was nothing to place them against and an offset rectangle
+              behind one reads as a misprint rather than as a decision.
+
+              Cropping was tried before that and cut the words off the top of
+              the graphic. Both are the same mistake -- treating these as
+              photographs, which they are not.
             */}
             <img
               src={convertFileSrc(figure.source.path)}
@@ -314,7 +351,22 @@ function Composed({
   );
 }
 
-/** The brand's accent, or the body colour where a theme sets none. */
+/**
+ * How much larger than the body a section marker is set.
+ *
+ * Measured from the heading's own length, in the same spirit as the size guess
+ * it multiplies. Deliberately coarse: this decides between "large" and "very
+ * large", and a slide holding one line of type has room to be wrong by a step.
+ */
+function sectionScale(text: string): number {
+  const length = text.trim().length;
+  if (length <= 18) return 2.1;
+  if (length <= 32) return 1.7;
+  if (length <= 52) return 1.35;
+  return 1.1;
+}
+
+/** The theme's accent, or the body colour where it sets none. */
 function accentOf(theme: ProjectorTheme): string {
   return theme.referenceColor || theme.textColor;
 }
