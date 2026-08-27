@@ -67,8 +67,53 @@ export type SlideComponent =
  *
  * Deliberately few. An operator choosing under service pressure needs one
  * decision, and a gallery of arrangements is not a decision but a delay.
+ *
+ * Nobody chooses these, which is the point: a layout is a function of what the
+ * slide is made of, so `layoutFor` derives it from the components. Asking the
+ * model for one would be a sixth thing it can get wrong on a slide, and the
+ * lesson of the anchoring work is that a mechanism beats an instruction.
+ *
+ * - `section` a movement of the sermon begins: a heading and nothing under it.
+ * - `single`  one thing, set large. A statement that stands on its own.
+ * - `split`   a comparison, as two headed columns rather than a ruled grid.
+ * - `stacked` a heading and what sits beneath it. The common case.
+ *
+ * "backed" -- a picture filling the frame with the words in a corner -- is
+ * absent because there are no pictures yet. It belongs with the imagery work,
+ * not here, and an arrangement nothing can trigger is dead code with a name.
  */
-export type SlideLayout = "single" | "stacked";
+export type SlideLayout = "single" | "stacked" | "split" | "section";
+
+/**
+ * The arrangement a slide's own contents call for.
+ *
+ * Every slide was stacked, because the two save paths wrote `"stacked"` in and
+ * nothing ever computed anything else. So a slide holding only a heading was
+ * drawn as a heading over an empty body -- which is what "those slides with
+ * just a title show as broken" was.
+ */
+export function layoutFor(components: SlideComponent[]): SlideLayout {
+  const body = components.filter(
+    (component) => !(component.kind === "text" && component.level === "title"),
+  );
+
+  // A heading with nothing under it is not a broken slide, it is a section
+  // marker, and it is the one slide that should be set enormous.
+  if (body.length === 0) return "section";
+
+  /*
+   * A two-column comparison is already side by side; a ruled grid is the
+   * awkward way to draw one. Three columns or more is a table and stays one --
+   * three panels across a wall are too narrow to read from the back.
+   */
+  const table = body.find((component) => component.kind === "table");
+  if (table && table.kind === "table" && table.header.length === 2) return "split";
+
+  // One thing on a slide gets the room, whether or not a heading names it.
+  if (body.length === 1 && components.length === 1) return "single";
+
+  return "stacked";
+}
 
 export type LiveBody =
   | { kind: "scripture"; lines: ScriptureLine[] }

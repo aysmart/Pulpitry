@@ -34,6 +34,77 @@ import { VideoSurface } from "./VideoSurface";
  * independent choices -- a table that picked its own size would be the one
  * thing on the wall that did not match.
  */
+/**
+ * The box every arrangement is drawn into.
+ *
+ * A plain column, as it was before there were arrangements. It neither clips
+ * nor caps its own height: the frame around it already does both, and a second
+ * box trying to do it as well is how a slide lost everything below its first
+ * line -- the words were there, drawn, and hidden by their own container.
+ *
+ * Sized from the length-based guess, like every other kind of body. It is a
+ * guess and it is sometimes wrong -- a slide whose heading and rule push it a
+ * line past the frame loses that line -- but measuring properly means changing
+ * how every surface sizes text, which is the display-parity work and not this.
+ */
+const FRAME = "flex w-full flex-col";
+
+/**
+ * A heading, ranged left under a hanging rule.
+ *
+ * Shared by the two layouts that have one so they cannot drift: the rule is
+ * what ties a heading to what sits beneath it, and a heading centred over
+ * left-ranged content points at nothing.
+ */
+function Heading({
+  text,
+  style,
+  accent,
+  base,
+  scale,
+}: {
+  text: string;
+  style: CSSProperties;
+  accent: string;
+  base: string;
+  scale: number;
+}) {
+  return (
+    <div className="flex w-full flex-col gap-[0.2em]">
+      <span
+        aria-hidden
+        className="rounded-full"
+        style={{
+          backgroundColor: accent,
+          height: `calc(${base} * 0.07)`,
+          width: `calc(${base} * ${scale * 1.2})`,
+        }}
+      />
+      <h2
+        className="w-full text-left text-balance"
+        style={{
+          ...style,
+          fontSize: `calc(${base} * ${scale})`,
+          fontWeight: 700,
+          lineHeight: 1.12,
+          letterSpacing: "-0.012em",
+        }}
+      >
+        {text}
+      </h2>
+    </div>
+  );
+}
+
+/**
+ * A slide made of components, arranged as its layout says.
+ *
+ * Everything is sized from the one style the rest of the frame uses, so a
+ * composed slide sits at the same scale as a verse and inherits the fitting
+ * that keeps it inside the frame. Sizes here are multiples of that, not
+ * independent choices -- a table that picked its own size would be the one
+ * thing on the wall that did not match.
+ */
 function Composed({
   body,
   style,
@@ -43,15 +114,138 @@ function Composed({
   style: CSSProperties;
   theme: ProjectorTheme;
 }) {
+  // The one size everything on the slide is a multiple of, so a heading and a
+  // table hold their relationship at whatever size the slide is set.
+  const base = typeof style.fontSize === "string" ? style.fontSize : "4cqw";
+  const accent = theme.referenceColor || theme.textColor;
+  /*
+   * The frame carries the slide's own size, so the `em` spacing below is a
+   * fraction of the type rather than of an inherited default.
+   *
+   * Without it every gap resolved against 16px and stayed 16px, so the space
+   * between a heading and its list was the same on a phone-sized preview and
+   * on a wall -- which is to say it vanished on the wall.
+   */
+  const frame = {
+    fontFamily: fontStack(theme.fontFamily),
+    color: theme.textColor,
+    fontSize: base,
+  } as CSSProperties;
+
+  const title = body.components.find(
+    (component) => component.kind === "text" && component.level === "title",
+  );
+  const rest = body.components.filter((component) => component !== title);
+
+  /*
+   * A movement of the sermon begins.
+   *
+   * Set as large as the frame allows, because this slide has one job and a
+   * whole wall to do it with. Drawn at body size in the middle of an empty
+   * frame, it looked like a slide that had failed to load -- which is what
+   * "those slides with just a title show as broken" was.
+   */
+  if (body.layout === "section" && title?.kind === "text") {
+    return (
+      <div className={FRAME} style={frame}>
+        <Heading text={title.text} style={style} accent={accent} base={base} scale={2.1} />
+      </div>
+    );
+  }
+
+  /*
+   * A comparison, as the two columns it already is.
+   *
+   * A ruled grid is right on a lower third, where the card is short and wide
+   * and rules are how rows stay apart. On a wall it reads as a spreadsheet:
+   * what a congregation needs is the two things beside each other, each under
+   * its own heading, with air between them.
+   */
+  if (body.layout === "split") {
+    const table = rest.find((component) => component.kind === "table");
+    const after = rest.filter((component) => component !== table);
+    if (table?.kind === "table") {
+      return (
+        <div className={`${FRAME} gap-[0.5em]`} style={frame}>
+          {title?.kind === "text" ? (
+            <Heading text={title.text} style={style} accent={accent} base={base} scale={1.3} />
+          ) : null}
+          <div className="flex w-full items-stretch gap-[1.1em]">
+            {table.header.map((head, column) => (
+              <div key={column} className="flex flex-1 flex-col gap-[0.35em]">
+                <h3
+                  className="text-left"
+                  style={{
+                    ...style,
+                    color: accent,
+                    fontSize: `calc(${base} * 0.95)`,
+                    fontWeight: 700,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {head}
+                </h3>
+                <span
+                  aria-hidden
+                  className="w-full"
+                  style={{
+                    backgroundColor: withAlpha(accent, 0.5),
+                    height: `calc(${base} * 0.035)`,
+                  }}
+                />
+                <ul className="flex flex-col gap-[0.5em]">
+                  {table.rows.map((row, at) => (
+                    <li
+                      key={at}
+                      className="text-left"
+                      style={{ ...style, fontSize: `calc(${base} * 0.88)`, lineHeight: 1.3 }}
+                    >
+                      {row[column] ?? ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          {after.map((component, index) => (
+            <Component key={index} component={component} style={style} theme={theme} base={base} ranged />
+          ))}
+        </div>
+      );
+    }
+  }
+
+  /*
+   * One thing, given the frame.
+   *
+   * Centred, because there is nothing for it to align with: the hanging rule
+   * exists to tie a heading to what sits under it, and here there is neither.
+   */
+  if (body.layout === "single") {
+    return (
+      <div className={`${FRAME} gap-[0.5em]`} style={frame}>
+        {body.components.map((component, index) => (
+          <Component key={index} component={component} style={style} theme={theme} base={base} />
+        ))}
+      </div>
+    );
+  }
+
+  /*
+   * A heading and what sits beneath it.
+   *
+   * Ranged left under a hanging rule rather than centred. Centring was the one
+   * relationship every slide had, and it is what made a heading over three
+   * points read as a paragraph somebody had broken up: a centred list has a
+   * ragged left edge, and parallel points stop looking parallel.
+   */
   return (
-    <div
-      className={`flex w-full flex-col ${
-        body.layout === "single" ? "justify-center gap-[0.5em]" : "gap-[0.7em]"
-      }`}
-      style={{ fontFamily: fontStack(theme.fontFamily), color: theme.textColor }}
-    >
-      {body.components.map((component, index) => (
-        <Component key={index} component={component} style={style} theme={theme} />
+    <div className={`${FRAME} gap-[0.45em]`} style={frame}>
+      {title?.kind === "text" ? (
+        <Heading text={title.text} style={style} accent={accent} base={base} scale={1.35} />
+      ) : null}
+      {rest.map((component, index) => (
+        <Component key={index} component={component} style={style} theme={theme} base={base} ranged />
       ))}
     </div>
   );
@@ -61,20 +255,41 @@ function Component({
   component,
   style,
   theme,
+  base: given,
+  ranged = false,
 }: {
   component: SlideComponent;
   style: CSSProperties;
   theme: ProjectorTheme;
+  /**
+   * The size everything on this slide is a multiple of.
+   *
+   * Passed in rather than read off `style`, and that distinction was the whole
+   * bug: this read the *guessed* size, so shrinking the slide to fit changed
+   * the container's variable and not one word inside it. The box never got
+   * shorter, the search concluded nothing fit, and the slide was drawn at the
+   * guess and clipped -- while the number said it had been fitted.
+   */
+  base?: string;
+  /**
+   * Whether this sits under a left-ranged heading.
+   *
+   * A list or a table centred beneath a left-ranged title floats free of it,
+   * and the hanging rule above the title then points at nothing. Alignment is
+   * the layout's decision, so the layout passes it down.
+   */
+  ranged?: boolean;
 }) {
   // The one size everything else is a multiple of.
-  const base = typeof style.fontSize === "string" ? style.fontSize : "4cqw";
+  const base =
+    given ?? (typeof style.fontSize === "string" ? style.fontSize : "4cqw");
 
   switch (component.kind) {
     case "text":
       return (
         <p
           className={`w-full text-balance ${
-            component.level === "body" ? "text-left" : "text-center"
+            ranged || component.level === "body" ? "text-left" : "text-center"
           }`}
           style={{
             ...style,
@@ -97,7 +312,9 @@ function Component({
          is the one thing that makes parallel points stop looking parallel. */
       return (
         <ol
-          className="mx-auto flex w-fit max-w-full flex-col gap-[0.3em] text-left"
+          className={`flex w-fit max-w-full flex-col gap-[0.3em] text-left ${
+            ranged ? "" : "mx-auto"
+          }`}
           style={{ ...style, fontSize: base, lineHeight: 1.3 }}
         >
           {component.items.map((item, index) => (
@@ -122,7 +339,7 @@ function Component({
          at distance. */
       return (
         <table
-          className="mx-auto w-fit max-w-full border-collapse text-left"
+          className={`w-fit max-w-full border-collapse text-left ${ranged ? "" : "mx-auto"}`}
           style={{ ...style, fontSize: `calc(${base} * 0.82)`, lineHeight: 1.3 }}
         >
           {component.header.length > 0 ? (
@@ -189,8 +406,11 @@ function Component({
          same rule the generator follows and the reason it never sends text. */
       return (
         <p
-          className="w-full text-center tracking-wide"
-          style={referenceStyle(theme)}
+          className={`w-full tracking-wide ${ranged ? "text-left" : "text-center"}`}
+          // Sized from the slide rather than from the theme's reference scale:
+          // a line that keeps its size while everything around it shrinks is
+          // the line that pushes the slide off the bottom of the frame.
+          style={{ ...referenceStyle(theme), fontSize: `calc(${base} * 0.62)` }}
         >
           {component.reference}
         </p>
@@ -562,3 +782,4 @@ export interface Extent {
  * winds.
  */
 const READABLE = 4.2;
+

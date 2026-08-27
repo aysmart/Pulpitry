@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { catalogSave, type Item } from "../lib/catalog";
-import type { SlideComponent, TextBlock } from "../lib/projector";
+import { layoutFor, type SlideComponent, type TextBlock } from "../lib/projector";
 import { describeError, generateSlides, type DraftSlide } from "../lib/api";
 
 /**
@@ -107,6 +107,33 @@ export function componentsFor(draft: DraftSlide): SlideComponent[] {
   return components;
 }
 
+/**
+ * A draft as the deck section it is stored as.
+ *
+ * The whole section, not just its components. This was written out at both
+ * save sites and the copies drifted: the one an operator actually uses had its
+ * own idea of what a slide was made of and dropped every table the model
+ * produced. Then the layout was hardcoded in both, so no slide ever had an
+ * arrangement other than a centred stack.
+ *
+ * One function, so there is one answer to what a slide is.
+ */
+export function sectionFor(draft: DraftSlide) {
+  const components = componentsFor(draft);
+  return {
+    // The title labels the section, as a song's does, so the operator can see
+    // what is coming in the section list.
+    label: draft.title || "Slide",
+    // Kept as well as the components: a deck saved today still opens in a
+    // build that predates them, and lines are what that build draws.
+    lines: [...draft.lines, ...(draft.reference ? [draft.reference] : [])],
+    components,
+    // Derived rather than chosen. Nobody is asked and the model is not either:
+    // an arrangement is a function of what the slide is made of.
+    layout: layoutFor(components),
+  };
+}
+
 export function blocksFor(draft: DraftSlide): TextBlock[] {
   const blocks: TextBlock[] = [];
 
@@ -183,16 +210,7 @@ export function SlidesFromSermon({ onClose }: { onClose: () => void }) {
         subtitle: `${drafts.length} slide${drafts.length === 1 ? "" : "s"}`,
         body: {
           kind: "deck",
-          sections: drafts.map((draft) => ({
-            // The title labels the section, as a song's does, so the operator
-            // can see what is coming in the section list.
-            label: draft.title || "Slide",
-            // Kept as well as the components: a deck saved today still opens in
-            // a build that predates them, and lines are what that build draws.
-            lines: [...draft.lines, ...(draft.reference ? [draft.reference] : [])],
-            components: componentsFor(draft),
-            layout: "stacked" as const,
-          })),
+          sections: drafts.map(sectionFor),
         },
         path: null,
         updatedAt: Date.now(),

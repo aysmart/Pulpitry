@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { describeError, generateSlides, type DraftSlide } from "../lib/api";
 import { catalogSave } from "../lib/catalog";
-import { componentsFor } from "./SlidesFromSermon";
+import { sectionFor } from "./SlidesFromSermon";
 import { open } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -314,15 +314,11 @@ export function HistoryDialog({
            * actually uses -- while the other copy, which I had carefully taught
            * to carry them, is reached from a screen nobody was on.
            *
-           * `componentsFor` is imported rather than repeated so there is one
-           * answer to what a slide is made of.
+           * `sectionFor` is imported rather than repeated so there is one
+           * answer to what a slide is made of -- and, since the arrangement
+           * was hardcoded in both copies too, how it is laid out.
            */
-          sections: slides.map((draft) => ({
-            label: draft.title || "Slide",
-            lines: [...draft.lines, ...(draft.reference ? [draft.reference] : [])],
-            components: componentsFor(draft),
-            layout: "stacked" as const,
-          })),
+          sections: slides.map(sectionFor),
         },
         path: null,
         updatedAt: Date.now(),
