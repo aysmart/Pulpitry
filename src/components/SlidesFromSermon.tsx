@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { catalogSave, type Item } from "../lib/catalog";
-import type { TextBlock } from "../lib/projector";
+import type { SlideComponent, TextBlock } from "../lib/projector";
 import { describeError, generateSlides, type DraftSlide } from "../lib/api";
 
 /**
@@ -46,6 +46,67 @@ import { describeError, generateSlides, type DraftSlide } from "../lib/api";
  * left-aligned fragments float against the left edge of a projector that is
  * rarely the same shape as the screen it is pointed at.
  */
+/**
+ * The same slide, as components.
+ *
+ * Stored alongside the blocks rather than instead of them: `blocks` is what
+ * every slide made before this existed carries and what an older build knows
+ * how to draw, and there is no reason a slide kept today should stop working
+ * if this is rolled back.
+ *
+ * A pure mapping for now, from the three fields a draft has. It exists so the
+ * component renderer is exercised by real slides made from real services
+ * before the model is taught to produce tables and figures -- if the shape is
+ * wrong, it is much cheaper to find out here.
+ */
+export function componentsFor(draft: DraftSlide): SlideComponent[] {
+  const components: SlideComponent[] = [];
+
+  if (draft.title) {
+    components.push({ kind: "text", text: draft.title, level: "title" });
+  }
+
+  /*
+   * One line is a statement; several are a list.
+   *
+   * The distinction is the whole reason components exist. Three parallel points
+   * ranged left read as three points; the same three centred and stacked read
+   * as a paragraph that has been broken up, which is what every slide looked
+   * like before this.
+   */
+  /*
+   * A comparison takes the body of the slide, and the lines stand down.
+   *
+   * The two are alternatives rather than companions: a preacher who set two
+   * things side by side made that the point, and three centred lines beneath a
+   * table are the same words twice.
+   */
+  if (draft.table) {
+    components.push({
+      kind: "table",
+      header: draft.table.header,
+      rows: draft.table.rows,
+    });
+    if (draft.reference) {
+      components.push({ kind: "passage", reference: draft.reference });
+    }
+    return components;
+  }
+
+  const [only] = draft.lines;
+  if (draft.lines.length === 1 && only) {
+    components.push({ kind: "text", text: only, level: "statement" });
+  } else if (draft.lines.length > 1) {
+    components.push({ kind: "list", items: draft.lines, ordered: false });
+  }
+
+  if (draft.reference) {
+    components.push({ kind: "passage", reference: draft.reference });
+  }
+
+  return components;
+}
+
 export function blocksFor(draft: DraftSlide): TextBlock[] {
   const blocks: TextBlock[] = [];
 
@@ -126,7 +187,11 @@ export function SlidesFromSermon({ onClose }: { onClose: () => void }) {
             // The title labels the section, as a song's does, so the operator
             // can see what is coming in the section list.
             label: draft.title || "Slide",
+            // Kept as well as the components: a deck saved today still opens in
+            // a build that predates them, and lines are what that build draws.
             lines: [...draft.lines, ...(draft.reference ? [draft.reference] : [])],
+            components: componentsFor(draft),
+            layout: "stacked" as const,
           })),
         },
         path: null,
@@ -201,12 +266,53 @@ export function SlidesFromSermon({ onClose }: { onClose: () => void }) {
                 ) : null}
               </div>
 
+              {draft.table ? (
+                <table className="w-full border-collapse text-left text-[11.5px] text-pulpitry-muted">
+                  <thead>
+                    <tr>
+                      {draft.table.header.map((cell, at) => (
+                        <th
+                          key={at}
+                          scope="col"
+                          className="border-b border-pulpitry-line pr-3 pb-1 font-semibold text-pulpitry-text"
+                        >
+                          {cell}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {draft.table.rows.map((row, at) => (
+                      <tr key={at}>
+                        {row.map((cell, index) => (
+                          <td key={index} className="pr-3 pt-1 align-top">
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : null}
+
               {draft.lines.length > 0 ? (
                 <ul className="flex flex-col gap-0.5 text-[12.5px] leading-snug text-pulpitry-muted">
                   {draft.lines.map((line, at) => (
                     <li key={at}>{line}</li>
                   ))}
                 </ul>
+              ) : null}
+
+              {/* What the preacher actually said, beneath the slide it became.
+                  Every slide here has already been checked against the
+                  transcript; this is so the operator can see *what* it was
+                  checked against without opening the transcript beside it. */}
+              {draft.anchor ? (
+                <p className="border-l-2 border-pulpitry-teal-dim pl-2 text-[10px] leading-[1.45] text-pulpitry-muted/80 italic">
+                  “{draft.anchor.length > 180
+                    ? `${draft.anchor.slice(0, 180).trimEnd()}…`
+                    : draft.anchor}”
+                </p>
               ) : null}
 
               {/* Dropped one at a time, because the usual outcome is six good

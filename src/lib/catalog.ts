@@ -2,12 +2,27 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type { TextBlock } from "./projector";
 import type { ProjectorTheme } from "./theme";
+import type { SlideComponent, SlideLayout } from "./projector";
 
 /** A labelled block of a song: "Verse 1", "Chorus", "Bridge". */
 export interface SongSection {
   label: string;
   /** Kept as written. A lyric breaks where the writer broke it. */
   lines: string[];
+  /**
+   * A slide's components, where this section is a slide rather than a verse.
+   *
+   * Songs never set these; decks do. The two share this type because they share
+   * everything else that matters — a labelled part of a longer thing that the
+   * operator steps through one at a time — and giving a deck its own near-copy
+   * would mean maintaining the stepping twice.
+   *
+   * Where they are present the section is drawn as a composed slide, and where
+   * they are absent it is drawn as lines, which is what every deck saved before
+   * this carries.
+   */
+  components?: SlideComponent[];
+  layout?: SlideLayout;
 }
 
 /** Whether a song's words may lawfully be put on a screen. */
@@ -83,7 +98,21 @@ export type ItemBody =
   | { kind: "image" }
   | { kind: "media"; looping: boolean }
   | { kind: "template"; theme: ProjectorTheme }
-  | { kind: "slide"; blocks: TextBlock[] }
+  /**
+   * A slide.
+   *
+   * `blocks` is what every slide saved before components existed carries, and
+   * it stays: a slide from last Sunday loads and renders exactly as it did.
+   * `components` is preferred when present, so the two can coexist for as long
+   * as it takes for the old ones to be replaced -- which may be never, and does
+   * not need to be.
+   */
+  | {
+      kind: "slide";
+      blocks: TextBlock[];
+      components?: SlideComponent[];
+      layout?: SlideLayout;
+    }
   /**
    * A sermon's slides, kept together and stepped in order.
    *

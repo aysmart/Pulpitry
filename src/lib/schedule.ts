@@ -105,6 +105,10 @@ export function presentableFor(item: Item): Presentable | null {
         itemId: item.id,
         title: item.title,
         blocks: item.body.blocks,
+        // Carried through rather than flattened: a composed slide that arrived
+        // here as blocks would lose its table on the way to the screen.
+        components: item.body.components,
+        layout: item.body.layout,
       };
     default:
       // A template is styling, not something to put on the screen.

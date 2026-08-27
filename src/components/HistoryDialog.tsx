@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { describeError, generateSlides, type DraftSlide } from "../lib/api";
 import { catalogSave } from "../lib/catalog";
+import { componentsFor } from "./SlidesFromSermon";
 import { open } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -305,9 +306,22 @@ export function HistoryDialog({
         subtitle: `${slides.length} slide${slides.length === 1 ? "" : "s"}`,
         body: {
           kind: "deck",
+          /*
+           * The same section a sermon's slides get, built the same way.
+           *
+           * This was its own copy: label and lines, no components. Every table
+           * the model produced was discarded here, by the path an operator
+           * actually uses -- while the other copy, which I had carefully taught
+           * to carry them, is reached from a screen nobody was on.
+           *
+           * `componentsFor` is imported rather than repeated so there is one
+           * answer to what a slide is made of.
+           */
           sections: slides.map((draft) => ({
             label: draft.title || "Slide",
             lines: [...draft.lines, ...(draft.reference ? [draft.reference] : [])],
+            components: componentsFor(draft),
+            layout: "stacked" as const,
           })),
         },
         path: null,
@@ -549,12 +563,54 @@ export function HistoryDialog({
                                 </span>
                               ) : null}
                             </div>
+                            {/* A comparison is the slide, so it is shown as one.
+                                Without this a table slide reads as a bare title
+                                and looks broken -- which is exactly how it was
+                                reported. */}
+                            {draft.table ? (
+                              <table className="mt-1.5 w-full border-collapse text-left text-[11.5px] text-pulpitry-muted">
+                                <thead>
+                                  <tr>
+                                    {draft.table.header.map((cell, at) => (
+                                      <th
+                                        key={at}
+                                        scope="col"
+                                        className="border-b border-pulpitry-line pr-3 pb-1 font-semibold text-pulpitry-text"
+                                      >
+                                        {cell}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {draft.table.rows.map((row, at) => (
+                                    <tr key={at}>
+                                      {row.map((cell, index) => (
+                                        <td key={index} className="pr-3 pt-1 align-top">
+                                          {cell}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : null}
+
                             {draft.lines.length > 0 ? (
                               <ul className="mt-1 flex flex-col gap-0.5 text-[12px] leading-snug text-pulpitry-muted">
                                 {draft.lines.map((line, at) => (
                                   <li key={at}>{line}</li>
                                 ))}
                               </ul>
+                            ) : null}
+
+                            {/* What the preacher said, under the slide it became. */}
+                            {draft.anchor ? (
+                              <p className="mt-1.5 border-l-2 border-pulpitry-teal-dim pl-2 text-[10px] leading-[1.45] text-pulpitry-muted/80 italic">
+                                “{draft.anchor.length > 140
+                                  ? `${draft.anchor.slice(0, 140).trimEnd()}…`
+                                  : draft.anchor}”
+                              </p>
                             ) : null}
                             <button
                               type="button"

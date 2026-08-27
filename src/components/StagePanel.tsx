@@ -17,6 +17,7 @@ import { Backdrop } from "./Backdrop";
 import {
   presentableLabel,
   presentableText,
+  toLiveContent,
   type Presentable,
 } from "../lib/usePresentation";
 import { EmptyState, Panel } from "./Panel";
@@ -44,7 +45,12 @@ function Stage({
   /** A picture or clip, which fills the pane instead of the text layout. */
   asset?: { kind: "image" | "media"; path: string; looping: boolean } | null;
   /** A written slide, which is its own layout and must not be flattened. */
-  slide?: { blocks: TextBlock[]; theme: ProjectorTheme } | null;
+  slide?: {
+    blocks: TextBlock[];
+    theme: ProjectorTheme;
+    /** Present where the slide has components rather than lines. */
+    body?: LiveBody;
+  } | null;
   /** How far through a long slide it is wound, and how far it goes. Live
    *  only. */
   progress?: number;
@@ -67,6 +73,7 @@ function Stage({
       >
         <SlideCanvas
           blocks={slide.blocks}
+          body={slide.body}
           theme={slide.theme}
           progress={progress}
           onExtent={onExtent}
@@ -186,13 +193,36 @@ function Stage({
 }
 
 /** The written slide behind an item, if that is what it is. */
+/**
+ * What the canvas should draw for a staged item, if anything.
+ *
+ * Asked of `toLiveContent` rather than worked out here, because that is the
+ * function that decides what goes to the projector and these panes exist to
+ * show what the projector will get. Deciding it twice is how Preview came to
+ * disagree: it tested for a slide, and a deck's section is a lyric -- so a
+ * sermon's slides, which are kept as a deck, fell through to the plain-text
+ * pane and a table arrived as a run of words.
+ */
 function slideOf(item: Presentable | null, theme: ProjectorTheme) {
-  return item?.kind === "slide" ? { blocks: item.blocks, theme } : null;
+  if (!item) return null;
+  const body = toLiveContent(item).body;
+  if (body.kind === "richText") return { blocks: body.blocks, theme, body };
+  if (body.kind === "composed") return { blocks: [], theme, body };
+  return null;
 }
 
-/** The same, for whatever the projector is currently showing. */
+/**
+ * The same, for whatever the projector is currently showing.
+ *
+ * Both kinds of slide: `richText` is what every slide made before components
+ * existed carries, and `composed` is what one made since carries. Leaving the
+ * second out sent it to the plain-text pane, where a table arrived as a run of
+ * words -- so a slide that was correct on the wall looked broken on the desk.
+ */
 function liveSlide(body: LiveBody | undefined, theme: ProjectorTheme) {
-  return body?.kind === "richText" ? { blocks: body.blocks, theme } : null;
+  if (body?.kind === "richText") return { blocks: body.blocks, theme, body };
+  if (body?.kind === "composed") return { blocks: [], theme, body };
+  return null;
 }
 
 /** The picture or clip behind an item, if that is what it is. */

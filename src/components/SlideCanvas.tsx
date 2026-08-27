@@ -1,4 +1,4 @@
-import type { TextBlock } from "../lib/projector";
+import type { LiveBody, TextBlock } from "../lib/projector";
 import type { ProjectorTheme } from "../lib/theme";
 import { Backdrop } from "./Backdrop";
 import { LiveBodyView, type Extent } from "./LiveBodyView";
@@ -13,11 +13,21 @@ import { LiveBodyView, type Extent } from "./LiveBodyView";
  */
 export function SlideCanvas({
   blocks,
+  body,
   theme,
   progress = 0,
   onExtent,
 }: {
   blocks: TextBlock[];
+  /**
+   * What to draw, where it is not simply blocks.
+   *
+   * A composed slide has components rather than lines, and drawing it from
+   * `blocks` shows a table as a run of words -- which is what the operator's
+   * panes did, so a slide that was correct on the wall looked broken on the
+   * desk.
+   */
+  body?: LiveBody;
   theme: ProjectorTheme;
   /** How far through a long slide it is wound, 0 to 1. */
   progress?: number;
@@ -52,7 +62,7 @@ export function SlideCanvas({
 
       <div className="absolute inset-0 flex flex-col items-center justify-center px-[6cqw] py-[5cqh]">
         <LiveBodyView
-          body={{ kind: "richText", blocks }}
+          body={body ?? { kind: "richText", blocks }}
           theme={theme}
           unit="cqw"
           // The outline is authored in px against a ~1920px screen; at this

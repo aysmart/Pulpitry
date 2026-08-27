@@ -31,10 +31,56 @@ export interface TextBlock {
  * unnumbered lines that must break where they were written, an image has no
  * text, and a clip has a timeline.
  */
+/**
+ * One thing on a slide.
+ *
+ * A tagged union for the reason [`LiveBody`] below is one: a table is not a
+ * paragraph with tabs in it and a list is not a paragraph with line breaks. The
+ * shapes are genuinely different, and flattening them into text is what made
+ * every slide a centred heading over centred lines.
+ *
+ * Only what is actually rendered appears here. A variant nobody draws is a
+ * slide that silently comes up blank in front of a congregation, so components
+ * are added to this union in the same change that teaches the renderer to draw
+ * them.
+ */
+export type SlideComponent =
+  /** A title, a statement set large, or a line of body text. */
+  | { kind: "text"; text: string; level: "title" | "statement" | "body" }
+  /** Parallel points. `ordered` where the preacher numbered them. */
+  | { kind: "list"; items: string[]; ordered: boolean }
+  /**
+   * A comparison, a rota, a set of figures.
+   *
+   * Often the literal shape of the argument — "under the law" beside "under
+   * grace" — and the one component whose invented contents would be most
+   * convincing and least noticed. Every cell is anchored; see slides.rs.
+   */
+  | { kind: "table"; header: string[]; rows: string[][] }
+  /** Something said, with whoever said it. */
+  | { kind: "quote"; text: string; attribution: string }
+  /** A reference. The verse comes from the library, never from the model. */
+  | { kind: "passage"; reference: string };
+
+/**
+ * How the components on a slide are placed.
+ *
+ * Deliberately few. An operator choosing under service pressure needs one
+ * decision, and a gallery of arrangements is not a decision but a delay.
+ */
+export type SlideLayout = "single" | "stacked";
+
 export type LiveBody =
   | { kind: "scripture"; lines: ScriptureLine[] }
   | { kind: "lyric"; lines: string[] }
   | { kind: "richText"; blocks: TextBlock[] }
+  /**
+   * A slide made of components rather than lines.
+   *
+   * Beside `richText` rather than replacing it: every slide saved before this
+   * existed is a `richText` and still renders exactly as it did.
+   */
+  | { kind: "composed"; components: SlideComponent[]; layout: SlideLayout }
   | { kind: "image"; path: string }
   | { kind: "media"; path: string; looping: boolean };
 
@@ -81,8 +127,53 @@ export function bodyText(body: LiveBody): string {
       return body.lines.join("\n");
     case "richText":
       return body.blocks.map((block) => block.text).join("\n");
+    case "composed":
+      return body.components.map(componentText).join("\n");
     default:
       return "";
+  }
+}
+
+/**
+ * Everything readable in a component, as text.
+ *
+ * Three callers with the same need and different reasons: sizing the type,
+ * searching a service, and mirroring to a paired Castavox — whose overlay
+ * carries flat strings, because it is a card beside a camera rather than a
+ * 16:9 frame. A table has no place in a lower third, so it is not sent as one;
+ * it is sent as something that still reads there.
+ */
+export function componentText(component: SlideComponent): string {
+  switch (component.kind) {
+    case "text":
+      return component.text;
+    case "list":
+      return component.items.join("\n");
+    case "table":
+      /*
+       * Each row paired with its heading, rather than cells run together.
+       *
+       * "Under the law · bondage" survives being read in a strip at the bottom
+       * of a video frame. "Under the law Under grace bondage freedom", which is
+       * what joining the cells gives, does not — the columns are the meaning
+       * and flattening them loses it.
+       */
+      return component.rows
+        .map((row) =>
+          row
+            .map((cell, index) => {
+              const heading = component.header[index];
+              return heading ? `${heading}: ${cell}` : cell;
+            })
+            .join(" · "),
+        )
+        .join("\n");
+    case "quote":
+      return component.attribution
+        ? `${component.text}\n${component.attribution}`
+        : component.text;
+    case "passage":
+      return component.reference;
   }
 }
 

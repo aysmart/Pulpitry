@@ -13,10 +13,190 @@ import {
   type AudioState,
   type LiveBody,
   type MediaCommand,
+  type SlideComponent,
   type TextBlock,
 } from "../lib/projector";
-import { fontStack, textStyle, type ProjectorTheme } from "../lib/theme";
+import {
+  fontStack,
+  referenceStyle,
+  textStyle,
+  withAlpha,
+  type ProjectorTheme,
+} from "../lib/theme";
 import { VideoSurface } from "./VideoSurface";
+
+/**
+ * A slide made of components.
+ *
+ * Everything is sized from the one style the rest of the frame uses, so a
+ * composed slide sits at the same scale as a verse and inherits the fitting
+ * that keeps it inside the frame. Sizes here are multiples of that, not
+ * independent choices -- a table that picked its own size would be the one
+ * thing on the wall that did not match.
+ */
+function Composed({
+  body,
+  style,
+  theme,
+}: {
+  body: Extract<LiveBody, { kind: "composed" }>;
+  style: CSSProperties;
+  theme: ProjectorTheme;
+}) {
+  return (
+    <div
+      className={`flex w-full flex-col ${
+        body.layout === "single" ? "justify-center gap-[0.5em]" : "gap-[0.7em]"
+      }`}
+      style={{ fontFamily: fontStack(theme.fontFamily), color: theme.textColor }}
+    >
+      {body.components.map((component, index) => (
+        <Component key={index} component={component} style={style} theme={theme} />
+      ))}
+    </div>
+  );
+}
+
+function Component({
+  component,
+  style,
+  theme,
+}: {
+  component: SlideComponent;
+  style: CSSProperties;
+  theme: ProjectorTheme;
+}) {
+  // The one size everything else is a multiple of.
+  const base = typeof style.fontSize === "string" ? style.fontSize : "4cqw";
+
+  switch (component.kind) {
+    case "text":
+      return (
+        <p
+          className={`w-full text-balance ${
+            component.level === "body" ? "text-left" : "text-center"
+          }`}
+          style={{
+            ...style,
+            fontSize:
+              component.level === "title"
+                ? `calc(${base} * 1.35)`
+                : component.level === "statement"
+                  ? `calc(${base} * 1.1)`
+                  : base,
+            fontWeight: component.level === "body" ? 400 : 600,
+            lineHeight: 1.25,
+          }}
+        >
+          {component.text}
+        </p>
+      );
+
+    case "list":
+      /* Ranged left, not centred. A centred list has a ragged left edge, which
+         is the one thing that makes parallel points stop looking parallel. */
+      return (
+        <ol
+          className="mx-auto flex w-fit max-w-full flex-col gap-[0.3em] text-left"
+          style={{ ...style, fontSize: base, lineHeight: 1.3 }}
+        >
+          {component.items.map((item, index) => (
+            <li key={index} className="flex gap-[0.5em]">
+              <span
+                aria-hidden={!component.ordered}
+                className="shrink-0 tabular-nums opacity-70"
+                style={{ color: theme.referenceColor || theme.textColor }}
+              >
+                {component.ordered ? `${index + 1}.` : "·"}
+              </span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ol>
+      );
+
+    case "table":
+      /* Hairlines in the text's own colour at low opacity rather than a border
+         colour of its own: a table on a projector is read from the back, and
+         rules heavy enough to see up close become a grid that fights the words
+         at distance. */
+      return (
+        <table
+          className="mx-auto w-fit max-w-full border-collapse text-left"
+          style={{ ...style, fontSize: `calc(${base} * 0.82)`, lineHeight: 1.3 }}
+        >
+          {component.header.length > 0 ? (
+            <thead>
+              <tr>
+                {component.header.map((cell, index) => (
+                  <th
+                    key={index}
+                    scope="col"
+                    className="px-[0.6em] pb-[0.28em] font-semibold"
+                    style={{ borderBottom: `0.06em solid ${withAlpha(theme.textColor, 0.45)}` }}
+                  >
+                    {cell}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+          ) : null}
+          <tbody>
+            {component.rows.map((row, at) => (
+              <tr key={at}>
+                {row.map((cell, index) => (
+                  <td
+                    key={index}
+                    className="px-[0.6em] py-[0.26em] tabular-nums"
+                    style={{
+                      borderBottom:
+                        at < component.rows.length - 1
+                          ? `0.03em solid ${withAlpha(theme.textColor, 0.18)}`
+                          : "none",
+                    }}
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+
+    case "quote":
+      return (
+        <figure className="mx-auto flex w-full max-w-[80%] flex-col gap-[0.35em]">
+          <blockquote
+            className="text-balance text-center italic"
+            style={{ ...style, fontSize: `calc(${base} * 1.05)`, lineHeight: 1.3 }}
+          >
+            {component.text}
+          </blockquote>
+          {component.attribution ? (
+            <figcaption
+              className="text-center not-italic opacity-70"
+              style={{ ...style, fontSize: `calc(${base} * 0.6)` }}
+            >
+              — {component.attribution}
+            </figcaption>
+          ) : null}
+        </figure>
+      );
+
+    case "passage":
+      /* The reference only. The verse is staged from the library, which is the
+         same rule the generator follows and the reason it never sends text. */
+      return (
+        <p
+          className="w-full text-center tracking-wide"
+          style={referenceStyle(theme)}
+        >
+          {component.reference}
+        </p>
+      );
+  }
+}
 
 /**
  * Renders whatever is live, in whatever shape it takes.
@@ -78,6 +258,9 @@ export function LiveBodyView({
   );
 
   switch (body.kind) {
+    case "composed":
+      return <Composed body={body} style={style} theme={theme} />;
+
     case "scripture":
       return (
         <p

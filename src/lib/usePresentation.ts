@@ -3,10 +3,13 @@ import { useCallback, useEffect, useState } from "react";
 import { adjacentVerse, type Verse } from "./bible";
 import type { SongSection } from "./catalog";
 import {
+  componentText,
   getLive,
   onLive,
   setLive,
   type LiveContent,
+  type SlideComponent,
+  type SlideLayout,
   type TextBlock,
 } from "./projector";
 
@@ -34,7 +37,16 @@ export type Presentable =
       path: string;
       looping: boolean;
     }
-  | { kind: "slide"; itemId: number; title: string; blocks: TextBlock[] };
+  | {
+      kind: "slide";
+      itemId: number;
+      title: string;
+      /** What every slide made before components existed carries. */
+      blocks: TextBlock[];
+      /** Preferred where present; see the note on the catalog's slide item. */
+      components?: SlideComponent[];
+      layout?: SlideLayout;
+    };
 
 /** The section a lyric item currently points at. */
 export function currentSection(item: Presentable): SongSection | null {
@@ -46,7 +58,9 @@ export function presentableText(item: Presentable): string {
     return item.verses.map((verse) => verse.text).join(" ");
   // A slide is already written out; joining it is how a list summarises it.
   if (item.kind === "slide")
-    return item.blocks.map((block) => block.text).join(" ");
+    return item.components && item.components.length > 0
+      ? item.components.map(componentText).join(" ")
+      : item.blocks.map((block) => block.text).join(" ");
   // A picture has no text, and captioning it with its filename would put the
   // filename on the projector.
   if (item.kind === "image" || item.kind === "media") return "";
@@ -87,7 +101,14 @@ export function toLiveContent(item: Presentable): LiveContent {
      * showed a Greek word nobody could place.
      */
     return {
-      body: { kind: "richText", blocks: item.blocks },
+      body:
+        item.components && item.components.length > 0
+          ? {
+              kind: "composed",
+              components: item.components,
+              layout: item.layout ?? "stacked",
+            }
+          : { kind: "richText", blocks: item.blocks },
       caption: presentableLabel(item),
       ids: [],
       progress: 0,
@@ -110,10 +131,31 @@ export function toLiveContent(item: Presentable): LiveContent {
     };
   }
   if (item.kind === "lyric") {
+    const section = currentSection(item);
+    /*
+     * A deck's section is a slide, and is drawn as one.
+     *
+     * Generated slides are kept as a deck, and a deck was staged as a song --
+     * which meant a slide's title went to the section picker and never to the
+     * wall, because a song's label is "Chorus" and nobody projects that. The
+     * strongest line on the slide was the one the congregation never saw.
+     */
+    if (section?.components && section.components.length > 0) {
+      return {
+        body: {
+          kind: "composed",
+          components: section.components,
+          layout: section.layout ?? "stacked",
+        },
+        caption: presentableLabel(item),
+        ids: [],
+        progress: 0,
+      };
+    }
     return {
       // Lines stay separate: a lyric breaks where the writer broke it, and
       // reflowing it into a paragraph makes it unsingable.
-      body: { kind: "lyric", lines: currentSection(item)?.lines ?? [] },
+      body: { kind: "lyric", lines: section?.lines ?? [] },
       caption: presentableLabel(item),
       ids: [],
       progress: 0,
