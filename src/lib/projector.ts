@@ -105,9 +105,16 @@ export type ImageSource = {
  *
  * - `section` a movement of the sermon begins: a heading and nothing under it.
  * - `single`  one thing, set large. A statement that stands on its own.
+ * - `cards`   a heading, and the points as panels rather than as bullets.
  * - `split`   two things side by side: a picture beside the words, or a
  *             comparison as two headed columns rather than a ruled grid.
  * - `stacked` a heading and what sits beneath it. The common case.
+ *
+ * The model specifies one per slide and this engine paints it. What it cannot
+ * do is paint a specification the slide will not support -- cards with nothing
+ * to put in them, a split with only one thing to split -- so `layoutOf` checks
+ * the spec against the components and falls back to what they imply. A bad
+ * specification degrades; it does not produce a broken slide.
  */
 /**
  * One parallel point.
@@ -133,7 +140,11 @@ export function itemText(item: ListItem): string {
   return typeof item === "string" ? item : item.text;
 }
 
-export type SlideLayout = "single" | "stacked" | "split" | "section";
+export type SlideLayout = "single" | "stacked" | "cards" | "split" | "section";
+
+/** Every arrangement the engine can paint. A spec naming anything else is not
+ *  a slide this build knows how to draw. */
+export const LAYOUTS: SlideLayout[] = ["single", "stacked", "cards", "split", "section"];
 
 /**
  * The arrangement a slide's own contents call for.
@@ -158,10 +169,54 @@ export type SlideLayout = "single" | "stacked" | "split" | "section";
  * in the first place.
  */
 export function layoutOf(stored: string | undefined, components: SlideComponent[]): SlideLayout {
-  const known: SlideLayout[] = ["single", "stacked", "split", "section"];
-  return known.includes(stored as SlideLayout)
-    ? (stored as SlideLayout)
-    : layoutFor(components);
+  if (!LAYOUTS.includes(stored as SlideLayout)) return layoutFor(components);
+  return supports(stored as SlideLayout, components) ? (stored as SlideLayout) : layoutFor(components);
+}
+
+/**
+ * Whether a slide has what its specified arrangement needs.
+ *
+ * The check, and the reason the model can be trusted to choose at all. It is
+ * asked to design each slide and it will sometimes ask for a shape the slide
+ * cannot make: cards with nothing to put in them, a split with only one thing
+ * to split, a section marker with three points under it. None of those are
+ * dangerous the way an invented figure is -- nobody is misled by a slide laid
+ * out oddly -- but each is a slide that looks broken, and the operator would
+ * have to fix by hand what nothing forced.
+ *
+ * So the specification is honoured where it can be and quietly replaced where
+ * it cannot, by what the components themselves imply.
+ */
+function supports(layout: SlideLayout, components: SlideComponent[]): boolean {
+  const body = components.filter(
+    (component) => !(component.kind === "text" && component.level === "title"),
+  );
+  const list = body.find((component) => component.kind === "list");
+
+  switch (layout) {
+    // A heading and nothing else. With something under it, it is not an
+    // opening -- it is an ordinary slide whose body would go undrawn.
+    case "section":
+      return body.length === 0;
+    // Panels need something to put in them, and a panel holding a bare
+    // sentence is a bullet in a box.
+    case "cards":
+      return (
+        list?.kind === "list" &&
+        list.items.length > 1 &&
+        list.items.length <= 4 &&
+        list.items.every((item) => itemHeading(item))
+      );
+    // Two things, or it is a stack with a gap down the middle.
+    case "split":
+      return body.some(
+        (component) => component.kind === "figure" || component.kind === "table",
+      );
+    case "single":
+      return body.length === 1;
+    case "stacked":
+      return body.length > 0;
+  }
 }
 
 export function layoutFor(components: SlideComponent[]): SlideLayout {
@@ -193,6 +248,16 @@ export function layoutFor(components: SlideComponent[]): SlideLayout {
    */
   const table = body.find((component) => component.kind === "table");
   if (table && table.kind === "table" && table.header.length === 2) return "split";
+
+  const list = body.find((component) => component.kind === "list");
+  if (
+    list?.kind === "list" &&
+    list.items.length > 1 &&
+    list.items.length <= 4 &&
+    list.items.every((item) => itemHeading(item))
+  ) {
+    return "cards";
+  }
 
   // One thing on a slide gets the room, whether or not a heading names it.
   if (body.length === 1 && components.length === 1) return "single";

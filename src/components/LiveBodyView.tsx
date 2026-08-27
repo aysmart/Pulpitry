@@ -332,6 +332,33 @@ function Composed({
   }
 
   /*
+   * A heading, and the points as panels.
+   *
+   * The same stack as below with one thing changed, so it stays one
+   * arrangement rather than two that must be kept in step.
+   */
+  if (layout === "cards") {
+    return (
+      <div className={`${FRAME} gap-[0.7em]`} style={frame}>
+        {title?.kind === "text" ? (
+          <Heading text={title.text} style={style} accent={accent} base={base} scale={1.35} />
+        ) : null}
+        {rest.map((component, index) => (
+          <Component
+            key={index}
+            component={component}
+            style={style}
+            theme={theme}
+            base={base}
+            ranged
+            asCards
+          />
+        ))}
+      </div>
+    );
+  }
+
+  /*
    * A heading and what sits beneath it.
    *
    * Ranged left under a hanging rule rather than centred. Centring was the one
@@ -377,6 +404,7 @@ function Component({
   theme,
   base: given,
   ranged = false,
+  asCards = false,
 }: {
   component: SlideComponent;
   style: CSSProperties;
@@ -391,6 +419,15 @@ function Component({
    * guess and clipped -- while the number said it had been fitted.
    */
   base?: string;
+  /**
+   * Whether a list of headed points is drawn as panels.
+   *
+   * The layout's decision and not this component's. Cards were derived here
+   * from "every point has a heading", which meant a slide could not be asked
+   * for them and could not be refused them -- and the model now specifies the
+   * arrangement, so the answer belongs where the arrangement is decided.
+   */
+  asCards?: boolean;
   /**
    * Whether this sits under a left-ranged heading.
    *
@@ -444,7 +481,7 @@ function Component({
        * list. Headings are required because a card of one sentence is a bullet
        * in a box, which is worse than a bullet.
        */
-      if (headed === component.items.length && component.items.length <= 4) {
+      if (asCards && headed === component.items.length && component.items.length <= 4) {
         const panel = panelStyle(theme);
         return (
           <div className="flex w-full items-stretch gap-[0.5em]">
