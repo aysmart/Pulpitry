@@ -16,6 +16,16 @@ export interface Settings {
   inputDeviceId: string | null;
   /** Verse detection searches this translation. */
   translation: string;
+  /**
+   * "auto" or "manual": whether a detected verse stages itself.
+   *
+   * Auto stages to *preview*, never to the wall. Detection is a guess -- it
+   * mishears names, and a paraphrase match is a weaker claim than a quotation
+   * -- and our own terms say nothing should reach a congregation without
+   * somebody deciding it should. Auto saves the hunt through the list, not the
+   * decision.
+   */
+  verseDisplay: string;
 
   /**
    * Which recogniser turns audio into words: "azure", "local" or "hosted".
@@ -124,6 +134,9 @@ export const EVENT_FINAL = "transcript:final";
 export const EVENT_STATUS = "speech:status";
 
 export const listAudioInputs = () => invoke<AudioDevice[]>("list_audio_inputs");
+
+/** Copies the log where somebody can attach it to an email. Returns the path. */
+export const exportLog = (to: string) => invoke<string>("export_log", { to });
 
 /** What a hosted plan has left this period. */
 export interface EntitlementView {

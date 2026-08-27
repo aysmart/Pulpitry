@@ -26,6 +26,11 @@ fn yes() -> bool {
     true
 }
 
+/// Waiting to be clicked, which is what every install has done until now.
+fn manual() -> String {
+    "manual".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -35,6 +40,17 @@ pub struct Settings {
     /// The translation the operator is working in. Verse detection searches
     /// this one, so it has to outlive the window that selected it.
     pub translation: String,
+
+    /// Whether a detected verse stages itself, or waits to be clicked.
+    ///
+    /// "auto" or "manual", and auto stages to *preview* rather than to the
+    /// wall. Our own terms say nothing should reach a congregation without
+    /// somebody deciding it should, and detection is a guess: it mishears
+    /// names, and a paraphrase match is a weaker claim than a quotation. Auto
+    /// saves the operator the hunt through the list; it does not save them the
+    /// decision.
+    #[serde(default = "manual")]
+    pub verse_display: String,
 
     /// Optional Azure AI Foundry model used to suggest paraphrased scripture.
     /// Everything it proposes is verified against the local library before the
@@ -254,6 +270,7 @@ impl Default for Settings {
             language: "en-US".into(),
             input_device_id: None,
             translation: "KJV".into(),
+            verse_display: manual(),
             assist_enabled: false,
             assist_endpoint: String::new(),
             assist_model: String::new(),

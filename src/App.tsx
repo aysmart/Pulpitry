@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 
 import { AboutDialog } from "./components/AboutDialog";
@@ -161,6 +161,30 @@ export default function App() {
   const semanticIndex = useSemanticIndex();
 
   const [settings, setSettings] = useState<SettingsView | null>(null);
+
+  /*
+   * Staging a detected verse without being asked, where the operator asked.
+   *
+   * Preview, never the wall. Detection is a guess -- it mishears names, and a
+   * paraphrase match is a weaker claim than a quotation -- and our own terms
+   * say nothing should reach a congregation without somebody deciding it
+   * should. So this saves the hunt through the list, not the decision.
+   *
+   * Only the newest, and only while it is newer than what is already staged: a
+   * second detection arriving mid-reading must not pull the screen off the
+   * verse being read. The id is compared rather than the object, because the
+   * list is rebuilt on every detection.
+   */
+  const autoStage = settings?.verseDisplay === "auto";
+  const newest = detections[0]?.verse;
+  const stagedId = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!autoStage || !newest) return;
+    if (stagedId.current === newest.id) return;
+    stagedId.current = newest.id;
+    previewVerse(newest);
+  }, [autoStage, newest, previewVerse]);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [library, setLibrary] = useState<LibraryStatus>({
     ready: false,

@@ -533,6 +533,41 @@ fn lexicon_entry(
     library.lexicon(&strongs).map_err(to_message)
 }
 
+/**
+ * Writes the log somewhere the operator can attach it to an email.
+ *
+ * Copied rather than pointed at. The file is inside the application's data
+ * directory, which on both platforms is a folder a volunteer cannot navigate to
+ * from a file chooser -- and "find ~/Library/Application Support" is the point
+ * where a support thread stops.
+ *
+ * Both files: the current one and the previous, because the failure worth
+ * reading is often the one that made them restart the application.
+ */
+#[tauri::command]
+fn export_log(app: AppHandle, to: String) -> CommandResult<String> {
+    let directory = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    let target = std::path::PathBuf::from(&to);
+
+    let mut written = String::new();
+    for name in ["pulpitry.previous.log", "pulpitry.log"] {
+        let from = directory.join(name);
+        let Ok(text) = std::fs::read_to_string(&from) else { continue };
+        written.push_str(&format!("===== {name} =====\n"));
+        written.push_str(&text);
+        written.push('\n');
+    }
+
+    if written.is_empty() {
+        return Err("There is no log to export yet.".into());
+    }
+
+    std::fs::write(&target, written).map_err(|error| {
+        format!("The log could not be written to {}. {error}", target.display())
+    })?;
+    Ok(target.display().to_string())
+}
+
 #[tauri::command]
 fn list_translations(library: State<'_, Arc<Library>>) -> CommandResult<Vec<Translation>> {
     library.translations().map_err(to_message)
@@ -1339,6 +1374,7 @@ pub fn run() {
             download_speech_model,
             node_status,
             library_status,
+            export_log,
             list_translations,
             list_books,
             get_chapter,

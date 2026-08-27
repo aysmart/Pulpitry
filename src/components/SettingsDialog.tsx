@@ -6,17 +6,25 @@ import { NdiPanel } from "./NdiPanel";
 import { HostedSubscription } from "./HostedSubscription";
 import { NodeRuntimeNotice } from "./NodeRuntimeNotice";
 
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { save } from "@tauri-apps/plugin-dialog";
+
+import { libraryStatus, type Translation } from "../lib/bible";
+
 import {
   clearAssistKey,
   clearAzureKey,
   describeError,
+  exportLog,
   hostedStatus,
+  listAudioInputs,
   measureSpeech,
   saveAssistKey,
   saveAzureKey,
   saveSettings,
   speechModels,
   downloadSpeechModel,
+  type AudioDevice,
   type HostedView,
   type ModelProgress,
   type SettingsView,
@@ -546,6 +554,46 @@ export function SettingsDialog({
   /* Account first: it is where a church starts, and where the one thing that
      stops the software working -- an expired or unentered licence -- lives. */
   const [pane, setPane] = useState<PaneId>("account");
+
+  /* Owned here now. The microphone and the translation were chosen in the main
+     window and nowhere else, which is fine while somebody is looking at the
+     main window and wrong when they have come to Settings to set the thing up
+     before a service. Both write the same stored setting rather than a copy. */
+  const [device, setDevice] = useState<string | null>(settings.inputDeviceId);
+  const [translation, setTranslation] = useState(settings.translation);
+  const [verseDisplay, setVerseDisplay] = useState(settings.verseDisplay);
+  const [translations, setTranslations] = useState<Translation[]>([]);
+  const [devices, setDevices] = useState<AudioDevice[]>([]);
+  const [logNote, setLogNote] = useState<string | null>(null);
+
+  const saveLog = async () => {
+    setLogNote(null);
+    try {
+      const path = await save({
+        title: "Save the log",
+        defaultPath: "pulpitry-log.txt",
+        filters: [{ name: "Text", extensions: ["txt"] }],
+      });
+      // Cancelling is not a failure and needs no message.
+      if (!path) return;
+      setLogNote(`Saved to ${await exportLog(path)}`);
+    } catch (err) {
+      setLogNote(describeError(err));
+    }
+  };
+
+  useEffect(() => {
+    let live = true;
+    void libraryStatus()
+      .then((status) => live && setTranslations(status.translations))
+      .catch(() => undefined);
+    void listAudioInputs()
+      .then((found) => live && setDevices(found))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
   const [model, setModel] = useState(settings.speechModel);
   const [models, setModels] = useState<SpeechModel[]>([]);
   const [modelNote, setModelNote] = useState<string | null>(null);
@@ -630,8 +678,9 @@ export function SettingsDialog({
       const next = await saveSettings({
         azureRegion: region.trim(),
         language,
-        inputDeviceId: settings.inputDeviceId,
-        translation: settings.translation,
+        inputDeviceId: device,
+        translation,
+        verseDisplay,
         assistEnabled,
         assistEndpoint: assistEndpoint.trim(),
         assistModel: assistModel.trim(),
@@ -707,10 +756,55 @@ export function SettingsDialog({
                 note="Hosted transcription and the assistant, metered against your plan. The applications work without one."
               >
                 <HostedSubscription onActivationChange={setHosted} />
+                {/* Named rather than assumed. A church without a plan has no
+                    way from here to the thing that sells one, and "contact us"
+                    is not a price. */}
+                <p className="text-[11.5px] leading-snug text-pulpitry-muted">
+                  {hosted
+                    ? "Changing plan, or adding hours: "
+                    : "Plans and prices: "}
+                  <button
+                    type="button"
+                    onClick={() => void openUrl("https://castavox.com/pricing")}
+                    className="text-pulpitry-gold underline-offset-2 hover:underline focus-visible:focus-ring"
+                  >
+                    castavox.com/pricing
+                  </button>
+                </p>
               </Section>
             </Pane>
 
             <Pane id="audio" active={pane}>
+              <Section
+                title="Microphone"
+                note="Which input the words are heard on. The engine below decides what happens to them."
+              >
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-pulpitry-muted">Input</span>
+                  <select
+                    value={device ?? ""}
+                    onChange={(event) => setDevice(event.target.value || null)}
+                    className={FIELD}
+                  >
+                    <option value="">System default</option>
+                    {devices.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                    {devices.length === 1
+                      ? "One input on this machine."
+                      : `${devices.length} inputs on this machine.`}{" "}
+                    A desk feed heard through a laptop microphone is the
+                    commonest reason detection misses everything.
+                  </span>
+                </label>
+              </Section>
+
+              <div className="border-t border-pulpitry-line" />
+
               <Section
                 title="Transcription"
                 note="Where the words come from. Verse detection is local either way and needs no network."
@@ -955,6 +1049,64 @@ export function SettingsDialog({
 
             <Pane id="scripture" active={pane}>
               <Section
+                title="Verses"
+                note="What happens when the sermon reaches a passage."
+              >
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-pulpitry-muted">
+                    Primary translation
+                  </span>
+                  <select
+                    value={translation}
+                    onChange={(event) => setTranslation(event.target.value)}
+                    className={FIELD}
+                  >
+                    {translations.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.id} · {entry.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                    What detection searches, and what a verse is staged in
+                    unless you pick another in the moment.
+                  </span>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-pulpitry-muted">
+                    When a verse is detected
+                  </span>
+                  <select
+                    value={verseDisplay}
+                    onChange={(event) => setVerseDisplay(event.target.value)}
+                    className={FIELD}
+                  >
+                    <option value="manual">
+                      Wait — it appears in the list to click
+                    </option>
+                    <option value="auto">
+                      Stage it in Preview automatically
+                    </option>
+                  </select>
+                  {/*
+                    Preview, and never the wall. Detection is a guess: it
+                    mishears names, and a paraphrase match is a weaker claim
+                    than a quotation. Our own terms say nothing should reach a
+                    congregation without somebody deciding it should -- so this
+                    saves the operator the hunt through the list, not the
+                    decision at the end of it.
+                  */}
+                  <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                    Either way it goes no further than Preview. Nothing reaches
+                    the screen until you send it.
+                  </span>
+                </label>
+              </Section>
+
+              <div className="border-t border-pulpitry-line" />
+
+              <Section
                 title="Paraphrase matching"
                 note="Finds scripture the speaker renders in their own words, by meaning rather than wording. Runs entirely on your machine — no network, no cost. Preparing a translation takes a couple of minutes the first time."
               >
@@ -1158,6 +1310,35 @@ export function SettingsDialog({
             ) : null}
 
             <Pane id="help" active={pane}>
+              <Section
+                title="When something goes wrong"
+                note="The log records what the application did, not what was said. No transcript, no verse, no audio."
+              >
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void saveLog()}
+                    className="rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-1.5 text-[12px] text-pulpitry-text focus-visible:focus-ring"
+                  >
+                    Save the log&hellip;
+                  </button>
+                  {logNote ? (
+                    <span className="text-[11.5px] text-pulpitry-muted">
+                      {logNote}
+                    </span>
+                  ) : null}
+                </div>
+                {/* Both files, because the failure worth reading is often the
+                    one that made them restart the application. */}
+                <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                  Saves this run and the one before it, somewhere you can attach
+                  them to an email. The file lives in a folder a file chooser
+                  cannot reach, which is where most support threads stop.
+                </span>
+              </Section>
+
+              <div className="border-t border-pulpitry-line" />
+
               <Section
                 title="New versions"
                 note="Once a day, Pulpitry asks the public download page whether a newer version has been published, and says so quietly if one has. The request carries nothing at all — no identifier, no version, nothing about this machine — and it does not reach our servers: the releases are on GitHub, which already serves every download. Switch it off for a machine that should touch nothing."
