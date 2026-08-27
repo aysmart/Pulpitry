@@ -27,7 +27,7 @@ use parking_lot::Mutex;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Listener, Manager, State};
 
-use castavox_core::mirror::{self, Desk, Line, Pairing, Shown};
+use castavox_core::mirror::{self, Desk, Line, Pairing, Shown, Table};
 
 use crate::projector::{LiveBody, LiveContent};
 use crate::settings;
@@ -286,6 +286,41 @@ impl Mirror {
 /// before. A stream overlay still showing Psalm 23 while the projector has moved
 /// on to a photograph is worse than an overlay showing nothing — the first is
 /// wrong and looks deliberate, the second is merely empty.
+/// A component as a comparison the far end can draw, if that is what it is.
+fn mirrored_table(component: &serde_json::Value) -> Option<Table> {
+    if component.get("kind").and_then(|v| v.as_str()) != Some("table") {
+        return None;
+    }
+    let strings = |value: Option<&serde_json::Value>| -> Vec<String> {
+        value
+            .and_then(|v| v.as_array())
+            .map(|items| {
+                items.iter().filter_map(|i| i.as_str()).map(|s| s.trim().to_string()).collect()
+            })
+            .unwrap_or_default()
+    };
+
+    let header = strings(component.get("header"));
+    let rows: Vec<Vec<String>> = component
+        .get("rows")
+        .and_then(|v| v.as_array())
+        .map(|rows| rows.iter().map(|row| strings(Some(row))).collect())
+        .unwrap_or_default();
+
+    // Two columns is the least that compares anything, and a table with no
+    // rows is a heading. Neither is worth sending.
+    if header.len() < 2 || rows.is_empty() {
+        return None;
+    }
+    Some(Table { header, rows })
+}
+
+/// Whether this component is the slide's title, which the caption carries.
+fn is_title(component: &serde_json::Value) -> bool {
+    component.get("kind").and_then(|v| v.as_str()) == Some("text")
+        && component.get("level").and_then(|v| v.as_str()) == Some("title")
+}
+
 /// One component as the lines a text overlay can carry.
 fn component_lines(component: &serde_json::Value) -> Vec<String> {
     let text = |key: &str| {
@@ -358,7 +393,7 @@ pub fn shown_of(live: &LiveContent) -> Shown {
                 .collect(),
         },
         LiveBody::Lyric { lines } => {
-            Shown::Words { title: live.caption.clone(), lines: lines.clone() }
+            Shown::Words { title: live.caption.clone(), lines: lines.clone(), table: None }
         }
         LiveBody::RichText { blocks } => Shown::Words {
             title: live.caption.clone(),
@@ -366,6 +401,7 @@ pub fn shown_of(live: &LiveContent) -> Shown {
             // own idea of what a heading looks like, and imposing Pulpitry's
             // would be the pixel-mirroring this deliberately does not do.
             lines: blocks.iter().map(|block| block.text.clone()).collect(),
+            table: None,
         },
         /*
          * A composed slide, as lines a lower third can hold.
@@ -376,10 +412,28 @@ pub fn shown_of(live: &LiveContent) -> Shown {
          * "Activity: busy  Progress: arrives" survives a strip at the bottom of
          * a video frame and "Activity Progress busy arrives" does not.
          */
-        LiveBody::Composed { components, .. } => Shown::Words {
-            title: live.caption.clone(),
-            lines: components.iter().flat_map(component_lines).collect(),
-        },
+        LiveBody::Composed { components, .. } => {
+            let table = components.iter().find_map(mirrored_table);
+            Shown::Words {
+                title: live.caption.clone(),
+                lines: components
+                    .iter()
+                    // The title is already the caption, and an overlay that
+                    // draws it above the body would show it twice. On the
+                    // projector it is a component like any other; here it is
+                    // the heading.
+                    .filter(|component| !is_title(component))
+                    // The comparison travels *both* ways: as a shape below, and
+                    // flattened here. Only the far screen knows whether its card
+                    // can hold a grid -- a full card can, a lower third cannot --
+                    // so it is given both and picks. Sending only the shape put
+                    // column headings and half a row on a lower third and cut
+                    // the rest off, which is worse than the prose it replaced.
+                    .flat_map(component_lines)
+                    .collect(),
+                table,
+            }
+        }
         // Nothing a text overlay can honestly show.
         LiveBody::Image { .. } | LiveBody::Media { .. } => Shown::Nothing,
     }
@@ -463,12 +517,29 @@ mod tests {
         };
 
         match shown_of(&live) {
-            Shown::Words { lines, .. } => {
-                assert_eq!(lines[0], "Activity And Progress");
-                // Paired with its heading: the columns are the meaning, and a
-                // lower third that runs them together loses it.
+            Shown::Words { title, lines, table } => {
+                assert_eq!(title, "Activity And Progress");
+                // Not repeated in the body: the overlay draws the caption as a
+                // heading, and the slide would carry its title twice.
+                assert_ne!(lines.first().map(String::as_str), Some("Activity And Progress"));
+
+                // The comparison crosses as a comparison, for a screen that can
+                // draw one. It was flattened into the lines before, and arrived
+                // as a paragraph of "Fear: ... \u{b7} Faith: ..." nobody reads.
+                let table = table.expect("the comparison did not cross");
+                assert_eq!(table.header, ["Activity", "Progress"]);
+                assert_eq!(table.rows[0][1], "Moves toward an outcome");
+
+                // And in the lines as well. A screen with no room for a grid
+                // -- a lower third is two tenths of a frame -- falls back to
+                // these and can wind through them; one with room draws the
+                // table and ignores them.
+                assert!(lines.iter().any(|line| line.contains("Keeps the hands busy")));
+
+                // A screen too old to draw one still reads it, paired with its
+                // headings, because the columns are the meaning.
                 assert_eq!(
-                    lines[1],
+                    table.as_lines()[0],
                     "Activity: Keeps the hands busy \u{b7} Progress: Moves toward an outcome"
                 );
             }
@@ -537,6 +608,7 @@ mod tests {
             Shown::Words {
                 title: "Notices".into(),
                 lines: vec!["Welcome".into(), "Please stand".into()],
+                table: None,
             },
         );
     }
