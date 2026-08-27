@@ -244,6 +244,17 @@ export interface DraftSlide {
   title: string;
   lines: string[];
   reference: string;
+  /**
+   * The words in the transcript this slide came from.
+   *
+   * Checked before it ever arrives — a slide whose anchor is not in the service
+   * is dropped on the other side. It is carried here so the operator can see
+   * what a slide was made from, which is the difference between approving one
+   * and trusting one.
+   */
+  anchor: string;
+  /** A comparison the preacher drew, where they drew one. Usually absent. */
+  table: { header: string[]; rows: string[][] } | null;
 }
 
 export const generateSlides = (source: string) =>
