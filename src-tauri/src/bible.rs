@@ -662,8 +662,13 @@ impl Library {
 
     pub fn translations(&self) -> Result<Vec<Translation>> {
         let connection = self.connection.lock();
+        // Alphabetically, everywhere. `ordinal` records the order translations
+        // arrived -- the manifest's order for bundled ones, then whatever a
+        // church downloaded and when -- which is a fact about how the library
+        // was filled and not about how anybody looks through it. A dropdown of
+        // thirty-two is scanned, and scanning wants one order it can predict.
         let mut statement = connection
-            .prepare("SELECT id, name, year, verse_count FROM translations ORDER BY ordinal, name")?;
+            .prepare("SELECT id, name, year, verse_count FROM translations ORDER BY id")?;
         let rows = statement.query_map([], |row| {
             Ok(Translation {
                 id: row.get(0)?,
@@ -1583,6 +1588,26 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    /// The list reads alphabetically whatever order things arrived in.
+    ///
+    /// Downloaded translations are given an ordinal after everything already
+    /// installed, so ordering by it would put a church's own choices at the
+    /// bottom in the order they happened to be fetched. Thirty-two entries in
+    /// arrival order is a list you read; alphabetically it is one you scan.
+    #[test]
+    fn translations_are_listed_alphabetically() {
+        let dir = scratch("order");
+        let library = Library::in_memory().unwrap();
+        for id in ["WEB", "AMP", "NIV"] {
+            let file = pack_file(&dir, id, &[(1, "Genesis", 1, 1, "In the beginning")]);
+            library.install(&pack(id, 1), &file).unwrap();
+        }
+
+        let listed: Vec<String> =
+            library.translations().unwrap().into_iter().map(|t| t.id).collect();
+        assert_eq!(listed, ["AMP", "NIV", "WEB"]);
     }
 
     /// A removal outlives the launch that made it.

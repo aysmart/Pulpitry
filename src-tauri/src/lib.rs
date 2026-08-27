@@ -654,6 +654,7 @@ async fn install_translation(
         let _ = std::fs::remove_file(&downloaded);
         result?;
 
+        announce(&app, &library);
         let _ = app.emit(
             "translation-progress",
             TranslationProgress { id: pack.id, received: 0, total: 0, done: true },
@@ -667,12 +668,41 @@ async fn install_translation(
 
 /// Removes a translation, its search index and its meaning index.
 #[tauri::command]
-async fn remove_translation(library: State<'_, Arc<Library>>, id: String) -> CommandResult<()> {
+async fn remove_translation(
+    app: AppHandle,
+    library: State<'_, Arc<Library>>,
+    id: String,
+) -> CommandResult<()> {
     let library = Arc::clone(&library);
-    tauri::async_runtime::spawn_blocking(move || library.remove(&id))
-        .await
-        .map_err(|error| format!("That could not be removed. {error}"))?
-        .map_err(to_message)
+    tauri::async_runtime::spawn_blocking(move || {
+        let removed = library.remove(&id);
+        if removed.is_ok() {
+            announce(&app, &library);
+        }
+        removed
+    })
+    .await
+    .map_err(|error| format!("That could not be removed. {error}"))?
+    .map_err(to_message)
+}
+
+/**
+ * Tells every window the library changed.
+ *
+ * The same event the first-run import sends, so a translation downloaded or
+ * removed reaches the chapter browser and the translation setting by the route
+ * they already listen on. Threading a callback from the library screen to each
+ * of them instead would mean a list that is right where somebody is looking and
+ * stale one screen over -- which is how an operator ends up choosing a
+ * translation that is no longer on the machine.
+ *
+ * Best effort. A window that has gone away is not a reason to fail a removal
+ * that has already happened.
+ */
+fn announce(app: &AppHandle, library: &Library) {
+    if let Ok(status) = library.status() {
+        let _ = app.emit(bible::EVENT_LIBRARY, status);
+    }
 }
 
 /*

@@ -56,7 +56,7 @@ function order(languages: string[]): string[] {
  * of a hall is not somewhere a green dot is legible, and a volunteer who has
  * used this twice should not have to have learnt what our colours mean.
  */
-export function TranslationLibrary({ onChange }: { onChange: () => void }) {
+export function TranslationLibrary() {
   const [rows, setRows] = useState<Offered[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   /** Per-translation percentage while it downloads. */
@@ -89,7 +89,6 @@ export function TranslationLibrary({ onChange }: { onChange: () => void }) {
           return next;
         });
         void refresh();
-        onChange();
         return;
       }
       const percent =
@@ -101,7 +100,7 @@ export function TranslationLibrary({ onChange }: { onChange: () => void }) {
     return () => {
       void unlisten.then((stop) => stop());
     };
-  }, [refresh, onChange]);
+  }, [refresh]);
 
   const install = async (row: Offered) => {
     setNote(null);
@@ -123,7 +122,6 @@ export function TranslationLibrary({ onChange }: { onChange: () => void }) {
     try {
       await removeTranslation(row.id);
       await refresh();
-      onChange();
     } catch (err) {
       setNote(describeError(err));
     }
