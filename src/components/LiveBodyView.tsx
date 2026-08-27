@@ -51,7 +51,7 @@ import { VideoSurface } from "./VideoSurface";
  * line past the frame loses that line -- but measuring properly means changing
  * how every surface sizes text, which is the display-parity work and not this.
  */
-const FRAME = "flex w-full flex-col";
+const FRAME = "flex w-full min-h-0 flex-1 flex-col [justify-content:safe_center]";
 
 /**
  * A heading, ranged left under a hanging rule.
@@ -118,9 +118,65 @@ function Composed({
   style: CSSProperties;
   theme: ProjectorTheme;
 }) {
-  // The one size everything on the slide is a multiple of, so a heading and a
-  // table hold their relationship at whatever size the slide is set.
-  const base = typeof style.fontSize === "string" ? style.fontSize : "4cqw";
+  const composedBox = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(SLIDE_FLOOR);
+
+  /*
+   * As large as actually fits, measured rather than guessed.
+   *
+   * The size arrives as a guess from how many characters the slide holds, and
+   * a character count cannot know the typeface, the box, or where the lines
+   * break -- nor that a heading is set larger with a rule above it. Measured
+   * on the real projector, a five-point slide wanted 431px in a frame with
+   * 378, and the surplus was clipped: the last line and its reference went off
+   * the bottom, on air, with nothing anywhere to say they had.
+   *
+   * The same measurement prose has always used. What it needed was a box with
+   * a definite height -- `flex-1 min-h-0`, see FRAME -- because the question
+   * it asks is whether scrollHeight exceeds clientHeight, and a box that hugs
+   * its contents answers no at every size.
+   */
+  useLayoutEffect(() => {
+    const element = composedBox.current;
+    if (!element) return;
+
+    const measure = () => {
+      const chosen = fitted(element, style.fontSize, SLIDE_FLOOR);
+      element.style.setProperty("--fit", `${chosen.toFixed(2)}cqw`);
+      setFit((current) => (current === chosen ? current : chosen));
+    };
+
+    measure();
+
+    /*
+     * Again once the typeface has arrived.
+     *
+     * A font landing after the first measurement changes how tall the words
+     * are, and the observer below would catch that only if it changed the box
+     * -- which it does not, because the box is a fixed share of the frame. The
+     * slide would keep a size chosen from the fallback's metrics.
+     */
+    let cancelled = false;
+    void document.fonts?.ready.then(() => {
+      if (!cancelled) measure();
+    });
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
+    // Keyed on the guess rather than on `style`, which is built fresh every
+    // render: depending on the object re-ran this on every render including
+    // the one `setFit` caused, and measuring while a measurement is being
+    // applied gives a different answer each pass.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [body, theme, style.fontSize]);
+
+  // Everything on the slide is a multiple of the fitted size, so shrinking to
+  // fit takes the headings, the rules and the panels down with the words.
+  const base = "var(--fit)";
   const accent = theme.referenceColor || theme.textColor;
   /*
    * The frame carries the slide's own size, so the `em` spacing below is a
@@ -134,6 +190,7 @@ function Composed({
     fontFamily: fontStack(theme.fontFamily),
     color: theme.textColor,
     fontSize: base,
+    "--fit": `${fit.toFixed(2)}cqw`,
   } as CSSProperties;
 
   // Derived where the stored name is one this build no longer draws; see
@@ -156,7 +213,7 @@ function Composed({
   if (layout === "section" && title?.kind === "text") {
     const panel = panelStyle(theme);
     return (
-      <div className={FRAME} style={frame}>
+      <div ref={composedBox} className={FRAME} style={frame}>
         {/*
           The heading stands on a field of colour rather than on the backdrop.
           One device, and the reason it is this one: a section marker is the
@@ -222,7 +279,7 @@ function Composed({
        */
       const column = `calc(${base} * 0.88)`;
       return (
-        <div className={`${FRAME} gap-[0.5em]`} style={frame}>
+        <div ref={composedBox} className={`${FRAME} gap-[0.5em]`} style={frame}>
           {title?.kind === "text" ? (
             <Heading text={title.text} style={style} accent={accent} base={column} scale={1.35} />
           ) : null}
@@ -266,7 +323,7 @@ function Composed({
     const after = rest.filter((component) => component !== table);
     if (table?.kind === "table") {
       return (
-        <div className={`${FRAME} gap-[0.5em]`} style={frame}>
+        <div ref={composedBox} className={`${FRAME} gap-[0.5em]`} style={frame}>
           {title?.kind === "text" ? (
             <Heading text={title.text} style={style} accent={accent} base={base} scale={1.3} />
           ) : null}
@@ -323,7 +380,7 @@ function Composed({
    */
   if (layout === "single") {
     return (
-      <div className={`${FRAME} gap-[0.5em]`} style={frame}>
+      <div ref={composedBox} className={`${FRAME} gap-[0.5em]`} style={frame}>
         {body.components.map((component, index) => (
           <Component key={index} component={component} style={style} theme={theme} base={base} />
         ))}
@@ -339,7 +396,7 @@ function Composed({
    */
   if (layout === "cards") {
     return (
-      <div className={`${FRAME} gap-[0.7em]`} style={frame}>
+      <div data-slidebox="1" className={`${FRAME} gap-[0.7em]`} style={frame}>
         {title?.kind === "text" ? (
           <Heading text={title.text} style={style} accent={accent} base={base} scale={1.35} />
         ) : null}
@@ -367,7 +424,7 @@ function Composed({
    * ragged left edge, and parallel points stop looking parallel.
    */
   return (
-    <div className={`${FRAME} gap-[0.45em]`} style={frame}>
+    <div ref={composedBox} className={`${FRAME} gap-[0.45em]`} style={frame}>
       {title?.kind === "text" ? (
         <Heading text={title.text} style={style} accent={accent} base={base} scale={1.35} />
       ) : null}
@@ -978,23 +1035,35 @@ const FIT_STEP = 0.1;
  * the same layout at different sizes -- land on the same number rather than on
  * two that differ by a hair and by one whole line.
  */
-function fitted(element: HTMLElement, guessed: CSSProperties["fontSize"]): number {
+function fitted(
+  element: HTMLElement,
+  guessed: CSSProperties["fontSize"],
+  /**
+   * How small this may be set before it stops shrinking.
+   *
+   * READABLE for prose, which nobody promised would fit: below that it cannot
+   * be read from the back of a room, so it stays legible and is wound instead.
+   * A slide has no winding. Its only alternative to shrinking is losing its
+   * last line off the bottom, so it may go smaller.
+   */
+  floor = READABLE,
+): number {
   const guess =
     typeof guessed === "string" ? Number.parseFloat(guessed) : Number.NaN;
-  if (!Number.isFinite(guess) || guess <= READABLE) return READABLE;
+  if (!Number.isFinite(guess) || guess <= floor) return floor;
 
   const apply = (value: number) =>
     element.style.setProperty("--fit", `${value.toFixed(2)}cqw`);
   const fits = () => element.scrollHeight <= element.clientHeight + 0.5;
 
   // If it will not fit even set small, it is one of the long ones: leave it at
-  // READABLE and let the winding below do its job.
-  apply(READABLE);
-  if (!fits()) return READABLE;
+  // the floor and let the winding below do its job.
+  apply(floor);
+  if (!fits()) return floor;
 
-  let low = READABLE;
+  let low = floor;
   let high = guess;
-  let best = READABLE;
+  let best = floor;
   for (let i = 0; i < 10; i += 1) {
     const mid = (low + high) / 2;
     apply(mid);
@@ -1005,7 +1074,7 @@ function fitted(element: HTMLElement, guessed: CSSProperties["fontSize"]): numbe
       high = mid;
     }
   }
-  return Math.max(READABLE, Math.floor(best / FIT_STEP) * FIT_STEP);
+  return Math.max(floor, Math.floor(best / FIT_STEP) * FIT_STEP);
 }
 
 /**
@@ -1033,4 +1102,14 @@ export interface Extent {
  * winds.
  */
 const READABLE = 4.2;
+
+/**
+ * How small a composed slide may be set before it stops shrinking.
+ *
+ * Lower than READABLE and deliberately so: prose that will not fit is wound,
+ * and a slide has nothing to wind. The same as the smallest size the
+ * length-based guess produces, so nothing here is smaller than something
+ * already going on a wall.
+ */
+const SLIDE_FLOOR = 2.4;
 
