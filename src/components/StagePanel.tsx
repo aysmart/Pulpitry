@@ -44,7 +44,15 @@ function Stage({
 }: {
   body: string | null;
   /** A picture or clip, which fills the pane instead of the text layout. */
-  asset?: { kind: "image" | "media"; path: string; looping: boolean } | null;
+  asset?: {
+    kind: "image" | "media";
+    path: string;
+    looping: boolean;
+    /** Whether it fills the pane or sits whole inside it. Carried here because
+     *  these panes draw assets themselves rather than through LiveBodyView, so
+     *  a switch the wall obeys means nothing until it reaches this copy. */
+    fill: boolean;
+  } | null;
   /** A written slide, which is its own layout and must not be flattened. */
   slide?: {
     blocks: TextBlock[];
@@ -86,14 +94,20 @@ function Stage({
   if (asset) {
     return (
       <div
-        className="flex h-full items-center justify-center bg-pulpitry-ink"
+        className={`flex h-full items-center justify-center bg-pulpitry-ink ${
+          asset.fill ? "overflow-hidden" : ""
+        }`}
         data-selectable
       >
         {asset.kind === "image" ? (
           <img
             src={convertFileSrc(asset.path)}
             alt=""
-            className="max-h-full max-w-full object-contain"
+            className={
+              asset.fill
+                ? "h-full w-full object-cover"
+                : "max-h-full max-w-full object-contain"
+            }
           />
         ) : (
           <VideoSurface
@@ -109,7 +123,11 @@ function Stage({
             // Whoever owns the sound owns the clock: the projector when it is
             // open, this pane otherwise. Two reporters would fight.
             reportProgress={tone === "live" && !projectorOpen}
-            className="max-h-full max-w-full object-contain"
+            className={
+              asset.fill
+                ? "h-full w-full object-cover"
+                : "max-h-full max-w-full object-contain"
+            }
           />
         )}
       </div>
@@ -229,18 +247,28 @@ function liveSlide(body: LiveBody | undefined, theme: ProjectorTheme) {
 /** The picture or clip behind an item, if that is what it is. */
 function assetOf(item: Presentable | null) {
   if (item?.kind === "image")
-    return { kind: "image" as const, path: item.path, looping: false };
+    return { kind: "image" as const, path: item.path, looping: false, fill: item.fill };
   if (item?.kind === "media")
-    return { kind: "media" as const, path: item.path, looping: item.looping };
+    return {
+      kind: "media" as const,
+      path: item.path,
+      looping: item.looping,
+      fill: item.fill,
+    };
   return null;
 }
 
 /** The same, for whatever the projector is currently showing. */
 function liveAsset(body: LiveBody | undefined) {
   if (body?.kind === "image")
-    return { kind: "image" as const, path: body.path, looping: false };
+    return { kind: "image" as const, path: body.path, looping: false, fill: body.fill };
   if (body?.kind === "media")
-    return { kind: "media" as const, path: body.path, looping: body.looping };
+    return {
+      kind: "media" as const,
+      path: body.path,
+      looping: body.looping,
+      fill: body.fill,
+    };
   return null;
 }
 
