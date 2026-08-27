@@ -147,7 +147,18 @@ export function toLiveContent(item: Presentable): LiveContent {
           components: section.components,
           layout: section.layout ?? "stacked",
         },
-        caption: presentableLabel(item),
+        /*
+         * The slide's own heading, and not the deck's name with it.
+         *
+         * A song's section label is structural -- "Chorus" names nothing on
+         * its own, so it goes on screen carrying the song's title. A slide's
+         * label is the heading the preacher's point was given, and the deck's
+         * title is the service's, repeated on every slide. Together they came
+         * to "Recognizing The Difference Between Similar Patterns — Why Clear
+         * Comparison Matters", which does not fit a card and pushed the half
+         * that mattered off the end of it.
+         */
+        caption: section.label || item.title,
         ids: [],
         progress: 0,
       };
