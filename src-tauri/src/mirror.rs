@@ -315,6 +315,16 @@ fn mirrored_table(component: &serde_json::Value) -> Option<Table> {
     Some(Table { header, rows })
 }
 
+/// A component as the passage it cites, if that is what it is.
+fn mirrored_reference(component: &serde_json::Value) -> Option<String> {
+    if component.get("kind").and_then(|v| v.as_str()) != Some("passage") {
+        return None;
+    }
+    let reference =
+        component.get("reference").and_then(|v| v.as_str()).unwrap_or_default().trim().to_string();
+    if reference.is_empty() { None } else { Some(reference) }
+}
+
 /// Whether this component is the slide's title, which the caption carries.
 fn is_title(component: &serde_json::Value) -> bool {
     component.get("kind").and_then(|v| v.as_str()) == Some("text")
@@ -393,7 +403,12 @@ pub fn shown_of(live: &LiveContent) -> Shown {
                 .collect(),
         },
         LiveBody::Lyric { lines } => {
-            Shown::Words { title: live.caption.clone(), lines: lines.clone(), table: None }
+            Shown::Words {
+                title: live.caption.clone(),
+                lines: lines.clone(),
+                table: None,
+                reference: String::new(),
+            }
         }
         LiveBody::RichText { blocks } => Shown::Words {
             title: live.caption.clone(),
@@ -402,6 +417,7 @@ pub fn shown_of(live: &LiveContent) -> Shown {
             // would be the pixel-mirroring this deliberately does not do.
             lines: blocks.iter().map(|block| block.text.clone()).collect(),
             table: None,
+            reference: String::new(),
         },
         /*
          * A composed slide, as lines a lower third can hold.
@@ -414,6 +430,7 @@ pub fn shown_of(live: &LiveContent) -> Shown {
          */
         LiveBody::Composed { components, .. } => {
             let table = components.iter().find_map(mirrored_table);
+            let reference = components.iter().find_map(mirrored_reference).unwrap_or_default();
             Shown::Words {
                 title: live.caption.clone(),
                 lines: components
@@ -429,9 +446,16 @@ pub fn shown_of(live: &LiveContent) -> Shown {
                     // so it is given both and picks. Sending only the shape put
                     // column headings and half a row on a lower third and cut
                     // the rest off, which is worse than the prose it replaced.
+                    //
+                    // The citation is the opposite case and travels once, below:
+                    // there is no screen that would rather have it as prose, and
+                    // in the lines it was drawn at body size under the statement
+                    // it belonged to and read as part of the sentence.
+                    .filter(|component| mirrored_reference(component).is_none())
                     .flat_map(component_lines)
                     .collect(),
                 table,
+                reference,
             }
         }
         // Nothing a text overlay can honestly show.
@@ -503,6 +527,7 @@ mod tests {
             body: LiveBody::Composed {
                 components: vec![
                     serde_json::json!({"kind":"text","level":"title","text":"Activity And Progress"}),
+                    serde_json::json!({"kind":"passage","reference":"Joshua 1:9"}),
                     serde_json::json!({
                         "kind":"table",
                         "header":["Activity","Progress"],
@@ -517,7 +542,7 @@ mod tests {
         };
 
         match shown_of(&live) {
-            Shown::Words { title, lines, table } => {
+            Shown::Words { title, lines, table, reference } => {
                 assert_eq!(title, "Activity And Progress");
                 // Not repeated in the body: the overlay draws the caption as a
                 // heading, and the slide would carry its title twice.
@@ -542,6 +567,12 @@ mod tests {
                     table.as_lines()[0],
                     "Activity: Keeps the hands busy \u{b7} Progress: Moves toward an outcome"
                 );
+
+                // The citation crosses as a citation, and is not left in the
+                // lines as well: there it was drawn at body size under the
+                // statement it belonged to and read as part of the sentence.
+                assert_eq!(reference, "Joshua 1:9");
+                assert!(!lines.iter().any(|line| line.contains("Joshua")));
             }
             other => panic!("a composed slide showed as {other:?}"),
         }
@@ -609,6 +640,7 @@ mod tests {
                 title: "Notices".into(),
                 lines: vec!["Welcome".into(), "Please stand".into()],
                 table: None,
+                reference: String::new(),
             },
         );
     }
