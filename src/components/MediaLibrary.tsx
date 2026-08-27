@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
 
-import {
-  catalogList,
-  catalogRemove,
-  catalogSave,
-  newItem,
-  type Item,
-} from "../lib/catalog";
+import { catalogList, catalogRemove, type Item } from "../lib/catalog";
+import { importAssets } from "../lib/pictures";
 import { presentableFor } from "../lib/schedule";
 import type { Presentable } from "../lib/usePresentation";
 import { EmptyState } from "./Panel";
@@ -21,15 +15,6 @@ type Filter = "image" | "media";
 const storedView = (): View =>
   localStorage.getItem(VIEW_KEY) === "list" ? "list" : "thumbnails";
 
-const IMAGE_TYPES = ["png", "jpg", "jpeg", "gif", "webp", "bmp"];
-const VIDEO_TYPES = ["mp4", "mov", "m4v", "webm", "avi", "mkv"];
-
-/** "/pictures/Advent Week 1.jpg" reads as "Advent Week 1". */
-function titleFor(path: string): string {
-  const name = path.split(/[\\/]/).pop() ?? path;
-  const dot = name.lastIndexOf(".");
-  return dot > 0 ? name.slice(0, dot) : name;
-}
 
 /**
  * Pictures and clips.
@@ -86,25 +71,8 @@ export function MediaLibrary({
   const importFiles = async () => {
     setBusy(true);
     try {
-      const picked = await open({
-        multiple: true,
-        filters: [
-          filter === "image"
-            ? { name: "Images", extensions: IMAGE_TYPES }
-            : { name: "Video", extensions: VIDEO_TYPES },
-        ],
-      });
-      const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
-      for (const path of paths) {
-        await catalogSave(
-          newItem(
-            titleFor(path),
-            filter === "image" ? { kind: "image" } : { kind: "media", looping: false },
-            path,
-          ),
-        );
-      }
-      if (paths.length > 0) await refresh();
+      const added = await importAssets(filter);
+      if (added.length > 0) await refresh();
     } catch (err) {
       fail(err);
     } finally {

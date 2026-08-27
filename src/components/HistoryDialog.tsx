@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { describeError, generateSlides, type DraftSlide } from "../lib/api";
 import { catalogSave } from "../lib/catalog";
+import { SlidePicture } from "./SlidePicture";
 import { sectionFor } from "./SlidesFromSermon";
 import { open } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
@@ -318,7 +319,7 @@ export function HistoryDialog({
            * answer to what a slide is made of -- and, since the arrangement
            * was hardcoded in both copies too, how it is laid out.
            */
-          sections: slides.map(sectionFor),
+          sections: slides.map((draft) => sectionFor(draft, draft.picture)),
         },
         path: null,
         updatedAt: Date.now(),
@@ -608,6 +609,19 @@ export function HistoryDialog({
                                   : draft.anchor}”
                               </p>
                             ) : null}
+                            <div className="mt-2">
+                              <SlidePicture
+                                source={draft.picture ?? null}
+                                onChange={(picture) =>
+                                  setSlides(
+                                    (current) =>
+                                      current?.map((slide, at) =>
+                                        at === index ? { ...slide, picture } : slide,
+                                      ) ?? null,
+                                  )
+                                }
+                              />
+                            </div>
                             <button
                               type="button"
                               onClick={() =>

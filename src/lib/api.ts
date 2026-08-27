@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import type { ImageSource } from "./projector";
 import type { ProjectorTheme } from "./theme";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
@@ -255,6 +256,15 @@ export interface DraftSlide {
   anchor: string;
   /** A comparison the preacher drew, where they drew one. Usually absent. */
   table: { header: string[]; rows: string[][] } | null;
+  /**
+   * A picture the operator put behind this slide while reviewing it.
+   *
+   * Set here and never by the model, which is why it is optional: a draft
+   * arrives without one. Held on the draft rather than in a map beside the
+   * list, because discarding a slide shifts every index after it -- and a
+   * picture keyed by index would then belong to the slide below.
+   */
+  picture?: ImageSource | null;
 }
 
 export const generateSlides = (source: string) =>

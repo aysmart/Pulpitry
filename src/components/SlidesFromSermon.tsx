@@ -1,7 +1,13 @@
 import { useState } from "react";
 
 import { catalogSave, type Item } from "../lib/catalog";
-import { layoutFor, type SlideComponent, type TextBlock } from "../lib/projector";
+import { SlidePicture } from "./SlidePicture";
+import {
+  layoutFor,
+  type ImageSource,
+  type SlideComponent,
+  type TextBlock,
+} from "../lib/projector";
 import { describeError, generateSlides, type DraftSlide } from "../lib/api";
 
 /**
@@ -59,11 +65,23 @@ import { describeError, generateSlides, type DraftSlide } from "../lib/api";
  * before the model is taught to produce tables and figures -- if the shape is
  * wrong, it is much cheaper to find out here.
  */
-export function componentsFor(draft: DraftSlide): SlideComponent[] {
+export function componentsFor(draft: DraftSlide, picture?: ImageSource | null): SlideComponent[] {
   const components: SlideComponent[] = [];
 
   if (draft.title) {
     components.push({ kind: "text", text: draft.title, level: "title" });
+  }
+
+  /*
+   * Before the words, because the arrangement puts it behind them.
+   *
+   * Not anchored, and it is the only thing on a slide that is not: everything
+   * else asserts that something was said, and a photograph of an open sky
+   * asserts nothing. There is no sentence in the transcript it could be
+   * checked against, because it does not claim anything to check.
+   */
+  if (picture) {
+    components.push({ kind: "figure", source: picture });
   }
 
   /*
@@ -118,8 +136,8 @@ export function componentsFor(draft: DraftSlide): SlideComponent[] {
  *
  * One function, so there is one answer to what a slide is.
  */
-export function sectionFor(draft: DraftSlide) {
-  const components = componentsFor(draft);
+export function sectionFor(draft: DraftSlide, picture?: ImageSource | null) {
+  const components = componentsFor(draft, picture);
   return {
     // The title labels the section, as a song's does, so the operator can see
     // what is coming in the section list.
@@ -210,7 +228,7 @@ export function SlidesFromSermon({ onClose }: { onClose: () => void }) {
         subtitle: `${drafts.length} slide${drafts.length === 1 ? "" : "s"}`,
         body: {
           kind: "deck",
-          sections: drafts.map(sectionFor),
+          sections: drafts.map((draft) => sectionFor(draft, draft.picture)),
         },
         path: null,
         updatedAt: Date.now(),
@@ -332,6 +350,18 @@ export function SlidesFromSermon({ onClose }: { onClose: () => void }) {
                     : draft.anchor}”
                 </p>
               ) : null}
+
+              <SlidePicture
+                source={draft.picture ?? null}
+                onChange={(picture) =>
+                  setDrafts(
+                    (current) =>
+                      current?.map((slide, at) =>
+                        at === index ? { ...slide, picture } : slide,
+                      ) ?? null,
+                  )
+                }
+              />
 
               {/* Dropped one at a time, because the usual outcome is six good
                   slides and one that missed the point. Keeping is for the set. */}

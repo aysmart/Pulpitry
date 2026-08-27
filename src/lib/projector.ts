@@ -60,7 +60,37 @@ export type SlideComponent =
   /** Something said, with whoever said it. */
   | { kind: "quote"; text: string; attribution: string }
   /** A reference. The verse comes from the library, never from the model. */
-  | { kind: "passage"; reference: string };
+  | { kind: "passage"; reference: string }
+  /**
+   * A picture. Illustrative, and the one component that is not anchored.
+   *
+   * Everything else on a slide asserts that something was said or is true, so
+   * it carries the words it came from and is dropped if they are not in the
+   * transcript. A photograph of an open sky asserts nothing. It sets a mood,
+   * and there is nothing about it that could be checked even in principle.
+   */
+  | { kind: "figure"; source: ImageSource; caption?: string };
+
+/**
+ * Where a picture came from.
+ *
+ * One arm for now, and deliberately: a picture the church already holds and
+ * chose. Generated pictures are a second arm, and adding it before there is
+ * anything that can produce one would be a shape with nothing behind it.
+ */
+export type ImageSource = {
+  from: "library";
+  /** The catalogue item, so the picture can be traced back to what it is. */
+  itemId: number;
+  /**
+   * The file, so drawing it needs no lookup.
+   *
+   * Carried as well as the id because a slide is drawn on a projector window
+   * that may be a different process, and a synchronous render cannot go and
+   * ask the database where a picture lives.
+   */
+  path: string;
+};
 
 /**
  * How the components on a slide are placed.
@@ -78,11 +108,9 @@ export type SlideComponent =
  * - `split`   a comparison, as two headed columns rather than a ruled grid.
  * - `stacked` a heading and what sits beneath it. The common case.
  *
- * "backed" -- a picture filling the frame with the words in a corner -- is
- * absent because there are no pictures yet. It belongs with the imagery work,
- * not here, and an arrangement nothing can trigger is dead code with a name.
+ * - `backed`  a picture fills the frame and the words sit over a scrim.
  */
-export type SlideLayout = "single" | "stacked" | "split" | "section";
+export type SlideLayout = "single" | "stacked" | "split" | "section" | "backed";
 
 /**
  * The arrangement a slide's own contents call for.
@@ -96,6 +124,15 @@ export function layoutFor(components: SlideComponent[]): SlideLayout {
   const body = components.filter(
     (component) => !(component.kind === "text" && component.level === "title"),
   );
+
+  /*
+   * A picture takes the frame and the words sit over it.
+   *
+   * Checked before the others because it changes what the slide *is*: a
+   * heading over a photograph is not a heading with a picture beneath it, and
+   * arranging it as one wastes both.
+   */
+  if (body.some((component) => component.kind === "figure")) return "backed";
 
   // A heading with nothing under it is not a broken slide, it is a section
   // marker, and it is the one slide that should be set enormous.
@@ -219,6 +256,17 @@ export function componentText(component: SlideComponent): string {
         : component.text;
     case "passage":
       return component.reference;
+    /*
+     * A caption, or nothing.
+     *
+     * Three callers want this text and a picture answers all three the same
+     * way. Sizing: a photograph takes the frame whatever size the words are.
+     * Searching: the picture's own name lives in the catalogue, not here.
+     * Mirroring: a paired screen reads a local file path off another machine's
+     * disk, so the picture cannot cross and a caption is all there is to send.
+     */
+    case "figure":
+      return component.caption ?? "";
   }
 }
 
