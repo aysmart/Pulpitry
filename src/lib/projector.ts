@@ -105,12 +105,11 @@ export type ImageSource = {
  *
  * - `section` a movement of the sermon begins: a heading and nothing under it.
  * - `single`  one thing, set large. A statement that stands on its own.
- * - `split`   a comparison, as two headed columns rather than a ruled grid.
+ * - `split`   two things side by side: a picture beside the words, or a
+ *             comparison as two headed columns rather than a ruled grid.
  * - `stacked` a heading and what sits beneath it. The common case.
- *
- * - `backed`  a picture fills the frame and the words sit over a scrim.
  */
-export type SlideLayout = "single" | "stacked" | "split" | "section" | "backed";
+export type SlideLayout = "single" | "stacked" | "split" | "section";
 
 /**
  * The arrangement a slide's own contents call for.
@@ -126,13 +125,17 @@ export function layoutFor(components: SlideComponent[]): SlideLayout {
   );
 
   /*
-   * A picture takes the frame and the words sit over it.
+   * A picture sits beside the words, never behind them.
    *
-   * Checked before the others because it changes what the slide *is*: a
-   * heading over a photograph is not a heading with a picture beneath it, and
-   * arranging it as one wastes both.
+   * Behind them was the first answer and it was wrong. A church's pictures are
+   * not stock scenery -- they are the graphics the church already made, and
+   * they have words in them. Body text over "tracked in real time" is two sets
+   * of words fighting, and no scrim dark enough to win that fight leaves a
+   * picture worth showing.
+   *
+   * Checked before the others because it changes what the slide is.
    */
-  if (body.some((component) => component.kind === "figure")) return "backed";
+  if (body.some((component) => component.kind === "figure")) return "split";
 
   // A heading with nothing under it is not a broken slide, it is a section
   // marker, and it is the one slide that should be set enormous.

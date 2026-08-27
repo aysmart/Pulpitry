@@ -162,6 +162,46 @@ function Composed({
    * its own heading, with air between them.
    */
   if (body.layout === "split") {
+    /*
+     * A picture in its own panel, with the words beside it.
+     *
+     * Never behind them. A church's pictures carry their own words -- they are
+     * the graphics it already made -- and body text laid over those is two
+     * headlines arguing. A panel gives the picture a place to be a picture.
+     */
+    const figure = rest.find((component) => component.kind === "figure");
+    if (figure?.kind === "figure") {
+      const beside = rest.filter((component) => component !== figure);
+      return (
+        <div className="flex w-full flex-col gap-[0.5em]" style={frame}>
+          {title?.kind === "text" ? (
+            <Heading text={title.text} style={style} accent={accent} base={base} scale={1.3} />
+          ) : null}
+          <div className="flex w-full items-center gap-[1.1em]">
+            <div className="flex min-w-0 flex-[1.15] flex-col gap-[0.45em]">
+              {beside.map((component, index) => (
+                <Component
+                  key={index}
+                  component={component}
+                  style={style}
+                  theme={theme}
+                  base={base}
+                  ranged
+                />
+              ))}
+            </div>
+            {/* Cropped to a panel rather than fitted, so two slides with
+                differently shaped pictures still look like one deck. */}
+            <img
+              src={convertFileSrc(figure.source.path)}
+              alt=""
+              className="h-[42cqh] flex-1 rounded-[0.12em] object-cover"
+            />
+          </div>
+        </div>
+      );
+    }
+
     const table = rest.find((component) => component.kind === "table");
     const after = rest.filter((component) => component !== table);
     if (table?.kind === "table") {
@@ -210,76 +250,6 @@ function Composed({
           {after.map((component, index) => (
             <Component key={index} component={component} style={style} theme={theme} base={base} ranged />
           ))}
-        </div>
-      );
-    }
-  }
-
-  /*
-   * A picture takes the frame, and the words sit over it.
-   *
-   * The scrim is not decoration. White text on a photograph is legible over
-   * the dark parts of it and gone over the light parts, and which parts those
-   * are depends on the picture -- so the words would be readable on one slide
-   * and not the next, with nothing about the slide to say why. A wash dark
-   * enough to hold type everywhere costs the picture some of its contrast and
-   * is the trade worth making on a wall.
-   */
-  if (body.layout === "backed") {
-    const figure = rest.find((component) => component.kind === "figure");
-    const over = rest.filter((component) => component !== figure);
-    if (figure?.kind === "figure") {
-      return (
-        /*
-         * Out through the frame's own padding, which is the only arrangement
-         * that wants to be.
-         *
-         * Every surface that draws a slide insets it -- `px-[6cqw] py-[5cqh]`
-         * on the projector and on the editor's canvas alike -- and that inset
-         * is right for words. A picture sitting inside it is a picture with a
-         * dark border, which reads as a photograph that failed to load rather
-         * than as a backdrop. The same two figures, negated -- and the height
-         * asked for against the frame rather than left to `flex-1`, which does
-         * not resolve on every surface that draws a slide and left the picture
-         * short by exactly the padding it was meant to escape.
-         */
-        <div
-          className="relative -mx-[6cqw] -my-[5cqh] flex h-[100cqh] w-[112cqw] shrink-0 flex-col overflow-hidden"
-          style={frame}
-        >
-          <img
-            src={convertFileSrc(figure.source.path)}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-          <div
-            aria-hidden
-            className="absolute inset-0"
-            style={{
-              background: `linear-gradient(to top, ${withAlpha("#000000", 0.82)} 0%, ${withAlpha(
-                "#000000",
-                0.55,
-              )} 45%, ${withAlpha("#000000", 0.28)} 100%)`,
-            }}
-          />
-          {/* At the bottom, where the wash is darkest. Set against the top it
-              sat over the lightest part of the scrim and was legible by luck --
-              on this picture and not the next one. */}
-          <div className="relative mt-auto flex w-full flex-col gap-[0.45em] px-[6cqw] py-[5cqh]">
-            {title?.kind === "text" ? (
-              <Heading text={title.text} style={style} accent={accent} base={base} scale={1.45} />
-            ) : null}
-            {over.map((component, index) => (
-              <Component
-                key={index}
-                component={component}
-                style={style}
-                theme={theme}
-                base={base}
-                ranged
-              />
-            ))}
-          </div>
         </div>
       );
     }
