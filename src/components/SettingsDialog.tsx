@@ -10,12 +10,14 @@ import {
   clearAssistKey,
   clearAzureKey,
   describeError,
+  hostedStatus,
   measureSpeech,
   saveAssistKey,
   saveAzureKey,
   saveSettings,
   speechModels,
   downloadSpeechModel,
+  type HostedView,
   type ModelProgress,
   type SettingsView,
   type SpeechModel,
@@ -286,6 +288,201 @@ function describeSize(bytes: number): string {
 const FIELD =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-2 text-[13px] text-pulpitry-text outline-none focus-visible:focus-ring";
 
+/**
+ * Where a setting lives, so an operator can learn it rather than hunt for it.
+ *
+ * Six named places beats one column you scroll, which is what this was while
+ * there were six settings and stopped being once there was a scripture library
+ * to put somewhere.
+ *
+ * Ranged left under a hanging rule rather than behind icons. Icons in a
+ * settings rail are the most generic thing in desktop software -- every
+ * application has the same little gear and speaker -- and the rule is the same
+ * device the slide arrangements use, so this reads as part of the product
+ * rather than as a settings screen bolted to it.
+ */
+const PANES = [
+  {
+    id: "account",
+    name: "Account",
+    note: "Your subscription, and the machines on it.",
+  },
+  {
+    id: "scripture",
+    name: "Scripture",
+    note: "What the model may suggest, and how sure it must be.",
+  },
+  { id: "audio", name: "Audio", note: "Where the words come from." },
+  {
+    id: "stage",
+    name: "Stage",
+    note: "Where the picture goes, and who else follows it.",
+  },
+  { id: "usage", name: "Usage", note: "What this period has used." },
+  {
+    id: "help",
+    name: "Help",
+    note: "What leaves this machine, and what does not.",
+  },
+] as const;
+
+type PaneId = (typeof PANES)[number]["id"];
+
+function Rail({
+  active,
+  onChoose,
+}: {
+  active: PaneId;
+  onChoose: (id: PaneId) => void;
+}) {
+  return (
+    <nav className="flex w-[164px] shrink-0 flex-col gap-0.5 border-r border-pulpitry-line py-3">
+      {PANES.map((pane) => {
+        const chosen = pane.id === active;
+        return (
+          <button
+            key={pane.id}
+            type="button"
+            onClick={() => onChoose(pane.id)}
+            aria-current={chosen ? "page" : undefined}
+            className={`flex flex-col gap-1 px-4 py-2 text-left transition-colors focus-visible:focus-ring ${
+              chosen
+                ? "text-pulpitry-text"
+                : "text-pulpitry-muted hover:text-pulpitry-text"
+            }`}
+          >
+            {/* The rule is the whole device: present on the chosen one, absent
+                on the rest. No background, no pill -- a settings rail that
+                highlights with a filled block reads as a tab bar. */}
+            <span
+              aria-hidden
+              className={`h-[2px] w-5 rounded-full transition-colors ${
+                chosen ? "bg-pulpitry-gold" : "bg-transparent"
+              }`}
+            />
+            <span className="text-[13px]">{pane.name}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+/**
+ * One pane, mounted whether or not it is showing.
+ *
+ * Hidden rather than unmounted, and that is not a detail: the subscription
+ * panel reports whether a licence is active, and the engine picker two panes
+ * away needs that answer. Unmounting it would mean the answer only exists
+ * while somebody is looking at Account.
+ */
+function Pane({
+  id,
+  active,
+  children,
+}: {
+  id: PaneId;
+  active: PaneId;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={id === active ? "flex flex-col gap-5" : "hidden"}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * What this period has used, for a church that wants to know before it runs out.
+ *
+ * Its own pane because it answers a question nobody could ask before: the
+ * numbers existed on the subscription and were only ever shown as a single
+ * remaining figure beside a licence key. "12 hr 30 min left" is the answer to
+ * "can we get through Sunday"; it is not the answer to "where did the last
+ * forty hours go", which is what a treasurer asks in January.
+ */
+function Usage() {
+  const [state, setState] = useState<HostedView | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    hostedStatus()
+      .then((next) => live && setState(next))
+      .catch(() => live && setState(null));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const plan = state?.entitlement;
+
+  if (!state?.activated || !plan) {
+    return (
+      <Section
+        title="Usage"
+        note="Nothing is metered without a subscription. Transcribing on this machine is unlimited and always has been."
+      >
+        <p className="text-[12.5px] leading-relaxed text-pulpitry-muted">
+          There is no plan on this machine, so there is nothing here to count.
+        </p>
+      </Section>
+    );
+  }
+
+  return (
+    <Section
+      title="This period"
+      note="Hours are pooled across the applications and the machines on your plan."
+    >
+      <dl className="flex flex-col divide-y divide-pulpitry-line">
+        <Row label="Transcription left" value={plan.speechRemaining} />
+        {/* By application, because a pooled figure hides which of the two spent
+            it -- and a church running both has no other way to find out. */}
+        {Object.entries(plan.byApp).map(([app, seconds]: [string, number]) => (
+          <Row
+            key={app}
+            label={app === "castavox" ? "Used by Castavox" : "Used by Pulpitry"}
+            value={hours(seconds)}
+            quiet
+          />
+        ))}
+        <Row
+          label="Period ends"
+          value={new Date(plan.periodEndsAt).toLocaleDateString()}
+        />
+      </dl>
+    </Section>
+  );
+}
+
+/** Seconds as a church would say them. */
+function hours(seconds: number): string {
+  const whole = Math.max(0, Math.round(seconds / 60));
+  if (whole < 60) return `${whole} min`;
+  return `${Math.floor(whole / 60)} hr ${whole % 60} min`;
+}
+
+function Row({
+  label,
+  value,
+  quiet = false,
+}: {
+  label: string;
+  value: string;
+  quiet?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-2.5">
+      <dt
+        className={`text-[12.5px] ${quiet ? "text-pulpitry-muted" : "text-pulpitry-text"}`}
+      >
+        {label}
+      </dt>
+      <dd className="text-[12.5px] tabular-nums text-pulpitry-text">{value}</dd>
+    </div>
+  );
+}
+
 function Section({
   title,
   note,
@@ -346,6 +543,9 @@ export function SettingsDialog({
   // Tracked rather than read straight from settings, because activating in this
   // dialog must make the option selectable without reopening it.
   const [hosted, setHosted] = useState(settings.hasHostedSubscription);
+  /* Account first: it is where a church starts, and where the one thing that
+     stops the software working -- an expired or unentered licence -- lives. */
+  const [pane, setPane] = useState<PaneId>("account");
   const [model, setModel] = useState(settings.speechModel);
   const [models, setModels] = useState<SpeechModel[]>([]);
   const [modelNote, setModelNote] = useState<string | null>(null);
@@ -487,477 +687,512 @@ export function SettingsDialog({
     >
       <form
         onSubmit={submit}
-        className="flex max-h-full w-full max-w-[560px] flex-col rounded-lg border border-pulpitry-line bg-pulpitry-surface shadow-2xl"
+        // Wider than it was, because a rail takes 164px and the pane beside it
+        // still has to hold a sentence of consequence under every setting.
+        className="flex max-h-full w-full max-w-[760px] flex-col rounded-lg border border-pulpitry-line bg-pulpitry-surface shadow-2xl"
       >
         <header className="shrink-0 border-b border-pulpitry-line px-5 py-3.5">
           <h2 className="text-[15px] text-pulpitry-text">Settings</h2>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto px-5 py-4">
-          <Section
-            title="Transcription"
-            note="Where the words come from. Verse detection is local either way and needs no network."
-          >
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[12px] text-pulpitry-muted">Engine</span>
-              <select
-                value={engine}
-                onChange={(event) => setEngine(event.target.value)}
-                className={FIELD}
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <Rail active={pane} onChoose={setPane} />
+
+          <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto px-5 py-4">
+            <Pane id="account" active={pane}>
+              {/* Always mounted, so the engine picker knows whether a licence
+                  is active even while somebody is looking at another pane. */}
+              <Section
+                title="Subscription"
+                note="Hosted transcription and the assistant, metered against your plan. The applications work without one."
               >
-                {/* First, because it is the default and the one most churches
+                <HostedSubscription onActivationChange={setHosted} />
+              </Section>
+            </Pane>
+
+            <Pane id="audio" active={pane}>
+              <Section
+                title="Transcription"
+                note="Where the words come from. Verse detection is local either way and needs no network."
+              >
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-pulpitry-muted">
+                    Engine
+                  </span>
+                  <select
+                    value={engine}
+                    onChange={(event) => setEngine(event.target.value)}
+                    className={FIELD}
+                  >
+                    {/* First, because it is the default and the one most churches
                     should stay on. A model for it has already been chosen and
                     fetched by the time anybody opens this. */}
-                <option value="local">
-                  This machine — free, no account needed
-                </option>
-                {/* Always offered, including before activation: choosing it is
+                    <option value="local">
+                      This machine — free, no account needed
+                    </option>
+                    {/* Always offered, including before activation: choosing it is
                     how somebody reaches the licence field below. */}
-                <option value="hosted">
-                  Castavox subscription{hosted ? "" : " — needs a licence key"}
-                </option>
-                <option value="azure">Azure Speech — your own account</option>
-              </select>
-              <span className="text-[11.5px] leading-snug text-pulpitry-muted">
-                This machine transcribes a sentence once it ends, so a verse
-                arrives a second or two later — but it needs no account, no key
-                and no network, and it costs nothing per hour. The other two
-                stream: words appear as they are spoken and a verse can be found
-                mid-sentence. A Castavox subscription does that without your
-                church having to open an Azure account at all.
-              </span>
-            </label>
+                    <option value="hosted">
+                      Castavox subscription
+                      {hosted ? "" : " — needs a licence key"}
+                    </option>
+                    <option value="azure">
+                      Azure Speech — your own account
+                    </option>
+                  </select>
+                  <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                    This machine transcribes a sentence once it ends, so a verse
+                    arrives a second or two later — but it needs no account, no
+                    key and no network, and it costs nothing per hour. The other
+                    two stream: words appear as they are spoken and a verse can
+                    be found mid-sentence. A Castavox subscription does that
+                    without your church having to open an Azure account at all.
+                  </span>
+                </label>
 
-            {/* Only what the chosen engine actually uses. An Azure key sitting
+                {/* Only what the chosen engine actually uses. An Azure key sitting
                 under "This machine" reads as something that must be filled in,
                 and the field that does matter is lost among three that do not. */}
-            {engine === "hosted" ? (
-              <HostedSubscription onActivationChange={setHosted} />
-            ) : null}
+                {/* The licence lives in Account now. Naming it here is the whole
+                point: an engine that needs one, and a place to go and get it. */}
+                {engine === "hosted" && !hosted ? (
+                  <p className="text-[11.5px] leading-snug text-pulpitry-muted">
+                    This engine needs a licence key.{" "}
+                    <button
+                      type="button"
+                      onClick={() => setPane("account")}
+                      className="text-pulpitry-gold underline-offset-2 hover:underline focus-visible:focus-ring"
+                    >
+                      Enter one in Account
+                    </button>
+                    .
+                  </p>
+                ) : null}
 
-            {engine === "local" ? (
-              <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] text-pulpitry-muted">Model</span>
-                <div className="flex gap-2">
-                  <select
-                    value={model}
-                    onChange={(event) => setModel(event.target.value)}
-                    className={`min-w-0 flex-1 ${FIELD}`}
-                  >
-                    {model && !models.some((m) => m.file === model) ? (
-                      /* Shown before the list arrives, so the box does not read
+                {engine === "local" ? (
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[12px] text-pulpitry-muted">
+                      Model
+                    </span>
+                    <div className="flex gap-2">
+                      <select
+                        value={model}
+                        onChange={(event) => setModel(event.target.value)}
+                        className={`min-w-0 flex-1 ${FIELD}`}
+                      >
+                        {model && !models.some((m) => m.file === model) ? (
+                          /* Shown before the list arrives, so the box does not read
                          as unset when a choice is already stored. */
-                      <option value={model}>{model}</option>
-                    ) : null}
-                    {models.length === 0 && !model ? (
-                      <option value="">—</option>
-                    ) : null}
-                    {models.map((m) => (
-                      <option key={m.file} value={m.file}>
-                        {/* Size first: on the machine most churches own, that is
+                          <option value={model}>{model}</option>
+                        ) : null}
+                        {models.length === 0 && !model ? (
+                          <option value="">—</option>
+                        ) : null}
+                        {models.map((m) => (
+                          <option key={m.file} value={m.file}>
+                            {/* Size first: on the machine most churches own, that is
                             the number that decides. */}
-                        {m.label} — {describeSize(m.bytes)} ·{" "}
-                        {[
-                          m.englishOnly ? "English only" : "any language",
-                          m.quantised
-                            ? "smaller, slightly less accurate"
-                            : null,
-                          m.installed ? "downloaded" : null,
-                        ]
-                          .filter(Boolean)
-                          .join(", ")}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    disabled={!model || fetching}
-                    onClick={() => {
-                      setFetching(true);
-                      setModelNote("Starting the download…");
-                      void downloadSpeechModel(model).catch((err) => {
-                        setFetching(false);
-                        setModelNote(String(err));
-                      });
-                    }}
-                    className="rounded border border-pulpitry-line px-3 py-2 text-[12.5px] text-pulpitry-text disabled:opacity-40 focus-visible:focus-ring"
-                  >
-                    {fetching ? "Downloading…" : "Download"}
-                  </button>
-                  {/* Measured, because reasoning about the processor has been
+                            {m.label} — {describeSize(m.bytes)} ·{" "}
+                            {[
+                              m.englishOnly ? "English only" : "any language",
+                              m.quantised
+                                ? "smaller, slightly less accurate"
+                                : null,
+                              m.installed ? "downloaded" : null,
+                            ]
+                              .filter(Boolean)
+                              .join(", ")}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={!model || fetching}
+                        onClick={() => {
+                          setFetching(true);
+                          setModelNote("Starting the download…");
+                          void downloadSpeechModel(model).catch((err) => {
+                            setFetching(false);
+                            setModelNote(String(err));
+                          });
+                        }}
+                        className="rounded border border-pulpitry-line px-3 py-2 text-[12.5px] text-pulpitry-text disabled:opacity-40 focus-visible:focus-ring"
+                      >
+                        {fetching ? "Downloading…" : "Download"}
+                      </button>
+                      {/* Measured, because reasoning about the processor has been
                       wrong in both directions: a thin-and-light was handed a
                       model it could not carry, and a machine that decodes
                       twenty-five times faster than speech was told it might
                       struggle. Four seconds settles it, before a Sunday. */}
-                  <button
-                    type="button"
-                    disabled={!model || timing}
-                    onClick={() => {
-                      setTiming(true);
-                      setSpeed("Timing this machine…");
-                      void measureSpeech()
-                        .then((result) =>
-                          setSpeed(
-                            result.factor > 0
-                              ? `${result.detail} (${(1 / result.factor).toFixed(1)}x real time)`
-                              : result.detail,
-                          ),
-                        )
-                        .catch((err) => setSpeed(describeError(err)))
-                        .finally(() => setTiming(false));
-                    }}
-                    className="rounded border border-pulpitry-line px-3 py-2 text-[12.5px] text-pulpitry-text disabled:opacity-40 focus-visible:focus-ring"
-                  >
-                    {timing ? "Timing…" : "Time it"}
-                  </button>
-                </div>
-                {speed ? (
-                  <p className="text-[11.5px] leading-snug text-pulpitry-muted">
-                    {speed}
-                  </p>
-                ) : null}
-                {modelNote ? (
-                  <span className="text-[11.5px] leading-snug text-pulpitry-muted">
-                    {modelNote}
-                  </span>
-                ) : null}
-              </label>
-            ) : (
-              /* Azure and a subscription both stream through the Node bridge,
-                 so both need a runtime. Only transcribing here does not. */
-              <NodeRuntimeNotice />
-            )}
-
-            {engine === "azure" ? (
-              <>
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-[12px] text-pulpitry-muted">
-                    Azure Speech key
-                    {settings.hasAzureKey ? (
-                      <span className="ml-2 text-pulpitry-teal">
-                        stored in your keychain
+                      <button
+                        type="button"
+                        disabled={!model || timing}
+                        onClick={() => {
+                          setTiming(true);
+                          setSpeed("Timing this machine…");
+                          void measureSpeech()
+                            .then((result) =>
+                              setSpeed(
+                                result.factor > 0
+                                  ? `${result.detail} (${(1 / result.factor).toFixed(1)}x real time)`
+                                  : result.detail,
+                              ),
+                            )
+                            .catch((err) => setSpeed(describeError(err)))
+                            .finally(() => setTiming(false));
+                        }}
+                        className="rounded border border-pulpitry-line px-3 py-2 text-[12.5px] text-pulpitry-text disabled:opacity-40 focus-visible:focus-ring"
+                      >
+                        {timing ? "Timing…" : "Time it"}
+                      </button>
+                    </div>
+                    {speed ? (
+                      <p className="text-[11.5px] leading-snug text-pulpitry-muted">
+                        {speed}
+                      </p>
+                    ) : null}
+                    {modelNote ? (
+                      <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                        {modelNote}
                       </span>
                     ) : null}
-                  </span>
-                  <input
-                    type="password"
-                    value={key}
-                    autoComplete="off"
-                    spellCheck={false}
-                    onChange={(event) => setKey(event.target.value)}
-                    placeholder={
-                      settings.hasAzureKey
-                        ? "•••••••• (leave blank to keep)"
-                        : "Paste your key"
-                    }
-                    className={FIELD}
-                  />
-                </label>
+                  </label>
+                ) : (
+                  /* Azure and a subscription both stream through the Node bridge,
+                 so both need a runtime. Only transcribing here does not. */
+                  <NodeRuntimeNotice />
+                )}
 
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-[12px] text-pulpitry-muted">
-                    Region
-                  </span>
-                  <input
-                    list="pulpitry-azure-regions"
-                    value={region}
-                    spellCheck={false}
-                    onChange={(event) => setRegion(event.target.value)}
-                    placeholder="e.g. uksouth"
-                    className={FIELD}
-                  />
-                  <datalist id="pulpitry-azure-regions">
-                    {REGIONS.map((name) => (
-                      <option key={name} value={name} />
-                    ))}
-                  </datalist>
-                </label>
-              </>
-            ) : null}
+                {engine === "azure" ? (
+                  <>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[12px] text-pulpitry-muted">
+                        Azure Speech key
+                        {settings.hasAzureKey ? (
+                          <span className="ml-2 text-pulpitry-teal">
+                            stored in your keychain
+                          </span>
+                        ) : null}
+                      </span>
+                      <input
+                        type="password"
+                        value={key}
+                        autoComplete="off"
+                        spellCheck={false}
+                        onChange={(event) => setKey(event.target.value)}
+                        placeholder={
+                          settings.hasAzureKey
+                            ? "•••••••• (leave blank to keep)"
+                            : "Paste your key"
+                        }
+                        className={FIELD}
+                      />
+                    </label>
 
-            {/* Every engine uses it now, except an .en model, which cannot do
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[12px] text-pulpitry-muted">
+                        Region
+                      </span>
+                      <input
+                        list="pulpitry-azure-regions"
+                        value={region}
+                        spellCheck={false}
+                        onChange={(event) => setRegion(event.target.value)}
+                        placeholder="e.g. uksouth"
+                        className={FIELD}
+                      />
+                      <datalist id="pulpitry-azure-regions">
+                        {REGIONS.map((name) => (
+                          <option key={name} value={name} />
+                        ))}
+                      </datalist>
+                    </label>
+                  </>
+                ) : null}
+
+                {/* Every engine uses it now, except an .en model, which cannot do
                 anything but English -- told to decode Yoruba it produces
                 English-shaped nonsense rather than Yoruba, so the choice is not
                 offered where it would be a promise nothing can keep. */}
-            {englishOnlyModel ? null : (
-              <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] text-pulpitry-muted">
-                  Spoken language
-                </span>
-                <select
-                  value={language}
-                  onChange={(event) => setLanguage(event.target.value)}
-                  className={FIELD}
-                >
-                  {LANGUAGES.map((entry) => (
-                    <option key={entry.code} value={entry.code}>
-                      {entry.label}
-                    </option>
-                  ))}
-                </select>
-                {/* Said at the moment of choosing rather than discovered during
+                {englishOnlyModel ? null : (
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[12px] text-pulpitry-muted">
+                      Spoken language
+                    </span>
+                    <select
+                      value={language}
+                      onChange={(event) => setLanguage(event.target.value)}
+                      className={FIELD}
+                    >
+                      {LANGUAGES.map((entry) => (
+                        <option key={entry.code} value={entry.code}>
+                          {entry.label}
+                        </option>
+                      ))}
+                    </select>
+                    {/* Said at the moment of choosing rather than discovered during
                     a sermon, which is when the wrong engine announces itself. */}
-                {languageWarning(language, engine) ? (
-                  <span className="mt-1.5 block text-[11.5px] leading-snug text-pulpitry-gold">
-                    {languageWarning(language, engine)}
-                  </span>
-                ) : null}
-              </label>
-            )}
-
-            {engine === "azure" && settings.hasAzureKey ? (
-              <button
-                type="button"
-                onClick={() => void forget("speech")}
-                className="self-start rounded px-1 py-0.5 text-[11.5px] text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
-              >
-                Forget speech key
-              </button>
-            ) : null}
-          </Section>
-
-          <div className="border-t border-pulpitry-line" />
-
-          <Section
-            title="Mirror to Castavox"
-            note="For a church running both, on two machines in the same building."
-          >
-            <MirrorPanel
-              enabled={mirrorEnabled}
-              onEnabledChange={setMirrorEnabled}
-            />
-          </Section>
-
-          <div className="border-t border-pulpitry-line" />
-
-          {/* Directly under Mirror on purpose. They are the two ways out of
-              this machine and are constantly confused for each other, so the
-              cheap one comes first and this one says what it is not. */}
-          <Section
-            title="Send the screen elsewhere"
-            note="For a video team whose switcher is not Castavox, or who need the picture itself rather than the verse."
-          >
-            <NdiPanel />
-          </Section>
-
-          <div className="border-t border-pulpitry-line" />
-
-          {/*
-            Disclosed rather than buried, and off until it is switched on.
-
-            The privacy policy tells churches that on the free local engine
-            nothing leaves the building. That stays true of anybody who leaves
-            this alone, which is what makes it a promise we can keep rather than
-            one we outgrew -- so the note says exactly what would be sent and,
-            just as plainly, what would not.
-          */}
-          <Section
-            title="New versions"
-            note="Once a day, Pulpitry asks the public download page whether a newer version has been published, and says so quietly if one has. The request carries nothing at all — no identifier, no version, nothing about this machine — and it does not reach our servers: the releases are on GitHub, which already serves every download. Switch it off for a machine that should touch nothing."
-          >
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={updateCheck}
-                onChange={(event) => setUpdateCheck(event.target.checked)}
-                className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-              />
-              <span className="text-[13px] text-pulpitry-text">
-                Tell me when a new version is out
-              </span>
-            </label>
-          </Section>
-
-          <div className="border-t border-pulpitry-line" />
-
-          <Section
-            title="Telling us this installation exists"
-            note="Once a day, if you switch it on: a random identifier made on this machine, which application and version, your operating system, what kind of processor it has, and which transcription engine you chose. Your country is worked out from the connection and the address is discarded. Never your machine's name, never your address, and never a transcript, a verse or a filename — there is no field for any of those. It never delays anything, and if it cannot be sent nothing happens."
-          >
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={checkIn}
-                onChange={(event) => setCheckIn(event.target.checked)}
-                className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-              />
-              <span className="text-[13px] text-pulpitry-text">
-                Send a daily check-in
-              </span>
-            </label>
-          </Section>
-
-          <div className="border-t border-pulpitry-line" />
-
-          <Section
-            title="Paraphrase matching"
-            note="Finds scripture the speaker renders in their own words, by meaning rather than wording. Runs entirely on your machine — no network, no cost. Preparing a translation takes a couple of minutes the first time."
-          >
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={semanticEnabled}
-                onChange={(event) => setSemanticEnabled(event.target.checked)}
-                className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-              />
-              <span className="text-[13px] text-pulpitry-text">
-                Match paraphrased scripture locally
-              </span>
-            </label>
-
-            <label className="flex flex-col gap-1.5">
-              <span className="flex items-baseline justify-between text-[12px] text-pulpitry-muted">
-                <span>Minimum similarity</span>
-                <span className="tabular-nums text-pulpitry-text">
-                  {Math.round(semanticThreshold * 100)}%
-                </span>
-              </span>
-              <input
-                type="range"
-                min={0.3}
-                max={0.9}
-                step={0.01}
-                value={semanticThreshold}
-                disabled={!semanticEnabled}
-                onChange={(event) =>
-                  setSemanticThreshold(Number(event.target.value))
-                }
-                className="accent-pulpitry-gold disabled:opacity-40 focus-visible:focus-ring"
-              />
-              <span className="text-[11px] text-pulpitry-muted">
-                Lower surfaces more, including looser links. Higher stays quiet
-                unless the wording is close. Unrelated speech typically scores
-                below 30%.
-              </span>
-            </label>
-          </Section>
-
-          {/* Nothing to configure on a subscription: the assistant runs on our
-              account, metered against the same plan as the hours. Leaving the
-              fields visible would ask a church to buy a second thing it has
-              already been given. */}
-          {engine === "hosted" ? (
-            <>
-              <div className="border-t border-pulpitry-line" />
-              <Section
-                title="Model assistance"
-                note="Included in your subscription. Suggests passages the speaker paraphrases rather than quotes, and writes the summary afterwards. The model proposes references only — every verse shown is read from your local library, so it cannot invent scripture."
-              >
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={assistEnabled}
-                    onChange={(event) => setAssistEnabled(event.target.checked)}
-                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-                  />
-                  <span className="text-[13px] text-pulpitry-text">
-                    Suggest paraphrased scripture
-                  </span>
-                </label>
-              </Section>
-            </>
-          ) : (
-            <>
-              <div className="border-t border-pulpitry-line" />
-
-              <Section
-                title="Model assistance"
-                note="Optional. Suggests passages the speaker paraphrases rather than quotes. The model proposes references only — every verse shown is read from your local library, so it cannot invent scripture."
-              >
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={assistEnabled}
-                    onChange={(event) => setAssistEnabled(event.target.checked)}
-                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-                  />
-                  <span className="text-[13px] text-pulpitry-text">
-                    Suggest paraphrased scripture using an Azure AI Foundry
-                    model
-                  </span>
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-[12px] text-pulpitry-muted">
-                    Endpoint
-                  </span>
-                  <input
-                    value={assistEndpoint}
-                    spellCheck={false}
-                    onChange={(event) => setAssistEndpoint(event.target.value)}
-                    placeholder="https://your-resource.services.ai.azure.com/models"
-                    className={FIELD}
-                  />
-                </label>
-
-                <div className="flex gap-3">
-                  <label className="flex flex-[2] flex-col gap-1.5">
-                    <span className="text-[12px] text-pulpitry-muted">
-                      Model or deployment
-                    </span>
-                    <input
-                      value={assistModel}
-                      spellCheck={false}
-                      onChange={(event) => setAssistModel(event.target.value)}
-                      placeholder="e.g. gpt-4o-mini"
-                      className={FIELD}
-                    />
-                  </label>
-                  <label className="flex flex-1 flex-col gap-1.5">
-                    <span className="text-[12px] text-pulpitry-muted">
-                      API version
-                    </span>
-                    <input
-                      value={assistApiVersion}
-                      spellCheck={false}
-                      onChange={(event) =>
-                        setAssistApiVersion(event.target.value)
-                      }
-                      className={FIELD}
-                    />
-                  </label>
-                </div>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-[12px] text-pulpitry-muted">
-                    Model key
-                    {settings.hasAssistKey ? (
-                      <span className="ml-2 text-pulpitry-teal">
-                        stored in your keychain
+                    {languageWarning(language, engine) ? (
+                      <span className="mt-1.5 block text-[11.5px] leading-snug text-pulpitry-gold">
+                        {languageWarning(language, engine)}
                       </span>
                     ) : null}
-                  </span>
-                  <input
-                    type="password"
-                    value={assistKey}
-                    autoComplete="off"
-                    spellCheck={false}
-                    onChange={(event) => setAssistKey(event.target.value)}
-                    placeholder={
-                      settings.hasAssistKey
-                        ? "•••••••• (leave blank to keep)"
-                        : "Paste your key"
-                    }
-                    className={FIELD}
-                  />
-                </label>
+                  </label>
+                )}
 
-                {settings.hasAssistKey ? (
+                {engine === "azure" && settings.hasAzureKey ? (
                   <button
                     type="button"
-                    onClick={() => void forget("assist")}
+                    onClick={() => void forget("speech")}
                     className="self-start rounded px-1 py-0.5 text-[11.5px] text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
                   >
-                    Forget model key
+                    Forget speech key
                   </button>
                 ) : null}
               </Section>
-            </>
-          )}
+            </Pane>
 
-          {error ? (
-            <p className="text-[12px] text-pulpitry-gold">{error}</p>
-          ) : null}
+            <Pane id="scripture" active={pane}>
+              <Section
+                title="Paraphrase matching"
+                note="Finds scripture the speaker renders in their own words, by meaning rather than wording. Runs entirely on your machine — no network, no cost. Preparing a translation takes a couple of minutes the first time."
+              >
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={semanticEnabled}
+                    onChange={(event) =>
+                      setSemanticEnabled(event.target.checked)
+                    }
+                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                  />
+                  <span className="text-[13px] text-pulpitry-text">
+                    Match paraphrased scripture locally
+                  </span>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="flex items-baseline justify-between text-[12px] text-pulpitry-muted">
+                    <span>Minimum similarity</span>
+                    <span className="tabular-nums text-pulpitry-text">
+                      {Math.round(semanticThreshold * 100)}%
+                    </span>
+                  </span>
+                  <input
+                    type="range"
+                    min={0.3}
+                    max={0.9}
+                    step={0.01}
+                    value={semanticThreshold}
+                    disabled={!semanticEnabled}
+                    onChange={(event) =>
+                      setSemanticThreshold(Number(event.target.value))
+                    }
+                    className="accent-pulpitry-gold disabled:opacity-40 focus-visible:focus-ring"
+                  />
+                  <span className="text-[11px] text-pulpitry-muted">
+                    Lower surfaces more, including looser links. Higher stays
+                    quiet unless the wording is close. Unrelated speech
+                    typically scores below 30%.
+                  </span>
+                </label>
+              </Section>
+              <div className="border-t border-pulpitry-line" />
+              {engine === "hosted" ? (
+                <>
+                  <div className="border-t border-pulpitry-line" />
+                  <Section
+                    title="Model assistance"
+                    note="Included in your subscription. Suggests passages the speaker paraphrases rather than quotes, and writes the summary afterwards. The model proposes references only — every verse shown is read from your local library, so it cannot invent scripture."
+                  >
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={assistEnabled}
+                        onChange={(event) =>
+                          setAssistEnabled(event.target.checked)
+                        }
+                        className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                      />
+                      <span className="text-[13px] text-pulpitry-text">
+                        Suggest paraphrased scripture
+                      </span>
+                    </label>
+                  </Section>
+                </>
+              ) : (
+                <>
+                  <div className="border-t border-pulpitry-line" />
+
+                  <Section
+                    title="Model assistance"
+                    note="Optional. Suggests passages the speaker paraphrases rather than quotes. The model proposes references only — every verse shown is read from your local library, so it cannot invent scripture."
+                  >
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={assistEnabled}
+                        onChange={(event) =>
+                          setAssistEnabled(event.target.checked)
+                        }
+                        className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                      />
+                      <span className="text-[13px] text-pulpitry-text">
+                        Suggest paraphrased scripture using an Azure AI Foundry
+                        model
+                      </span>
+                    </label>
+
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[12px] text-pulpitry-muted">
+                        Endpoint
+                      </span>
+                      <input
+                        value={assistEndpoint}
+                        spellCheck={false}
+                        onChange={(event) =>
+                          setAssistEndpoint(event.target.value)
+                        }
+                        placeholder="https://your-resource.services.ai.azure.com/models"
+                        className={FIELD}
+                      />
+                    </label>
+
+                    <div className="flex gap-3">
+                      <label className="flex flex-[2] flex-col gap-1.5">
+                        <span className="text-[12px] text-pulpitry-muted">
+                          Model or deployment
+                        </span>
+                        <input
+                          value={assistModel}
+                          spellCheck={false}
+                          onChange={(event) =>
+                            setAssistModel(event.target.value)
+                          }
+                          placeholder="e.g. gpt-4o-mini"
+                          className={FIELD}
+                        />
+                      </label>
+                      <label className="flex flex-1 flex-col gap-1.5">
+                        <span className="text-[12px] text-pulpitry-muted">
+                          API version
+                        </span>
+                        <input
+                          value={assistApiVersion}
+                          spellCheck={false}
+                          onChange={(event) =>
+                            setAssistApiVersion(event.target.value)
+                          }
+                          className={FIELD}
+                        />
+                      </label>
+                    </div>
+
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[12px] text-pulpitry-muted">
+                        Model key
+                        {settings.hasAssistKey ? (
+                          <span className="ml-2 text-pulpitry-teal">
+                            stored in your keychain
+                          </span>
+                        ) : null}
+                      </span>
+                      <input
+                        type="password"
+                        value={assistKey}
+                        autoComplete="off"
+                        spellCheck={false}
+                        onChange={(event) => setAssistKey(event.target.value)}
+                        placeholder={
+                          settings.hasAssistKey
+                            ? "•••••••• (leave blank to keep)"
+                            : "Paste your key"
+                        }
+                        className={FIELD}
+                      />
+                    </label>
+
+                    {settings.hasAssistKey ? (
+                      <button
+                        type="button"
+                        onClick={() => void forget("assist")}
+                        className="self-start rounded px-1 py-0.5 text-[11.5px] text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
+                      >
+                        Forget model key
+                      </button>
+                    ) : null}
+                  </Section>
+                </>
+              )}
+            </Pane>
+
+            <Pane id="stage" active={pane}>
+              <Section
+                title="Mirror to Castavox"
+                note="For a church running both, on two machines in the same building."
+              >
+                <MirrorPanel
+                  enabled={mirrorEnabled}
+                  onEnabledChange={setMirrorEnabled}
+                />
+              </Section>
+              <div className="border-t border-pulpitry-line" />
+              <Section
+                title="Send the screen elsewhere"
+                note="For a video team whose switcher is not Castavox, or who need the picture itself rather than the verse."
+              >
+                <NdiPanel />
+              </Section>
+            </Pane>
+
+            <Pane id="usage" active={pane}>
+              <Usage />
+            </Pane>
+
+            {/* Outside the panes: a save fails for the whole dialogue, and an
+                error hidden behind the pane that caused it is an error nobody
+                sees. */}
+            {error ? (
+              <p className="text-[12px] text-pulpitry-gold">{error}</p>
+            ) : null}
+
+            <Pane id="help" active={pane}>
+              <Section
+                title="New versions"
+                note="Once a day, Pulpitry asks the public download page whether a newer version has been published, and says so quietly if one has. The request carries nothing at all — no identifier, no version, nothing about this machine — and it does not reach our servers: the releases are on GitHub, which already serves every download. Switch it off for a machine that should touch nothing."
+              >
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={updateCheck}
+                    onChange={(event) => setUpdateCheck(event.target.checked)}
+                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                  />
+                  <span className="text-[13px] text-pulpitry-text">
+                    Tell me when a new version is out
+                  </span>
+                </label>
+              </Section>
+              <div className="border-t border-pulpitry-line" />
+              <Section
+                title="Telling us this installation exists"
+                note="Once a day, if you switch it on: a random identifier made on this machine, which application and version, your operating system, what kind of processor it has, and which transcription engine you chose. Your country is worked out from the connection and the address is discarded. Never your machine's name, never your address, and never a transcript, a verse or a filename — there is no field for any of those. It never delays anything, and if it cannot be sent nothing happens."
+              >
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={checkIn}
+                    onChange={(event) => setCheckIn(event.target.checked)}
+                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                  />
+                  <span className="text-[13px] text-pulpitry-text">
+                    Send a daily check-in
+                  </span>
+                </label>
+              </Section>
+            </Pane>
+          </div>
         </div>
 
         <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-pulpitry-line px-5 py-3.5">
