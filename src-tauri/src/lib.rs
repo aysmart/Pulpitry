@@ -510,6 +510,9 @@ struct Offered {
     bytes: u64,
     verse_count: i64,
     installed: bool,
+    /// What a church should know before choosing it: a translation that is not
+    /// a whole Bible, or one short of chapters the source could not give us.
+    note: Option<String>,
     licence: Option<String>,
     attribution: Option<String>,
 }
@@ -545,6 +548,7 @@ async fn translation_library(library: State<'_, Arc<Library>>) -> CommandResult<
                 name: pack.name,
                 year: pack.year,
                 language: pack.language,
+                note: pack.note,
                 licence: pack.licence,
                 attribution: pack.attribution,
             }
@@ -566,6 +570,7 @@ async fn translation_library(library: State<'_, Arc<Library>>) -> CommandResult<
             bytes: 0,
             verse_count: translation.verse_count,
             installed: true,
+            note: None,
             licence: None,
             attribution: None,
         });

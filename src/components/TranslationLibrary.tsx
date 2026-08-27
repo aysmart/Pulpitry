@@ -178,10 +178,20 @@ export function TranslationLibrary({ onChange }: { onChange: () => void }) {
                   <span className="w-16 shrink-0 font-medium text-pulpitry-text tabular-nums">
                     {row.id}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-pulpitry-text">
+                  <span className="min-w-0 flex-1 text-pulpitry-text">
                     {row.name}
                     {row.year > 0 && (
                       <span className="text-pulpitry-muted"> · {row.year}</span>
+                    )}
+                    {/* Under the name rather than behind a hover or an icon.
+                        Somebody deciding whether to spend a download on this
+                        translation is reading this line at the moment the
+                        answer matters, and "the Old Testament is four books"
+                        is not a footnote to that decision. */}
+                    {row.note && (
+                      <span className="block text-[11.5px] leading-snug text-pulpitry-muted">
+                        {row.note}
+                      </span>
                     )}
                   </span>
 

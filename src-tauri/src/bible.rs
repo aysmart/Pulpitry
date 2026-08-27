@@ -1456,6 +1456,8 @@ mod tests {
             sha256: String::new(),
             bytes: 0,
             language: "English".into(),
+            note: None,
+            missing_verses: 0,
             licence: None,
             attribution: None,
         }

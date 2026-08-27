@@ -147,6 +147,8 @@ export interface Offered {
   bytes: number;
   verseCount: number;
   installed: boolean;
+  /** What to know before choosing it: a partial Bible, or one with gaps. */
+  note: string | null;
   licence: string | null;
   attribution: string | null;
 }
