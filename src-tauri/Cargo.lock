@@ -595,13 +595,14 @@ dependencies = [
 [[package]]
 name = "castavox-core"
 version = "0.1.0"
-source = "git+https://github.com/aysmart/castavox-core?branch=main#403897bf8cce245a109ea4c74221668eb616a648"
+source = "git+https://github.com/aysmart/castavox-core?branch=main#d5bdaa4b3f5ae2657e09d4cb28c41c977ec618aa"
 dependencies = [
  "anyhow",
  "candle-core",
  "candle-nn",
  "candle-transformers",
  "cpal",
+ "flate2",
  "getrandom 0.3.4",
  "hmac",
  "mdns-sd",

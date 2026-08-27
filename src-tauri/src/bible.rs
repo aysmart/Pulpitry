@@ -29,123 +29,6 @@ const INTERLINEAR: &str = "resources/interlinear.tsv.gz";
 /// Strong's definitions, built by scripts/build-lexicon.mjs.
 const LEXICON: &str = "resources/lexicon.tsv.gz";
 
-/// Bumped whenever the schema below changes. The database is a cache derived
-/// entirely from bundled resources, so the cheapest correct migration is to
-/// discard it and re-import rather than carry ALTER statements forward.
-const SCHEMA_VERSION: i64 = 3;
-
-const SCHEMA: &str = r#"
-PRAGMA journal_mode = WAL;
-PRAGMA synchronous = NORMAL;
-
-CREATE TABLE IF NOT EXISTS translations (
-    id          TEXT PRIMARY KEY,
-    name        TEXT NOT NULL,
-    year        INTEGER NOT NULL DEFAULT 0,
-    ordinal     INTEGER NOT NULL DEFAULT 0,
-    checksum    TEXT    NOT NULL DEFAULT '',
-    verse_count INTEGER NOT NULL DEFAULT 0
-);
-
-/*
- * Translations this church has said no to.
- *
- * Without this, removing a bundled translation is a button that works until
- * the next launch and then quietly undoes itself, because the import that
- * fills an empty library on first run cannot tell "never had it" from "did not
- * want it". One row per refusal, cleared when somebody downloads it again.
- */
-CREATE TABLE IF NOT EXISTS declined (
-    id TEXT PRIMARY KEY
-);
-
-CREATE TABLE IF NOT EXISTS verses (
-    id          INTEGER PRIMARY KEY,
-    translation TEXT    NOT NULL,
-    book_number INTEGER NOT NULL,
-    book        TEXT    NOT NULL,
-    chapter     INTEGER NOT NULL,
-    verse       INTEGER NOT NULL,
-    text        TEXT    NOT NULL
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_verses_reference
-    ON verses(translation, book_number, chapter, verse);
-
-/*
- * The original languages, keyed by where a word sits rather than by
- * translation.
- *
- * Greek and Hebrew belong to no translation: a church reading the KJV and one
- * reading the Yoruba Bible are looking at the same underlying text. So this
- * joins on book, chapter and verse, and every translation gets it for free.
- *
- * No foreign key to `verses`. A verse a translation happens not to carry -- a
- * versification difference, a book still importing -- should not take its Greek
- * with it.
- */
-CREATE TABLE IF NOT EXISTS interlinear (
-    book_number     INTEGER NOT NULL,
-    chapter         INTEGER NOT NULL,
-    verse           INTEGER NOT NULL,
-    position        INTEGER NOT NULL,
-    original        TEXT    NOT NULL,
-    transliteration TEXT    NOT NULL DEFAULT '',
-    gloss           TEXT    NOT NULL DEFAULT '',
-    strongs         TEXT    NOT NULL DEFAULT '',
-    morphology      TEXT    NOT NULL DEFAULT '',
-    lemma           TEXT    NOT NULL DEFAULT '',
-    PRIMARY KEY (book_number, chapter, verse, position)
-);
-
-/*
- * What a Strong's number means, from STEPBible's brief lexicons.
- *
- * Keyed by the same extended numbers the interlinear carries, so a word on
- * screen reaches its entry with nothing to match on.
- */
-CREATE TABLE IF NOT EXISTS lexicon (
-    strongs     TEXT PRIMARY KEY,
-    lemma       TEXT NOT NULL DEFAULT '',
-    translit    TEXT NOT NULL DEFAULT '',
-    part        TEXT NOT NULL DEFAULT '',
-    gloss       TEXT NOT NULL DEFAULT '',
-    definition  TEXT NOT NULL DEFAULT '',
-    -- Thayer's, where there is one. Greek New Testament only.
-    thayer      TEXT NOT NULL DEFAULT ''
-);
-
-/*
- * Which build of a bundled resource is in the tables above.
- *
- * The interlinear and the lexicon were guarded on row count alone, which
- * answers "has this ever been imported" and not "is this the current text".
- * They are the same count either way, so a correction to the words themselves
- * -- 2,218 Thayer's entries reaching the operator with a literal `&#x27;` in
- * the middle of a sentence -- would have landed on new installations only, and
- * never on anybody who already had the app.
- */
-CREATE TABLE IF NOT EXISTS imports (
-    name        TEXT PRIMARY KEY,
-    fingerprint TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS verse_embeddings (
-    verse_id    INTEGER PRIMARY KEY,
-    translation TEXT NOT NULL,
-    vector      BLOB NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_embeddings_translation
-    ON verse_embeddings(translation);
-
-CREATE VIRTUAL TABLE IF NOT EXISTS verses_fts USING fts5(
-    text,
-    content='verses',
-    content_rowid='id',
-    tokenize='porter unicode61'
-);
-"#;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -196,19 +79,6 @@ fn imported_mark(connection: &Connection, name: &str) -> Option<String> {
 /// thayer" and the lexicon silently stayed empty on every machine that had
 /// already run the previous version.
 ///
-/// SQLite has no `ADD COLUMN IF NOT EXISTS`, so each is attempted and a
-/// complaint that it already exists is the expected outcome on every run after
-/// the first. Append only: removing an entry does not remove the column from
-/// anybody's database.
-fn migrate(connection: &Connection) {
-    for statement in ["ALTER TABLE lexicon ADD COLUMN thayer TEXT NOT NULL DEFAULT ''"] {
-        // A failure here is almost always "duplicate column name", which is
-        // success. Anything else surfaces when the query that needs the column
-        // runs, with a message naming the column rather than the migration.
-        let _ = connection.execute(statement, []);
-    }
-}
-
 /*
  * A translation is described in one place, and that place is the shared crate.
  *
@@ -228,6 +98,7 @@ fn migrate(connection: &Connection) {
  * `attributions` reads them so the obligation lives in a screen instead of in a
  * comment somebody has to remember.
  */
+use castavox_core::library;
 use castavox_core::packs::Pack;
 
 #[derive(Debug, Clone, Serialize)]
@@ -313,18 +184,7 @@ impl Library {
         let connection = Connection::open(directory.join("pulpitry.db"))
             .context("could not open the verse library")?;
 
-        let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-        if version != SCHEMA_VERSION {
-            connection.execute_batch(
-                "DROP TABLE IF EXISTS verses_fts;
-                 DROP TABLE IF EXISTS verses;
-                 DROP TABLE IF EXISTS translations;",
-            )?;
-        }
-        connection.execute_batch(SCHEMA).context("could not prepare the verse library")?;
-        migrate(&connection);
-        connection.pragma_update(None, "user_version", SCHEMA_VERSION)?;
-
+        library::prepare(&connection)?;
         Ok(Self { connection: Mutex::new(connection) })
     }
 
@@ -344,8 +204,7 @@ impl Library {
     #[cfg(test)]
     pub(crate) fn in_memory() -> Result<Self> {
         let connection = Connection::open_in_memory()?;
-        connection.execute_batch(SCHEMA)?;
-        migrate(&connection);
+        library::prepare(&connection)?;
         Ok(Self { connection: Mutex::new(connection) })
     }
 
@@ -396,6 +255,11 @@ impl Library {
     ) -> Result<()> {
         let declined = self.declined()?;
         for (ordinal, entry) in self.manifest(app)?.into_iter().enumerate() {
+            // Before the skip, not after. A translation that is already current
+            // is exactly the one that will never be reimported, and so exactly
+            // the one whose licence would never be recorded.
+            library::backfill_licence(&self.connection.lock(), &entry)?;
+
             // Removed on purpose. Reimporting it here is how a Remove button
             // becomes a button that works until Sunday.
             if declined.contains(&entry.id) || self.translation_is_current(&entry)? {
@@ -424,34 +288,16 @@ impl Library {
 
     /// The texts whose licence obliges us to name them.
     ///
-    /// CC BY-SA permits the commercial use this makes of them and asks for
-    /// attribution in return, so this is a condition of shipping rather than a
-    /// credit we chose to give. Deduplicated because five of the translations
-    /// are Biblica's and one line covers them.
-    pub fn attributions(&self, app: &AppHandle) -> Vec<String> {
-        let Ok(entries) = self.manifest(app) else {
-            return Vec::new();
-        };
-
-        let mut seen: Vec<String> = Vec::new();
-        for entry in entries {
-            let (Some(licence), Some(who)) = (entry.licence, entry.attribution) else {
-                continue;
-            };
-            let line = format!("{who} — {licence}");
-            if !seen.contains(&line) {
-                seen.push(line);
-            }
-        }
-        seen
+    /// Read from what is installed rather than from what is bundled, so it
+    /// stays right for a translation a church downloaded. See
+    /// `castavox_core::library`.
+    pub fn attributions(&self, _app: &AppHandle) -> Vec<String> {
+        library::attributions(&self.connection.lock()).unwrap_or_default()
     }
 
     /// The ids this church has removed and does not want back.
     fn declined(&self) -> Result<Vec<String>> {
-        let connection = self.connection.lock();
-        let mut statement = connection.prepare("SELECT id FROM declined")?;
-        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
-        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+        library::declined(&self.connection.lock())
     }
 
     fn manifest(&self, app: &AppHandle) -> Result<Vec<Pack>> {
@@ -471,103 +317,11 @@ impl Library {
     /// fixing wording changes no counts. The row count catches an import that
     /// was interrupted partway and must not be mistaken for a finished one.
     fn translation_is_current(&self, entry: &Pack) -> Result<bool> {
-        let connection = self.connection.lock();
-        let installed: Option<(String, i64)> = connection
-            .query_row(
-                "SELECT checksum, verse_count FROM translations WHERE id = ?1",
-                params![entry.id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .optional()?;
-
-        let Some((checksum, expected)) = installed else { return Ok(false) };
-        if checksum != entry.checksum || expected <= 0 {
-            return Ok(false);
-        }
-
-        let actual: i64 = connection.query_row(
-            "SELECT COUNT(*) FROM verses WHERE translation = ?1",
-            params![entry.id],
-            |row| row.get(0),
-        )?;
-        Ok(actual == expected)
+        library::is_current(&self.connection.lock(), entry)
     }
 
     fn import(&self, entry: &Pack, ordinal: i64, path: &Path) -> Result<i64> {
-        let id = &entry.id;
-        let file = fs::File::open(path)
-            .with_context(|| format!("could not open {}", path.display()))?;
-        let mut raw = String::new();
-        GzDecoder::new(file)
-            .read_to_string(&mut raw)
-            .with_context(|| format!("could not decompress {}", path.display()))?;
-
-        let mut connection = self.connection.lock();
-        let transaction = connection.transaction()?;
-        transaction.execute("DELETE FROM verses WHERE translation = ?1", params![id])?;
-
-        let mut imported = 0i64;
-        {
-            let mut insert = transaction.prepare(
-                "INSERT INTO verses(translation, book_number, book, chapter, verse, text)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            )?;
-
-            for (index, line) in raw.lines().enumerate() {
-                if line.trim().is_empty() {
-                    continue;
-                }
-                let mut fields = line.splitn(5, '\t');
-                let (Some(book_number), Some(book), Some(chapter), Some(verse), Some(text)) = (
-                    fields.next(),
-                    fields.next(),
-                    fields.next(),
-                    fields.next(),
-                    fields.next(),
-                ) else {
-                    bail!("{}: line {} has too few fields", path.display(), index + 1);
-                };
-
-                insert.execute(params![
-                    id,
-                    book_number.parse::<i64>().context("bad book number")?,
-                    book,
-                    chapter.parse::<i64>().context("bad chapter number")?,
-                    verse.parse::<i64>().context("bad verse number")?,
-                    text,
-                ])?;
-                imported += 1;
-            }
-        }
-
-        // The manifest records what this file should contain. A mismatch means
-        // the resource is truncated or does not match the manifest it shipped
-        // with — importing it part-way would leave a Bible with holes in it.
-        if imported != entry.verse_count {
-            bail!(
-                "{} yielded {imported} verses but the manifest expects {}",
-                path.display(),
-                entry.verse_count
-            );
-        }
-
-        transaction.execute(
-            "INSERT INTO translations(id, name, year, ordinal, checksum, verse_count)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT(id) DO UPDATE SET
-                 name = excluded.name,
-                 year = excluded.year,
-                 ordinal = excluded.ordinal,
-                 checksum = excluded.checksum,
-                 verse_count = excluded.verse_count",
-            params![id, entry.name, entry.year, ordinal, entry.checksum, imported],
-        )?;
-        transaction.commit()?;
-
-        // External-content FTS5: build the index in one pass from the table.
-        connection.execute("INSERT INTO verses_fts(verses_fts) VALUES('rebuild')", [])?;
-
-        Ok(imported)
+        library::import(&mut self.connection.lock(), entry, ordinal, path)
     }
 
     /// Installs a downloaded pack, by exactly the route a bundled one takes.
@@ -584,26 +338,7 @@ impl Library {
     /// the church asked for them, which is a more useful list than alphabetical:
     /// what you chose is near where you last looked.
     pub fn install(&self, pack: &Pack, path: &Path) -> Result<i64> {
-        let next = {
-            let connection = self.connection.lock();
-            connection
-                .query_row(
-                    "SELECT COALESCE(MAX(ordinal), -1) + 1 FROM translations",
-                    [],
-                    |row| row.get::<_, i64>(0),
-                )
-                .unwrap_or(0)
-        };
-        self.import(pack, next, path)
-            .with_context(|| format!("could not install {}", pack.id))?;
-
-        // Asked for again, so it is no longer refused: a bundled translation
-        // downloaded back should behave exactly like one that was never
-        // removed, including surviving a reinstall of the application.
-        self.connection
-            .lock()
-            .execute("DELETE FROM declined WHERE id = ?1", params![pack.id])?;
-        Ok(pack.verse_count)
+        library::install(&mut self.connection.lock(), pack, path)
     }
 
     /// Removes an installed translation and everything derived from it.
@@ -618,36 +353,7 @@ impl Library {
     /// it with no scripture, and "you cannot remove your only translation" is a
     /// better answer than a working button and an empty Bible.
     pub fn remove(&self, id: &str) -> Result<()> {
-        let mut connection = self.connection.lock();
-        let installed: i64 =
-            connection.query_row("SELECT COUNT(*) FROM translations", [], |row| row.get(0))?;
-        if installed <= 1 {
-            bail!("this is the only translation installed, so it cannot be removed");
-        }
-
-        let transaction = connection.transaction()?;
-        transaction.execute(
-            "DELETE FROM verse_embeddings WHERE translation = ?1",
-            params![id],
-        )?;
-        let removed = transaction.execute("DELETE FROM verses WHERE translation = ?1", params![id])?;
-        transaction.execute("DELETE FROM translations WHERE id = ?1", params![id])?;
-        transaction.execute(
-            "INSERT INTO declined(id) VALUES (?1) ON CONFLICT(id) DO NOTHING",
-            params![id],
-        )?;
-        transaction.commit()?;
-
-        if removed == 0 {
-            bail!("{id} is not installed");
-        }
-
-        // External-content FTS5 keeps its own copy of the text, so the delete
-        // above does not shrink the index. Rebuilding is what actually returns
-        // the space, and doing it here rather than lazily means the size the
-        // library reports afterwards is the size on disk.
-        connection.execute("INSERT INTO verses_fts(verses_fts) VALUES('rebuild')", [])?;
-        Ok(())
+        library::remove(&mut self.connection.lock(), id)
     }
 
     pub fn status(&self) -> Result<LibraryStatus> {
