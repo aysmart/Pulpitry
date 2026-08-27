@@ -77,8 +77,28 @@ pub enum LiveBody {
     Lyric { lines: Vec<String> },
     /// Free text the operator wrote.
     RichText { blocks: Vec<TextBlock> },
-    Image { path: String },
-    Media { path: String, looping: bool },
+    /*
+     * `fill` crosses with them, and has to.
+     *
+     * Everything the projector draws goes through this type, and `serde` drops
+     * a field it does not know about without saying so. The switch worked on
+     * Preview, which reads the catalogue item directly, and did nothing on
+     * Live or the wall -- both of which come back through here.
+     *
+     * That is the fourth feature lost to this exact hole: a slide's
+     * components, a mirrored comparison, a background image, and now this.
+     */
+    Image {
+        path: String,
+        #[serde(default)]
+        fill: bool,
+    },
+    Media {
+        path: String,
+        looping: bool,
+        #[serde(default)]
+        fill: bool,
+    },
     /**
      * A slide made of components: text, a list, a table, a quote, a reference.
      *
@@ -578,6 +598,40 @@ pub struct SecondState {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_picture_keeps_how_it_meets_the_frame() {
+        /*
+         * The fourth field to be silently dropped by this type, after a
+         * slide's components, a mirrored comparison and a background image.
+         *
+         * `serde` ignores what it does not know, so a frontend that sends a
+         * field this struct has not got loses it with no error anywhere. The
+         * symptom is always the same and never points here: the setting works
+         * on the one surface that does not make the round trip, and does
+         * nothing on the two that do.
+         */
+        let staged: LiveBody = serde_json::from_str(
+            r#"{"kind":"image","path":"/a.jpg","fill":true}"#,
+        )
+        .expect("the projector could not read a staged picture");
+
+        match staged {
+            LiveBody::Image { fill, .. } => assert!(fill, "fill was dropped crossing into Rust"),
+            other => panic!("read as {other:?}"),
+        }
+
+        // And back out again, because the projector window reads it from here.
+        let sent = serde_json::to_string(&LiveBody::Media {
+            path: "/a.mp4".into(),
+            looping: false,
+            fill: true,
+        })
+        .unwrap();
+        assert!(sent.contains("\"fill\":true"), "fill was dropped leaving Rust: {sent}");
+    }
+
+    use super::*;
+
     fn passage() -> LiveContent {
         LiveContent {
             body: LiveBody::Scripture {
@@ -615,8 +669,8 @@ mod tests {
                     italic: false,
                 }],
             },
-            LiveBody::Image { path: "/tmp/a.png".into() },
-            LiveBody::Media { path: "/tmp/a.mp4".into(), looping: true },
+            LiveBody::Image { path: "/tmp/a.png".into(), fill: true },
+            LiveBody::Media { path: "/tmp/a.mp4".into(), looping: true, fill: true },
         ];
         for body in variants {
             let encoded = serde_json::to_string(&body).expect("encode");

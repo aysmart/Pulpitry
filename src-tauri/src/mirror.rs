@@ -799,11 +799,11 @@ mod tests {
          * screen's own business.
          */
         assert_eq!(
-            shown_of(&live(LiveBody::Image { path: "/a.jpg".into() }, "")),
+            shown_of(&live(LiveBody::Image { path: "/a.jpg".into(), fill: true }, "")),
             Shown::Nothing { showing: true },
         );
         assert_eq!(
-            shown_of(&live(LiveBody::Media { path: "/a.mp4".into(), looping: false }, "")),
+            shown_of(&live(LiveBody::Media { path: "/a.mp4".into(), looping: false, fill: true }, "")),
             Shown::Nothing { showing: true },
         );
 
