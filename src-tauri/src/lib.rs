@@ -474,6 +474,203 @@ fn library_status(library: State<'_, Arc<Library>>) -> CommandResult<LibraryStat
 }
 
 /*
+ * The scripture library: what a church has, and what it can have.
+ *
+ * The catalogue is fetched rather than compiled in, so a translation added next
+ * month appears in a church's list without an application update. That is the
+ * difference between adding a translation and shipping a release to add one,
+ * and it is why the URL below points at a file rather than at a version.
+ */
+const TRANSLATION_CATALOGUE: &str =
+    "https://raw.githubusercontent.com/aysmart/castavox-downloads/main/translations/catalogue.json";
+
+/// Where the packs sit, which is beside the catalogue that names them.
+const TRANSLATION_PACKS: &str =
+    "https://raw.githubusercontent.com/aysmart/castavox-downloads/main/translations";
+
+/// One row of the library, as the operator reads it.
+///
+/// The catalogue and the installed table are joined here rather than in the
+/// window, because the interesting states are the ones a naive join gets wrong:
+/// a translation installed from an older catalogue that has since been
+/// withdrawn is still installed and must still be listed, and a translation
+/// installed at a size the catalogue no longer quotes should report the size it
+/// actually is.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Offered {
+    id: String,
+    name: String,
+    year: i64,
+    /// Empty for anything the catalogue does not describe, which the window
+    /// groups under "Installed" rather than inventing a language for.
+    language: String,
+    /// Compressed download size. Zero when it is installed and no longer
+    /// offered, where there is nothing to download and so nothing to warn about.
+    bytes: u64,
+    verse_count: i64,
+    installed: bool,
+    licence: Option<String>,
+    attribution: Option<String>,
+}
+
+/// Everything a church could read, whether or not this machine holds it.
+///
+/// Fails loudly when the catalogue cannot be reached. The window already knows
+/// what is installed -- it asked for that separately and shows it regardless --
+/// so the only thing lost to a hall with no internet is the list of things that
+/// would need internet anyway.
+#[tauri::command]
+async fn translation_library(library: State<'_, Arc<Library>>) -> CommandResult<Vec<Offered>> {
+    let installed = library.translations().map_err(to_message)?;
+
+    let catalogue = tauri::async_runtime::spawn_blocking(|| {
+        castavox_core::packs::catalogue(TRANSLATION_CATALOGUE)
+    })
+    .await
+    .map_err(|error| format!("The catalogue could not be read. {error}"))?
+    .map_err(to_message)?;
+
+    let mut offered: Vec<Offered> = catalogue
+        .into_iter()
+        .map(|pack| {
+            let here = installed.iter().find(|t| t.id == pack.id);
+            Offered {
+                verse_count: here.map_or(pack.verse_count, |t| t.verse_count),
+                installed: here.is_some(),
+                // Nothing to download once it is here, and a size beside an
+                // installed translation reads as a cost rather than a fact.
+                bytes: if here.is_some() { 0 } else { pack.bytes },
+                id: pack.id,
+                name: pack.name,
+                year: pack.year,
+                language: pack.language,
+                licence: pack.licence,
+                attribution: pack.attribution,
+            }
+        })
+        .collect();
+
+    // Anything installed that the catalogue no longer offers. A church that
+    // downloaded it last year still reads from it every Sunday, and a library
+    // that omits it would be telling them it is gone.
+    for translation in installed {
+        if offered.iter().any(|o| o.id == translation.id) {
+            continue;
+        }
+        offered.push(Offered {
+            id: translation.id,
+            name: translation.name,
+            year: translation.year,
+            language: String::new(),
+            bytes: 0,
+            verse_count: translation.verse_count,
+            installed: true,
+            licence: None,
+            attribution: None,
+        });
+    }
+
+    Ok(offered)
+}
+
+/// How a download is going, for the row that shows it.
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TranslationProgress {
+    id: String,
+    received: u64,
+    total: u64,
+    /// Set once the rows are in and the library has changed.
+    done: bool,
+}
+
+/**
+ * Downloads one translation and puts it in the library.
+ *
+ * Blocking work on a blocking thread: the download is a socket read loop and
+ * the import is a SQLite transaction, and neither belongs on the thread that
+ * answers the window.
+ *
+ * The order is deliberate. The file is fetched and its SHA-256 checked before
+ * anything touches the database, and the import is a transaction, so the two
+ * states a church can be left in are "as it was" and "with the translation".
+ * There is no third state where a Bible has holes in it.
+ *
+ * The pack is deleted afterwards. It is 1.3 MB of a file whose contents are now
+ * rows in a database, and a church that removes the translation later should
+ * get the disk back rather than most of it.
+ */
+#[tauri::command]
+async fn install_translation(
+    app: AppHandle,
+    library: State<'_, Arc<Library>>,
+    id: String,
+) -> CommandResult<()> {
+    let library = Arc::clone(&library);
+    let into = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("There is nowhere to download to. {error}"))?
+        .join("packs");
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let catalogue = castavox_core::packs::catalogue(TRANSLATION_CATALOGUE)?;
+        let pack = catalogue
+            .into_iter()
+            .find(|pack| pack.id == id)
+            .with_context(|| format!("{id} is not in the catalogue"))?;
+
+        // Percentage, not bytes: a row that repaints on every 64 KB chunk is
+        // work nobody can see, and the number the operator reads changes a
+        // hundred times at most.
+        let last = std::sync::atomic::AtomicU64::new(u64::MAX);
+        let handle = app.clone();
+        let downloaded = castavox_core::packs::download(&pack, TRANSLATION_PACKS, &into, |p| {
+            let percent = if p.total > 0 { p.received * 100 / p.total } else { 0 };
+            if last.swap(percent, std::sync::atomic::Ordering::Relaxed) == percent {
+                return;
+            }
+            let _ = handle.emit(
+                "translation-progress",
+                TranslationProgress {
+                    id: pack.id.clone(),
+                    received: p.received,
+                    total: p.total,
+                    done: false,
+                },
+            );
+        })?;
+
+        let result = library.install(&pack, &downloaded);
+        // Removed whether or not the import worked. A failed import is retried
+        // by downloading again, which is a few seconds, and a kept pack is a
+        // file that looks like part of the library and is not.
+        let _ = std::fs::remove_file(&downloaded);
+        result?;
+
+        let _ = app.emit(
+            "translation-progress",
+            TranslationProgress { id: pack.id, received: 0, total: 0, done: true },
+        );
+        anyhow::Ok(())
+    })
+    .await
+    .map_err(|error| format!("The download could not be started. {error}"))?
+    .map_err(to_message)
+}
+
+/// Removes a translation, its search index and its meaning index.
+#[tauri::command]
+async fn remove_translation(library: State<'_, Arc<Library>>, id: String) -> CommandResult<()> {
+    let library = Arc::clone(&library);
+    tauri::async_runtime::spawn_blocking(move || library.remove(&id))
+        .await
+        .map_err(|error| format!("That could not be removed. {error}"))?
+        .map_err(to_message)
+}
+
+/*
  * The NDI output, as the operator drives it.
  *
  * The running output lives in a Mutex<Option<..>> in app state: `Some` while it
@@ -1466,6 +1663,9 @@ pub fn run() {
             download_speech_model,
             node_status,
             library_status,
+            translation_library,
+            install_translation,
+            remove_translation,
             export_log,
             made_here,
             send_feedback,

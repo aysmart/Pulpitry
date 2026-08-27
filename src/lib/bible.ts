@@ -48,8 +48,11 @@ export const libraryStatus = () => invoke<LibraryStatus>("library_status");
 export const listBooks = (translation: string) =>
   invoke<Book[]>("list_books", { translation });
 
-export const getChapter = (translation: string, bookNumber: number, chapter: number) =>
-  invoke<Verse[]>("get_chapter", { translation, bookNumber, chapter });
+export const getChapter = (
+  translation: string,
+  bookNumber: number,
+  chapter: number,
+) => invoke<Verse[]>("get_chapter", { translation, bookNumber, chapter });
 
 export const searchVerses = (translation: string, query: string, limit = 50) =>
   invoke<Verse[]>("search_verses", { translation, query, limit });
@@ -63,7 +66,14 @@ export const adjacentVerse = (
   chapter: number,
   verse: number,
   forward: boolean,
-) => invoke<Verse | null>("adjacent_verse", { translation, bookNumber, chapter, verse, forward });
+) =>
+  invoke<Verse | null>("adjacent_verse", {
+    translation,
+    bookNumber,
+    chapter,
+    verse,
+    forward,
+  });
 
 export const onLibraryStatus = (
   handler: (status: LibraryStatus) => void,
@@ -118,3 +128,49 @@ export interface LexiconEntry {
 /** What a Strong's number means, or null where the lexicon has no entry. */
 export const lexiconEntry = (strongs: string) =>
   invoke<LexiconEntry | null>("lexicon_entry", { strongs });
+
+/**
+ * One row of the scripture library: a translation this church has, or could.
+ *
+ * The join between the published catalogue and what is installed happens in
+ * Rust, because the states worth getting right are the awkward ones — a
+ * translation installed from a catalogue that no longer offers it is still
+ * installed, and still has to appear.
+ */
+export interface Offered {
+  id: string;
+  name: string;
+  year: number;
+  /** Empty for anything the catalogue does not describe. */
+  language: string;
+  /** Compressed download size; zero once it is installed. */
+  bytes: number;
+  verseCount: number;
+  installed: boolean;
+  licence: string | null;
+  attribution: string | null;
+}
+
+export interface TranslationProgress {
+  id: string;
+  received: number;
+  total: number;
+  done: boolean;
+}
+
+/** Everything a church could read. Rejects when the catalogue is unreachable. */
+export const translationLibrary = (): Promise<Offered[]> =>
+  invoke<Offered[]>("translation_library");
+
+export const installTranslation = (id: string): Promise<void> =>
+  invoke("install_translation", { id });
+
+export const removeTranslation = (id: string): Promise<void> =>
+  invoke("remove_translation", { id });
+
+export const onTranslationProgress = (
+  handle: (progress: TranslationProgress) => void,
+): Promise<UnlistenFn> =>
+  listen<TranslationProgress>("translation-progress", (event) =>
+    handle(event.payload),
+  );

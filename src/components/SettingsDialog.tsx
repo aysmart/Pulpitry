@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
 import { MirrorPanel } from "./MirrorPanel";
@@ -6,6 +6,7 @@ import { NdiPanel } from "./NdiPanel";
 import { HostedSubscription } from "./HostedSubscription";
 import { NodeRuntimeNotice } from "./NodeRuntimeNotice";
 import { Feedback } from "./Feedback";
+import { TranslationLibrary } from "./TranslationLibrary";
 
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -672,6 +673,15 @@ export function SettingsDialog({
     }
   };
 
+  /* Re-read after a download or a removal: the primary-translation list above
+     is the same set the library edits, and leaving it stale means offering an
+     operator a translation that is no longer on the machine. */
+  const rereadLibrary = useCallback(() => {
+    void libraryStatus()
+      .then((status) => setTranslations(status.translations))
+      .catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     let live = true;
     void libraryStatus()
@@ -1263,6 +1273,15 @@ export function SettingsDialog({
                     preview one, double-click to send it.
                   </span>
                 </div>
+              </Section>
+
+              <div className="border-t border-pulpitry-line" />
+
+              <Section
+                title="Library"
+                note="Which translations this machine holds. Downloading one adds it everywhere the application reads scripture; removing one returns the space."
+              >
+                <TranslationLibrary onChange={rereadLibrary} />
               </Section>
 
               <div className="border-t border-pulpitry-line" />

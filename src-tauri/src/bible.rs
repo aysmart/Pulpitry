@@ -14,7 +14,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use flate2::read::GzDecoder;
 use parking_lot::Mutex;
 use rusqlite::{params, Connection, OptionalExtension};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
 /// Emitted once the first-launch import has settled, carrying a [`LibraryStatus`].
@@ -197,31 +197,26 @@ fn migrate(connection: &Connection) {
     }
 }
 
-/// One entry of `resources/translations.json`, written by scripts/build-bible.mjs.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ManifestEntry {
-    id: String,
-    name: String,
-    year: i64,
-    file: String,
-    verse_count: i64,
-    checksum: String,
-    /*
-     * The licence, where the text carries one.
-     *
-     * Absent on the public-domain translations, which is most of them. Present
-     * on the Biblica open editions and the Free Bible Version, which are
-     * CC BY-SA -- and for those, naming the source is a condition of being
-     * allowed to ship the text at all, not a courtesy. It is read here so the
-     * About dialog can list them rather than the obligation living in a comment
-     * somebody has to remember.
-     */
-    #[serde(default)]
-    licence: Option<String>,
-    #[serde(default)]
-    attribution: Option<String>,
-}
+/*
+ * A translation is described in one place, and that place is the shared crate.
+ *
+ * `resources/translations.json` and the published catalogue are the same
+ * document with the same field names; the only difference is that a download
+ * needs a size and a real hash, and a file that arrived inside a signed
+ * application needs neither. Describing that shape twice would mean a
+ * downloaded translation and a bundled one taking different routes into the
+ * same table, which is the duplication that has already cost us a table that
+ * would not draw and a Fill switch that did nothing in three separate places.
+ *
+ * So `import` below takes a `Pack` and does not care where the file came from.
+ *
+ * The licence fields matter more than their size suggests. CC BY-SA obliges us
+ * to name Biblica and the Free Bible Version, and that is a condition of being
+ * allowed to ship the text at all rather than a credit we chose to give.
+ * `attributions` reads them so the obligation lives in a screen instead of in a
+ * comment somebody has to remember.
+ */
+use castavox_core::packs::Pack;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -436,7 +431,7 @@ impl Library {
         seen
     }
 
-    fn manifest(&self, app: &AppHandle) -> Result<Vec<ManifestEntry>> {
+    fn manifest(&self, app: &AppHandle) -> Result<Vec<Pack>> {
         let path = app
             .path()
             .resolve(MANIFEST, tauri::path::BaseDirectory::Resource)
@@ -452,7 +447,7 @@ impl Library {
     /// shipped in an app update, which a verse count alone would miss because
     /// fixing wording changes no counts. The row count catches an import that
     /// was interrupted partway and must not be mistaken for a finished one.
-    fn translation_is_current(&self, entry: &ManifestEntry) -> Result<bool> {
+    fn translation_is_current(&self, entry: &Pack) -> Result<bool> {
         let connection = self.connection.lock();
         let installed: Option<(String, i64)> = connection
             .query_row(
@@ -475,7 +470,7 @@ impl Library {
         Ok(actual == expected)
     }
 
-    fn import(&self, entry: &ManifestEntry, ordinal: i64, path: &Path) -> Result<i64> {
+    fn import(&self, entry: &Pack, ordinal: i64, path: &Path) -> Result<i64> {
         let id = &entry.id;
         let file = fs::File::open(path)
             .with_context(|| format!("could not open {}", path.display()))?;
@@ -550,6 +545,74 @@ impl Library {
         connection.execute("INSERT INTO verses_fts(verses_fts) VALUES('rebuild')", [])?;
 
         Ok(imported)
+    }
+
+    /// Installs a downloaded pack, by exactly the route a bundled one takes.
+    ///
+    /// The file has already been fetched and its SHA-256 checked by
+    /// `castavox_core::packs`; what happens here is the same transaction
+    /// `ensure_bundled_translations` runs, which is the point of the two
+    /// sharing a type. A download that arrives corrupt never reaches this
+    /// function, and an import that fails inside it rolls back, so there is no
+    /// state in between where a church has half a Bible.
+    ///
+    /// The ordinal puts it after everything already installed. Bundled
+    /// translations keep manifest order and downloaded ones arrive in the order
+    /// the church asked for them, which is a more useful list than alphabetical:
+    /// what you chose is near where you last looked.
+    pub fn install(&self, pack: &Pack, path: &Path) -> Result<i64> {
+        let next = {
+            let connection = self.connection.lock();
+            connection
+                .query_row(
+                    "SELECT COALESCE(MAX(ordinal), -1) + 1 FROM translations",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap_or(0)
+        };
+        self.import(pack, next, path)
+            .with_context(|| format!("could not install {}", pack.id))
+    }
+
+    /// Removes an installed translation and everything derived from it.
+    ///
+    /// Three tables, because a translation is not only its verses: the meaning
+    /// index is 65 MB of the reason somebody is removing it in the first place,
+    /// and leaving those rows behind would mean the disk barely moves and the
+    /// operator concludes the button does nothing.
+    ///
+    /// It refuses to remove the last one. An application whose entire purpose
+    /// is putting scripture on a screen should not offer a control that leaves
+    /// it with no scripture, and "you cannot remove your only translation" is a
+    /// better answer than a working button and an empty Bible.
+    pub fn remove(&self, id: &str) -> Result<()> {
+        let mut connection = self.connection.lock();
+        let installed: i64 =
+            connection.query_row("SELECT COUNT(*) FROM translations", [], |row| row.get(0))?;
+        if installed <= 1 {
+            bail!("this is the only translation installed, so it cannot be removed");
+        }
+
+        let transaction = connection.transaction()?;
+        transaction.execute(
+            "DELETE FROM verse_embeddings WHERE translation = ?1",
+            params![id],
+        )?;
+        let removed = transaction.execute("DELETE FROM verses WHERE translation = ?1", params![id])?;
+        transaction.execute("DELETE FROM translations WHERE id = ?1", params![id])?;
+        transaction.commit()?;
+
+        if removed == 0 {
+            bail!("{id} is not installed");
+        }
+
+        // External-content FTS5 keeps its own copy of the text, so the delete
+        // above does not shrink the index. Rebuilding is what actually returns
+        // the space, and doing it here rather than lazily means the size the
+        // library reports afterwards is the size on disk.
+        connection.execute("INSERT INTO verses_fts(verses_fts) VALUES('rebuild')", [])?;
+        Ok(())
     }
 
     pub fn status(&self) -> Result<LibraryStatus> {
@@ -1332,6 +1395,162 @@ fn resolve_book(name: &str, books: &[&str]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
+    /// A pack on disk, as a download would have left one.
+    fn pack_file(directory: &Path, id: &str, verses: &[(i64, &str, i64, i64, &str)]) -> PathBuf {
+        use std::io::Write;
+        let path = directory.join(format!("{id}.tsv.gz"));
+        let mut encoder =
+            flate2::write::GzEncoder::new(fs::File::create(&path).unwrap(), flate2::Compression::fast());
+        for (number, book, chapter, verse, text) in verses {
+            writeln!(encoder, "{number}\t{book}\t{chapter}\t{verse}\t{text}").unwrap();
+        }
+        encoder.finish().unwrap();
+        path
+    }
+
+    fn pack(id: &str, verse_count: i64) -> Pack {
+        Pack {
+            id: id.into(),
+            name: format!("{id} Version"),
+            year: 1611,
+            file: format!("{id}.tsv.gz"),
+            verse_count,
+            checksum: format!("{id}-checksum"),
+            sha256: String::new(),
+            bytes: 0,
+            language: "English".into(),
+            licence: None,
+            attribution: None,
+        }
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("bible-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// A downloaded pack goes in by the route a bundled one takes, and the
+    /// verses are readable afterwards. This is the whole claim the library
+    /// screen makes when it says "Installed".
+    #[test]
+    fn installs_a_downloaded_pack() {
+        let dir = scratch("install");
+        let library = Library::in_memory().unwrap();
+        let file = pack_file(&dir, "AAA", &[(43, "John", 3, 16, "For God so loved the world")]);
+
+        assert_eq!(library.install(&pack("AAA", 1), &file).unwrap(), 1);
+
+        let installed = library.translations().unwrap();
+        assert_eq!(installed.len(), 1);
+        assert_eq!(installed[0].id, "AAA");
+        assert_eq!(installed[0].verse_count, 1);
+
+        // Through the FTS index, because an import that fills `verses` and
+        // leaves the index empty is one where every search comes back empty
+        // and nothing says why.
+        let found = library
+            .phrase_search("AAA", &["loved".into(), "the".into(), "world".into()], 5)
+            .unwrap();
+        assert_eq!(found.len(), 1);
+    }
+
+    /**
+     * The whole chain, against a real pack over a real socket.
+     *
+     * Ignored, because it needs the catalogue served somewhere. Run it against
+     * the published one, or locally:
+     *
+     * ```text
+     * (cd Castavox/build/translations && python3 -m http.server 8787)
+     * CATALOGUE=http://127.0.0.1:8787/catalogue.json cargo test --lib -- --ignored
+     * ```
+     *
+     * The unit tests above use fabricated three-verse packs, which is right for
+     * what they check and says nothing about a 1.3 MB gzip arriving over a
+     * network and hashing to what the catalogue promised. This says that.
+     */
+    #[test]
+    #[ignore = "needs the catalogue served"]
+    fn downloads_and_installs_a_real_pack() {
+        let url = std::env::var("CATALOGUE")
+            .unwrap_or_else(|_| "http://127.0.0.1:8787/catalogue.json".into());
+        let base = url.rsplit_once('/').unwrap().0.to_string();
+
+        let catalogue = castavox_core::packs::catalogue(&url).unwrap();
+        let pack = catalogue.iter().find(|p| p.id == "KJV").expect("KJV is in the catalogue");
+
+        let dir = scratch("real");
+        let file = castavox_core::packs::download(pack, &base, &dir, |_| {}).unwrap();
+
+        let library = Library::in_memory().unwrap();
+        assert_eq!(library.install(pack, &file).unwrap(), pack.verse_count);
+
+        // Searched rather than counted, because a row count proves the import
+        // ran and nothing about whether the index it built can find anything.
+        // Two verses say "God so loved" -- John 3:16 and 1 John 4:11 -- and
+        // expecting one was a wrong assertion rather than a wrong import.
+        let found = library
+            .phrase_search("KJV", &["God".into(), "so".into(), "loved".into()], 5)
+            .unwrap();
+        assert!(found.iter().any(|v| v.book == "John" && v.chapter == 3 && v.verse == 16));
+    }
+
+    /// A truncated pack imports nothing rather than a Bible with holes in it.
+    #[test]
+    fn refuses_a_pack_that_does_not_match_its_count() {
+        let dir = scratch("short");
+        let library = Library::in_memory().unwrap();
+        let file = pack_file(&dir, "BBB", &[(1, "Genesis", 1, 1, "In the beginning")]);
+
+        assert!(library.install(&pack("BBB", 31102), &file).is_err());
+        assert!(library.translations().unwrap().is_empty());
+    }
+
+    /// Removing takes the verses and the search index with it, and leaves the
+    /// other translations alone.
+    #[test]
+    fn removes_a_translation_and_only_that_one() {
+        let dir = scratch("remove");
+        let library = Library::in_memory().unwrap();
+        let first = pack_file(&dir, "AAA", &[(43, "John", 3, 16, "For God so loved the world")]);
+        let second = pack_file(&dir, "BBB", &[(43, "John", 3, 16, "God loved the world so much")]);
+        library.install(&pack("AAA", 1), &first).unwrap();
+        library.install(&pack("BBB", 1), &second).unwrap();
+
+        library.remove("AAA").unwrap();
+
+        let left = library.translations().unwrap();
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].id, "BBB");
+        assert!(library
+            .phrase_search("AAA", &["loved".into(), "the".into(), "world".into()], 5)
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            library
+                .phrase_search("BBB", &["loved".into(), "the".into(), "world".into()], 5)
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    /// The last one stays. An application for putting scripture on a screen
+    /// should not offer a button that leaves it with no scripture.
+    #[test]
+    fn will_not_remove_the_only_translation() {
+        let dir = scratch("last");
+        let library = Library::in_memory().unwrap();
+        let file = pack_file(&dir, "AAA", &[(1, "Genesis", 1, 1, "In the beginning")]);
+        library.install(&pack("AAA", 1), &file).unwrap();
+
+        assert!(library.remove("AAA").is_err());
+        assert_eq!(library.translations().unwrap().len(), 1);
+    }
 
     const BOOKS: &[&str] = &[
         "Genesis", "Exodus", "Joshua", "Job", "Psalms", "Proverbs", "Song of Solomon",
