@@ -223,7 +223,7 @@ impl Mirror {
         // The wind position travels beside the text, so a screen mirroring a
         // lexicon entry follows the operator down it rather than sitting on the
         // first frame while the desk reads the fourth.
-        running.desk.stage(live.map(shown_of).unwrap_or(Shown::Nothing),
+        running.desk.stage(live.map(shown_of).unwrap_or(Shown::Nothing { showing: false }),
                            live.map(|content| content.progress).unwrap_or(0.0));
     }
 
@@ -282,7 +282,7 @@ impl Mirror {
 /// Pulpitry's live content, in the words the wire speaks.
 ///
 /// The mapping is deliberately lossy in one direction: a photograph or a video
-/// clip becomes [`Shown::Nothing`] rather than being left as whatever was there
+/// clip becomes [`Shown::Nothing { showing: false }`] rather than being left as whatever was there
 /// before. A stream overlay still showing Psalm 23 while the projector has moved
 /// on to a photograph is worse than an overlay showing nothing — the first is
 /// wrong and looks deliberate, the second is merely empty.
@@ -567,7 +567,15 @@ pub fn shown_of(live: &LiveContent) -> Shown {
             }
         }
         // Nothing a text overlay can honestly show.
-        LiveBody::Image { .. } | LiveBody::Media { .. } => Shown::Nothing,
+        /*
+         * A picture or a clip: showing, and unmirrorable.
+         *
+         * Not a blank. The desk has put something on the wall that this
+         * protocol has no way to carry, which is a different thing from the
+         * desk clearing -- and a screen told the wrong one takes its lower
+         * third off the stream because a picture went up in the room.
+         */
+        LiveBody::Image { .. } | LiveBody::Media { .. } => Shown::Nothing { showing: true },
     }
 }
 
@@ -777,13 +785,33 @@ mod tests {
     }
 
     #[test]
-    fn a_photograph_blanks_the_overlay_rather_than_leaving_the_last_verse() {
-        // The first is wrong and looks deliberate; the second is merely empty.
-        // A stream showing Psalm 23 over a photograph is the worse of the two.
-        assert_eq!(shown_of(&live(LiveBody::Image { path: "/a.jpg".into() }, "")), Shown::Nothing);
+    fn a_photograph_says_it_is_showing_rather_than_asking_for_a_blank() {
+        /*
+         * This used to send a plain blank, on the reasoning that a stream
+         * showing Psalm 23 over a photograph is worse than one showing
+         * nothing. That reasoning was about the *last verse* and it is still
+         * right -- but the signal it chose said something else, and the far
+         * end obeyed it: putting a picture on the wall took the overlay off
+         * the stream, because a blank is how the desk asks for one.
+         *
+         * The desk is not asking for anything here. It has used a surface this
+         * protocol cannot carry, and what the screen does about that is the
+         * screen's own business.
+         */
+        assert_eq!(
+            shown_of(&live(LiveBody::Image { path: "/a.jpg".into() }, "")),
+            Shown::Nothing { showing: true },
+        );
         assert_eq!(
             shown_of(&live(LiveBody::Media { path: "/a.mp4".into(), looping: false }, "")),
-            Shown::Nothing,
+            Shown::Nothing { showing: true },
+        );
+
+        // And a desk with nothing staged still asks for a blank, which is the
+        // one case that should still blank a screen.
+        assert_eq!(
+            shown_of(&live(LiveBody::Lyric { lines: vec![] }, "")).is_showing_unmirrorable(),
+            false,
         );
     }
 

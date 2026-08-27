@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { convertFileSrc } from "@tauri-apps/api/core";
 
@@ -12,6 +12,7 @@ import {
   type TextBlock,
   type Ticker,
 } from "../lib/projector";
+import { handsAreBusy } from "../lib/shortcuts";
 import { fontStack, type ProjectorTheme } from "../lib/theme";
 import { Backdrop } from "./Backdrop";
 import {
@@ -326,6 +327,51 @@ export function StagePanel({
     lastScreen,
     Math.round((live?.progress ?? 0) / (liveExtent.step || 1)),
   );
+
+  /*
+   * The arrow keys, which are where an operator's hand already is.
+   *
+   * Left and right step through what is staged; up and down wind a body taller
+   * than the screen. The same four things the buttons below do, and they call
+   * the same expressions rather than their own -- a shortcut that winds by a
+   * different amount than the button beside it is two behaviours wearing one
+   * name.
+   *
+   * `handsAreBusy` is what keeps this from being a hazard: an operator typing
+   * in a search box means "move the caret" by Left, and one with a dialogue
+   * open means the dialogue.
+   */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (handsAreBusy(event)) return;
+
+      switch (event.key) {
+        case "ArrowLeft":
+          event.preventDefault();
+          onStep(false);
+          return;
+        case "ArrowRight":
+          event.preventDefault();
+          onStep(true);
+          return;
+        case "ArrowUp":
+          if (liveExtent.screenfuls <= 1 || liveScreen === 0) return;
+          event.preventDefault();
+          onWind((liveScreen - 1) * liveExtent.step);
+          return;
+        case "ArrowDown":
+          if (liveExtent.screenfuls <= 1 || liveScreen >= lastScreen) return;
+          event.preventDefault();
+          onWind(liveScreen + 1 >= lastScreen ? 1 : (liveScreen + 1) / lastScreen);
+          return;
+        default:
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onStep, onWind, liveExtent, liveScreen, lastScreen]);
+
 
   return (
     <div className="flex min-h-0 flex-col gap-2">

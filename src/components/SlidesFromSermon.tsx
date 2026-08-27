@@ -298,7 +298,8 @@ export function SlidesFromSermon({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
+    <div data-dialog
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
       <div className="flex max-h-full w-[620px] flex-col overflow-hidden rounded-lg border border-pulpitry-line bg-pulpitry-surface shadow-2xl">
         <header className="shrink-0 border-b border-pulpitry-line px-5 py-3.5">
           <h2 className="text-[15px] text-pulpitry-text">Slides from a sermon</h2>
