@@ -88,7 +88,15 @@ pub fn describe(
     // ever pressed Summarise.
 
     let client = castavox_core::tls::client()
-        .timeout(std::time::Duration::from_secs(120))
+        /*
+         * Long, because the far end is allowed to be.
+         *
+         * The broker waits 280 seconds for a reasoning model, and a client that
+         * gives up at 120 turns a slow answer into a failure while the work
+         * carries on being paid for. Whichever timeout is shorter is the one
+         * that decides, so this has to be the longer of the two.
+         */
+        .timeout(std::time::Duration::from_secs(300))
         .build()
         .context("could not prepare the request")?;
 
@@ -155,7 +163,10 @@ pub fn describe(
         match castavox_core::assistant::complete(
             &client,
             &route,
-            body(settings, transcript, false, whole),
+            // true: send the schema. `complete` leaves a format the caller has
+            // already set, and the schema is the only thing this model treats
+            // as binding.
+            body(settings, transcript, true, whole),
             true,
         ) {
             Ok(content) => content,
@@ -314,7 +325,7 @@ fn in_stretches(
             body(
                 settings,
                 &joined(&notes, service_words, plain_prose),
-                false,
+                true,
                 service_words,
             ),
             true,
@@ -639,7 +650,71 @@ fn body(
     });
 
     if strict_json {
-        body["response_format"] = serde_json::json!({ "type": "json_object" });
+        /*
+         * The shape as a contract. A schema cannot make the model write a
+         * section, but it can stop it inventing keys, omitting the topics, or
+         * returning the summary as an array of paragraphs -- all of which it
+         * did once the model changed. `complete` asks again without this where
+         * a deployment cannot take one.
+         */
+        body["response_format"] = serde_json::json!({
+            "type": "json_schema",
+            "json_schema": {
+                "name": "description",
+                "strict": true,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "title", "opening", "mainPoints", "passages",
+                        "illustrations", "application", "quotations", "topics"
+                    ],
+                    "properties": {
+                        "title": { "type": "string" },
+                        "opening": { "type": "string" },
+                        "mainPoints": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": ["point", "detail"],
+                                "properties": {
+                                    "point": { "type": "string" },
+                                    "detail": { "type": "string" }
+                                }
+                            }
+                        },
+                        "passages": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": ["reference", "teaching"],
+                                "properties": {
+                                    "reference": { "type": "string" },
+                                    "teaching": { "type": "string" }
+                                }
+                            }
+                        },
+                        "illustrations": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": ["what", "purpose"],
+                                "properties": {
+                                    "what": { "type": "string" },
+                                    "purpose": { "type": "string" }
+                                }
+                            }
+                        },
+                        "application": { "type": "array", "items": { "type": "string" } },
+                        "quotations": { "type": "array", "items": { "type": "string" } },
+                        "topics": { "type": "array", "items": { "type": "string" } }
+                    }
+                }
+            }
+        });
     }
     body
 }
@@ -747,8 +822,27 @@ or a date.
   \"topics\"  four to ten short subjects, as noun phrases: \"forgiveness\", \
 \"the parable of the sower\", \"suffering and hope\".
 
-Structure the summary like this, leaving out any section the transcript does \
-not support:
+Fill in every field. The application writes the document from them, so a field \
+you leave empty is a section the reader never sees. A section you find thin is \
+one to write briefly, not one to leave out -- and a summary missing its \
+passages or its application is the commonest complaint about this feature. \
+Only `illustrations` may be an empty list, and only when the speaker used none.
+
+  \"opening\"       two or three sentences of prose saying what was taught and \
+where it landed.
+  \"mainPoints\"    one entry per movement of the argument, each with a short \
+`point` naming it and a `detail` of two or three sentences developing it: what \
+was claimed, how it was argued, any distinction the speaker drew.
+  \"passages\"      every scripture actually expounded: the `reference` alone -- \
+never the words of the passage -- and what was drawn from it in `teaching`.
+  \"illustrations\" each story, image or example: `what` it was and its \
+`purpose`.
+  \"application\"   what the speaker actually called for. Only what they said.
+  \"quotations\"    up to three sentences worth preserving in the speaker's own \
+words.
+
+The old shape, for reference, was one Markdown string; it is now these fields \
+and the headings are added here:
 
   Two or three sentences of prose saying what was taught and where it landed. \
 No heading above this; it opens the document.
@@ -770,7 +864,8 @@ translation at length.
 
   ## Illustrations
   Any story, image, analogy or example used, as a bulleted list: what it was, \
-and what it was for. Omit the section entirely if there were none.
+and what it was for. This is the one section that may be left out entirely, \
+and only when the speaker genuinely used none.
 
   ## Application
   What the speaker actually called for, as a bulleted list. Only what they \
@@ -796,6 +891,72 @@ rather than guessing. If the transcript is too fragmentary to summarise \
 honestly, say that in the summary instead of inventing content.";
 
 /// Reads the model's reply, tolerating the ways it dresses JSON up.
+/// The Markdown, out of the sections the model returned.
+fn assemble(value: &serde_json::Value) -> String {
+    let text = |key: &str| {
+        value.get(key).and_then(|v| v.as_str()).unwrap_or_default().trim().to_string()
+    };
+    let list = |key: &str| -> Vec<&serde_json::Value> {
+        value.get(key).and_then(|v| v.as_array()).map(|a| a.iter().collect()).unwrap_or_default()
+    };
+    let field = |item: &serde_json::Value, key: &str| {
+        item.get(key).and_then(|v| v.as_str()).unwrap_or_default().trim().to_string()
+    };
+
+    let mut out = String::new();
+    let opening = text("opening");
+    if !opening.is_empty() {
+        out.push_str(&opening);
+    }
+
+    let points = list("mainPoints");
+    if !points.is_empty() {
+        out.push_str("\n\n## Main points\n");
+        for (index, item) in points.iter().enumerate() {
+            let (point, detail) = (field(item, "point"), field(item, "detail"));
+            out.push_str(&format!("\n{}. **{point}** — {detail}", index + 1));
+        }
+    }
+
+    let passages = list("passages");
+    if !passages.is_empty() {
+        out.push_str("\n\n## Passages\n");
+        for item in &passages {
+            out.push_str(&format!(
+                "\n- **{}** — {}",
+                field(item, "reference"),
+                field(item, "teaching")
+            ));
+        }
+    }
+
+    let illustrations = list("illustrations");
+    if !illustrations.is_empty() {
+        out.push_str("\n\n## Illustrations\n");
+        for item in &illustrations {
+            out.push_str(&format!("\n- {} — {}", field(item, "what"), field(item, "purpose")));
+        }
+    }
+
+    let application = list("application");
+    if !application.is_empty() {
+        out.push_str("\n\n## Application\n");
+        for item in &application {
+            out.push_str(&format!("\n- {}", item.as_str().unwrap_or_default().trim()));
+        }
+    }
+
+    let quotations = list("quotations");
+    if !quotations.is_empty() {
+        out.push_str("\n\n## Notable quotations\n");
+        for item in &quotations {
+            out.push_str(&format!("\n> {}", item.as_str().unwrap_or_default().trim()));
+        }
+    }
+
+    out.trim().to_string()
+}
+
 fn read(content: &str) -> Result<Description> {
     let text = content.trim();
     // Fenced blocks, despite being asked for bare JSON. Models do this.
@@ -813,8 +974,24 @@ fn read(content: &str) -> Result<Description> {
     let value = json_of(text)?;
 
     let title = value.get("title").and_then(|v| v.as_str()).unwrap_or_default().trim().to_string();
-    let summary =
-        value.get("summary").and_then(|v| v.as_str()).unwrap_or_default().trim().to_string();
+    /*
+     * Assembled from its parts, where the model returned parts.
+     *
+     * `summary` used to be one string of Markdown, with the headings asked for
+     * in prose -- and a model that follows prose loosely returned the opening
+     * paragraph and stopped. Passages and Application, the two an operator
+     * actually wants, were the ones that went. No amount of insisting fixed it,
+     * because a heading inside a string is not something a schema can require.
+     *
+     * Each section is now its own field, so a missing one is a schema violation
+     * rather than a stylistic choice, and the Markdown is written here. The
+     * plain `summary` is still read first: a deployment that cannot take a
+     * schema answers in the old shape, and that answer is still worth having.
+     */
+    let summary = match value.get("summary").and_then(|v| v.as_str()) {
+        Some(written) if !written.trim().is_empty() => written.trim().to_string(),
+        _ => assemble(&value),
+    };
 
     let topics = value
         .get("topics")
@@ -859,6 +1036,46 @@ mod tests {
     }
 
     #[test]
+    fn the_document_is_written_from_the_sections() {
+        // The model returns fields; the headings are ours. A section it fills
+        // is a section the reader sees, which is the whole point of moving them
+        // out of one Markdown string it could quietly truncate.
+        let reply = r#"{
+            "title":"Activity and Progress",
+            "opening":"The teaching examined pairs of ideas that look alike.",
+            "mainPoints":[{"point":"Busy is not moving","detail":"He drew the treadmill out."}],
+            "passages":[{"reference":"Hebrews 12:1","teaching":"Run with patience."}],
+            "illustrations":[],
+            "application":["Slow down before deciding."],
+            "quotations":["Activity is not progress."],
+            "topics":["discernment","habits"]
+        }"#;
+        let got = read(reply).unwrap();
+
+        assert_eq!(got.title, "Activity and Progress");
+        assert!(got.summary.starts_with("The teaching examined"), "the opening is not first");
+        for heading in ["## Main points", "## Passages", "## Application", "## Notable quotations"]
+        {
+            assert!(got.summary.contains(heading), "{heading} is missing");
+        }
+        // The one section that may genuinely be absent leaves no empty heading.
+        assert!(!got.summary.contains("## Illustrations"), "an empty section was given a heading");
+        assert_eq!(got.topics, vec!["discernment".to_string(), "habits".to_string()]);
+    }
+
+    #[test]
+    fn a_reply_in_the_old_shape_is_still_read() {
+        // A deployment that cannot take a schema answers with one Markdown
+        // string, and that answer is still worth having.
+        // r###, because the sample contains `"##` -- a Markdown heading right
+        // after a quote closes anything shorter.
+        let got =
+            read(r###"{"title":"T","summary":"## Main points\n\n1. **A** — b","topics":["x"]}"###)
+                .unwrap();
+        assert!(got.summary.contains("## Main points"));
+    }
+
+    #[test]
     fn a_longer_service_is_given_a_longer_summary() {
         assert_eq!(reply_budget(500), 4_000);
         assert_eq!(reply_budget(5_000), 8_000);
@@ -873,6 +1090,19 @@ mod tests {
     }
 
     #[test]
+    fn the_request_actually_carries_the_schema() {
+        // The schema lived in `body` behind a flag both call sites passed as
+        // false, so it was written, tested, deployed and never sent. Two rounds
+        // of prompt work were spent explaining behaviour it would have fixed.
+        let settings = Settings::default();
+        let sent = body(&settings, "a transcript", true, 6_000);
+        assert_eq!(
+            sent["response_format"]["type"], "json_schema",
+            "the schema is not in the request"
+        );
+    }
+
+    #[test]
     fn the_strict_parameter_is_the_only_difference_between_the_two_bodies() {
         let mut settings = Settings::default();
         settings.assist_model = "gpt-4o-mini".into();
@@ -880,7 +1110,21 @@ mod tests {
         let strict = body(&settings, "a transcript", true, 2);
         let plain = body(&settings, "a transcript", false, 2);
 
-        assert_eq!(strict["response_format"]["type"], "json_object");
+        // A schema now, not merely "some JSON": the shape is a contract the
+        // model cannot decline, which is the whole reason for sending one.
+        assert_eq!(strict["response_format"]["type"], "json_schema");
+        assert_eq!(strict["response_format"]["json_schema"]["strict"], true);
+        // Every section, because a field the schema does not require is a
+        // section the model may decide not to write -- which is how Passages
+        // and Application went missing.
+        for key in ["title", "opening", "mainPoints", "passages", "application", "topics"] {
+            assert!(
+                strict["response_format"]["json_schema"]["schema"]["required"]
+                    .as_array()
+                    .is_some_and(|required| required.iter().any(|r| r == key)),
+                "{key} is not required, so it may be omitted"
+            );
+        }
         assert!(plain.get("response_format").is_none(), "the fallback must not send it");
 
         // Everything the summary depends on survives the fallback.
