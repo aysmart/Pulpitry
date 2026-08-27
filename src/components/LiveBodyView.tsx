@@ -180,30 +180,45 @@ function Composed({
     const figure = rest.find((component) => component.kind === "figure");
     if (figure?.kind === "figure") {
       const beside = rest.filter((component) => component !== figure);
+      /*
+       * The words take two thirds and are set smaller than they would be
+       * whole-frame.
+       *
+       * The size is guessed from how many characters the slide holds, and that
+       * guess assumes the words have the frame. Given half of it they wrap
+       * twice as often, and a three-point slide ran off the bottom -- the
+       * heading's own rule clipped away above the top edge.
+       */
+      const column = `calc(${base} * 0.88)`;
       return (
-        <div className="flex w-full flex-col gap-[0.5em]" style={frame}>
+        <div className={`${FRAME} gap-[0.5em]`} style={frame}>
           {title?.kind === "text" ? (
-            <Heading text={title.text} style={style} accent={accent} base={base} scale={1.3} />
+            <Heading text={title.text} style={style} accent={accent} base={column} scale={1.35} />
           ) : null}
-          <div className="flex w-full items-center gap-[1.1em]">
-            <div className="flex min-w-0 flex-[1.15] flex-col gap-[0.45em]">
+          <div className="flex w-full items-center gap-[1.2em]">
+            <div className="flex min-w-0 flex-[1.35] flex-col gap-[0.45em]">
               {beside.map((component, index) => (
                 <Component
                   key={index}
                   component={component}
                   style={style}
                   theme={theme}
-                  base={base}
+                  base={column}
                   ranged
                 />
               ))}
             </div>
-            {/* Cropped to a panel rather than fitted, so two slides with
-                differently shaped pictures still look like one deck. */}
+            {/*
+              Fitted, never cropped, and this is the same lesson the backdrop
+              taught. A church's pictures are the graphics it already made:
+              cropping one to a tidy panel cuts the words off the top of it,
+              which is what "Every school run," became. Consistency between two
+              slides is not worth a headline sliced in half.
+            */}
             <img
               src={convertFileSrc(figure.source.path)}
               alt=""
-              className="h-[42cqh] flex-1 rounded-[0.12em] object-cover"
+              className="max-h-[66cqh] min-w-0 flex-1 self-center rounded-[0.12em] object-contain"
             />
           </div>
         </div>

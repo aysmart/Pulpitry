@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import { LiveBodyView } from "./components/LiveBodyView";
+import type { LiveBody } from "./lib/projector";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import {
@@ -38,6 +39,24 @@ import "./styles.css";
  * nothing at all when they clear — a blank screen is the "off" state, not a
  * logo or a placeholder.
  */
+/**
+ * Whether the thing on screen already shows its own name.
+ *
+ * The caption is the item's title, drawn small beneath everything -- right for
+ * a verse, whose reference is not otherwise on the slide, and wrong for a
+ * composed slide, which carries its title as a component set large at the top.
+ * "Seeing The Difference" appeared as the heading and again as a grey line
+ * under it.
+ */
+function titledItself(body: LiveBody): boolean {
+  return (
+    body.kind === "composed" &&
+    body.components.some(
+      (component) => component.kind === "text" && component.level === "title",
+    )
+  );
+}
+
 function Projector() {
   const [content, setContent] = useState<LiveContent | null>(null);
   const [theme, setTheme] = useState<ProjectorTheme>(DEFAULT_THEME);
@@ -166,7 +185,7 @@ function Projector() {
                   command={command}
                   progress={content.progress}
                 />
-                {theme.showReference && content.caption ? (
+                {theme.showReference && content.caption && !titledItself(content.body) ? (
                   /* Its own typeface, size and colour, set by the theme. The
                      margin is in cqh like everything else in this frame, so it
                      holds its proportion whatever the screen is. */
