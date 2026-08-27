@@ -86,6 +86,24 @@ pub struct SongSection {
     pub label: String,
     /// Kept as written. A lyric breaks where the writer broke it.
     pub lines: Vec<String>,
+    /*
+     * A slide's components, carried through rather than understood.
+     *
+     * Songs never set these; decks do, where a section is a slide with a table
+     * or a list rather than lines. This side has no need to look inside one --
+     * it stores what it is given and hands it back -- so it is `Value` rather
+     * than a mirror of the shape, which would be a second definition to keep in
+     * step with the first for no benefit.
+     *
+     * It exists because it was absent: the frontend built components, sent
+     * them, and this struct dropped them on the way to the database. Every
+     * table generated was discarded here, silently, and the feature looked as
+     * though the model would not produce one.
+     */
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub components: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<String>,
 }
 
 /// Whether a song's words may lawfully be put on a screen.
@@ -303,6 +321,16 @@ impl Catalog {
 
     /// Inserts a new item, or updates the one whose id is set.
     pub fn save(&self, item: &Item) -> Result<Item> {
+        // What arrived, for a deck. Components have gone missing between the
+        // frontend and the disk once already, and every layer looked correct
+        // while they did.
+        if let ItemBody::Deck { sections } = &item.body {
+            let carrying = sections.iter().filter(|s| s.components.is_some()).count();
+            crate::log_line!(
+                "[catalog] saving a deck: {} sections, {carrying} carrying components",
+                sections.len()
+            );
+        }
         let body = serde_json::to_string(&item.body)?;
         let searchable = format!(
             "{} {} {}",
@@ -564,12 +592,51 @@ mod tests {
                 sections: vec![SongSection {
                     label: "Verse 1".into(),
                     lines: lines.iter().map(|line| line.to_string()).collect(),
+                    components: None,
+                    layout: None,
                 }],
                 rights: SongRights::default(),
             },
             path: None,
             updated_at: 0,
         }
+    }
+
+    #[test]
+    fn a_section_keeps_the_components_it_was_given() {
+        // This struct dropped them silently: the frontend built a table, sent
+        // it, and what reached the database was a label and no lines. Every
+        // table generated was discarded here, and the feature looked as though
+        // the model would not produce one.
+        let json = r#"{
+            "label": "Activity vs Progress",
+            "lines": [],
+            "components": [
+                {"kind":"table","header":["Activity","Progress"],"rows":[["Busy","Arrives"]]}
+            ],
+            "layout": "stacked"
+        }"#;
+
+        let section: SongSection = serde_json::from_str(json).expect("would not parse");
+        let back = serde_json::to_value(&section).unwrap();
+
+        assert_eq!(back["components"][0]["kind"], "table", "the components were dropped");
+        assert_eq!(back["layout"], "stacked");
+    }
+
+    #[test]
+    fn a_song_section_carries_no_component_fields_at_all() {
+        // Songs never set them, and a song's stored shape should not grow two
+        // nulls because decks needed somewhere to put a table.
+        let section = SongSection {
+            label: "Chorus".into(),
+            lines: vec!["a line".into()],
+            components: None,
+            layout: None,
+        };
+        let back = serde_json::to_value(&section).unwrap();
+        assert!(back.get("components").is_none(), "a null was written for a song");
+        assert!(back.get("layout").is_none());
     }
 
     #[test]
@@ -601,7 +668,7 @@ mod tests {
         let catalog = Catalog::in_memory().expect("catalog");
         let bodies = vec![
             ItemBody::Song {
-                sections: vec![SongSection { label: "Chorus".into(), lines: vec!["x".into()] }],
+                sections: vec![SongSection { label: "Chorus".into(), lines: vec!["x".into()], components: None, layout: None }],
                 rights: SongRights::default(),
             },
             ItemBody::Image,
@@ -661,6 +728,8 @@ mod tests {
             sections: vec![SongSection {
                 label: "Verse 1".into(),
                 lines: vec!["Amazing grace! How sweet the sound".into()],
+                components: None,
+                layout: None,
             }],
             scripture: vec!["Eph 2:4-9".into()],
         }
@@ -708,6 +777,8 @@ mod tests {
             sections: vec![SongSection {
                 label: "Verse 1".into(),
                 lines: vec!["the operator's own wording".into()],
+                components: None,
+                layout: None,
             }],
             rights: SongRights::default(),
         };

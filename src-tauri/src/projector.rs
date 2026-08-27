@@ -79,6 +79,20 @@ pub enum LiveBody {
     RichText { blocks: Vec<TextBlock> },
     Image { path: String },
     Media { path: String, looping: bool },
+    /**
+     * A slide made of components: text, a list, a table, a quote, a reference.
+     *
+     * Carried rather than understood. This side puts what is live in front of
+     * the projector window and never draws it, so mirroring the component union
+     * here would be a second definition to keep in step with the one in
+     * `projector.ts` for no benefit -- and the two would drift the first time
+     * either gained a kind.
+     *
+     * It exists because it did not: a composed slide failed to deserialise
+     * here, `set_live` returned an error, and nothing reached the wall. Preview
+     * drew the table perfectly, because Preview never crosses this bridge.
+     */
+    Composed { components: Vec<serde_json::Value>, layout: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

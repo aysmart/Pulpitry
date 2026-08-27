@@ -286,6 +286,65 @@ impl Mirror {
 /// before. A stream overlay still showing Psalm 23 while the projector has moved
 /// on to a photograph is worse than an overlay showing nothing — the first is
 /// wrong and looks deliberate, the second is merely empty.
+/// One component as the lines a text overlay can carry.
+fn component_lines(component: &serde_json::Value) -> Vec<String> {
+    let text = |key: &str| {
+        component.get(key).and_then(|v| v.as_str()).unwrap_or_default().trim().to_string()
+    };
+    let strings = |key: &str| -> Vec<String> {
+        component
+            .get(key)
+            .and_then(|v| v.as_array())
+            .map(|items| {
+                items.iter().filter_map(|i| i.as_str()).map(|s| s.trim().to_string()).collect()
+            })
+            .unwrap_or_default()
+    };
+
+    match component.get("kind").and_then(|v| v.as_str()).unwrap_or_default() {
+        "text" | "passage" => {
+            let one = if component.get("text").is_some() { text("text") } else { text("reference") };
+            if one.is_empty() { vec![] } else { vec![one] }
+        }
+        "list" => strings("items"),
+        "quote" => {
+            let said = text("text");
+            let who = text("attribution");
+            match (said.is_empty(), who.is_empty()) {
+                (true, _) => vec![],
+                (false, true) => vec![said],
+                (false, false) => vec![said, format!("— {who}")],
+            }
+        }
+        "table" => {
+            let header = strings("header");
+            component
+                .get("rows")
+                .and_then(|v| v.as_array())
+                .map(|rows| {
+                    rows.iter()
+                        .filter_map(|row| row.as_array())
+                        .map(|row| {
+                            row.iter()
+                                .enumerate()
+                                .filter_map(|(at, cell)| {
+                                    let cell = cell.as_str()?.trim();
+                                    Some(match header.get(at) {
+                                        Some(head) if !head.is_empty() => format!("{head}: {cell}"),
+                                        _ => cell.to_string(),
+                                    })
+                                })
+                                .collect::<Vec<_>>()
+                                .join(" \u{b7} ")
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        }
+        _ => vec![],
+    }
+}
+
 pub fn shown_of(live: &LiveContent) -> Shown {
     match &live.body {
         LiveBody::Scripture { lines } => Shown::Scripture {
@@ -307,6 +366,19 @@ pub fn shown_of(live: &LiveContent) -> Shown {
             // own idea of what a heading looks like, and imposing Pulpitry's
             // would be the pixel-mirroring this deliberately does not do.
             lines: blocks.iter().map(|block| block.text.clone()).collect(),
+        },
+        /*
+         * A composed slide, as lines a lower third can hold.
+         *
+         * The overlay is a card beside a camera, not a 16:9 frame, so a table
+         * is not sent as one -- it is sent as something that still reads there.
+         * Each row is paired with its heading rather than run together, because
+         * "Activity: busy  Progress: arrives" survives a strip at the bottom of
+         * a video frame and "Activity Progress busy arrives" does not.
+         */
+        LiveBody::Composed { components, .. } => Shown::Words {
+            title: live.caption.clone(),
+            lines: components.iter().flat_map(component_lines).collect(),
         },
         // Nothing a text overlay can honestly show.
         LiveBody::Image { .. } | LiveBody::Media { .. } => Shown::Nothing,
@@ -366,6 +438,42 @@ mod tests {
 
     fn live(body: LiveBody, caption: &str) -> LiveContent {
         LiveContent { body, caption: caption.into(), ids: Vec::new(), progress: 0.0 }
+    }
+
+    #[test]
+    fn a_composed_slide_reaches_the_overlay_as_lines() {
+        // The bridge had no variant for one at all: `set_live` failed to
+        // deserialise it, the command errored, and nothing went live. Preview
+        // drew the table perfectly, because Preview never crosses this bridge.
+        let live = LiveContent {
+            body: LiveBody::Composed {
+                components: vec![
+                    serde_json::json!({"kind":"text","level":"title","text":"Activity And Progress"}),
+                    serde_json::json!({
+                        "kind":"table",
+                        "header":["Activity","Progress"],
+                        "rows":[["Keeps the hands busy","Moves toward an outcome"]]
+                    }),
+                ],
+                layout: "stacked".into(),
+            },
+            caption: "Activity And Progress".into(),
+            ids: vec![],
+            progress: 0.0,
+        };
+
+        match shown_of(&live) {
+            Shown::Words { lines, .. } => {
+                assert_eq!(lines[0], "Activity And Progress");
+                // Paired with its heading: the columns are the meaning, and a
+                // lower third that runs them together loses it.
+                assert_eq!(
+                    lines[1],
+                    "Activity: Keeps the hands busy \u{b7} Progress: Moves toward an outcome"
+                );
+            }
+            other => panic!("a composed slide showed as {other:?}"),
+        }
     }
 
     #[test]
