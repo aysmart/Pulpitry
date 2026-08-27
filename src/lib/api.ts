@@ -150,6 +150,14 @@ export const sendFeedback = (input: {
   platform: string;
 }) => invoke<void>("send_feedback", input);
 
+/** What this machine has made and not yet reported. */
+export interface Tally {
+  summaries: number;
+  slides: number;
+}
+
+export const madeHere = () => invoke<Tally>("made_here");
+
 /** Copies the log where somebody can attach it to an email. Returns the path. */
 export const exportLog = (to: string) => invoke<string>("export_log", { to });
 

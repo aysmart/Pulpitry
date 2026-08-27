@@ -18,6 +18,7 @@ import {
   describeError,
   exportLog,
   hostedStatus,
+  madeHere,
   listAudioInputs,
   measureSpeech,
   saveAssistKey,
@@ -27,6 +28,7 @@ import {
   downloadSpeechModel,
   type AudioDevice,
   type HostedView,
+  type Tally,
   type ModelProgress,
   type SettingsView,
   type SpeechModel,
@@ -417,12 +419,16 @@ function Pane({
  */
 function Usage() {
   const [state, setState] = useState<HostedView | null>(null);
+  const [made, setMade] = useState<Tally | null>(null);
 
   useEffect(() => {
     let live = true;
     hostedStatus()
       .then((next) => live && setState(next))
       .catch(() => live && setState(null));
+    madeHere()
+      .then((next) => live && setMade(next))
+      .catch(() => undefined);
     return () => {
       live = false;
     };
@@ -430,42 +436,71 @@ function Usage() {
 
   const plan = state?.entitlement;
 
+  /*
+   * Shown above the plan, and shown without one.
+   *
+   * Making a summary is not metered -- the service is unlimited -- so this
+   * belongs to the machine rather than to a subscription, and a church with no
+   * plan at all should still be able to see what it has done.
+   */
+  const madeRows = made ? (
+    <Section
+      title="Made on this machine"
+      note="Waiting to be reported. The count falls once it has been."
+    >
+      <dl className="flex flex-col divide-y divide-pulpitry-line">
+        <Row label="Summaries" value={String(made.summaries)} />
+        <Row label="Slide sets" value={String(made.slides)} />
+      </dl>
+    </Section>
+  ) : null;
+
   if (!state?.activated || !plan) {
     return (
-      <Section
-        title="Usage"
-        note="Nothing is metered without a subscription. Transcribing on this machine is unlimited and always has been."
-      >
-        <p className="text-[12.5px] leading-relaxed text-pulpitry-muted">
-          There is no plan on this machine, so there is nothing here to count.
-        </p>
-      </Section>
+      <>
+        {madeRows}
+        <Section
+          title="Hours"
+          note="Nothing is metered without a subscription. Transcribing on this machine is unlimited and always has been."
+        >
+          <p className="text-[12.5px] leading-relaxed text-pulpitry-muted">
+            There is no plan on this machine, so there are no hours to count.
+          </p>
+        </Section>
+      </>
     );
   }
 
   return (
-    <Section
-      title="This period"
-      note="Hours are pooled across the applications and the machines on your plan."
-    >
-      <dl className="flex flex-col divide-y divide-pulpitry-line">
-        <Row label="Transcription left" value={plan.speechRemaining} />
-        {/* By application, because a pooled figure hides which of the two spent
+    <>
+      {madeRows}
+      <Section
+        title="This period"
+        note="Hours are pooled across the applications and the machines on your plan."
+      >
+        <dl className="flex flex-col divide-y divide-pulpitry-line">
+          <Row label="Transcription left" value={plan.speechRemaining} />
+          {/* By application, because a pooled figure hides which of the two spent
             it -- and a church running both has no other way to find out. */}
-        {Object.entries(plan.byApp).map(([app, seconds]: [string, number]) => (
+          {Object.entries(plan.byApp).map(
+            ([app, seconds]: [string, number]) => (
+              <Row
+                key={app}
+                label={
+                  app === "castavox" ? "Used by Castavox" : "Used by Pulpitry"
+                }
+                value={hours(seconds)}
+                quiet
+              />
+            ),
+          )}
           <Row
-            key={app}
-            label={app === "castavox" ? "Used by Castavox" : "Used by Pulpitry"}
-            value={hours(seconds)}
-            quiet
+            label="Period ends"
+            value={new Date(plan.periodEndsAt).toLocaleDateString()}
           />
-        ))}
-        <Row
-          label="Period ends"
-          value={new Date(plan.periodEndsAt).toLocaleDateString()}
-        />
-      </dl>
-    </Section>
+        </dl>
+      </Section>
+    </>
   );
 }
 

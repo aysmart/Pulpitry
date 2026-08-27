@@ -334,6 +334,9 @@ struct SpeechSpeed {
 /// discards the address before anything is written down.
 const CHECK_IN_ENDPOINT: &str = "https://castavox.com/api/v1/check-in";
 
+/// Where the tally of what a church has made goes. Informational only.
+const MADE_ENDPOINT: &str = "https://castavox.com/api/v1/made";
+
 /// Where a report goes, to be sent on by the broker.
 ///
 /// Posted rather than opened as a mail link. A church laptop with no mail
@@ -629,6 +632,17 @@ fn export_log(app: AppHandle, to: String) -> CommandResult<String> {
     Ok(target.display().to_string())
 }
 
+/// What this machine has made, for the Usage pane to show.
+///
+/// Read from the same file the tally is kept in, so the number an operator
+/// sees is the number that will be reported -- rather than a second count that
+/// could drift from it.
+#[tauri::command]
+fn made_here(app: AppHandle) -> CommandResult<castavox_core::made::Tally> {
+    let dir = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    Ok(castavox_core::made::tally(&dir))
+}
+
 #[tauri::command]
 fn list_translations(library: State<'_, Arc<Library>>) -> CommandResult<Vec<Translation>> {
     library.translations().map_err(to_message)
@@ -817,10 +831,17 @@ async fn generate_slides(app: AppHandle, source: String) -> CommandResult<Vec<sl
     }
 
     // Off the UI thread: one request that may take the better part of a minute.
-    tauri::async_runtime::spawn_blocking(move || slides::generate(&settings, &key, &source))
+    let made = tauri::async_runtime::spawn_blocking(move || slides::generate(&settings, &key, &source))
         .await
         .map_err(|err| err.to_string())?
-        .map_err(to_message)
+        .map_err(to_message)?;
+
+    // Counted on success only, and counted even where the check-in is off:
+    // the switch decides what is sent, not what a church's own file records.
+    if let Ok(dir) = app.path().app_data_dir() {
+        castavox_core::made::record(&dir, 0, 1);
+    }
+    Ok(made)
 }
 
 /// Asks the model what a recorded service was about.
@@ -893,6 +914,12 @@ async fn summarise_session(
     transcripts
         .describe(id, &described.title, &described.summary, &described.topics)
         .map_err(to_message)?;
+
+    // After it is stored, so a summary that was written and lost is not counted
+    // as one a church has.
+    if let Ok(dir) = app.path().app_data_dir() {
+        castavox_core::made::record(&dir, 1, 0);
+    }
     Ok(described)
 }
 
@@ -1288,6 +1315,10 @@ pub fn run() {
                         env!("CARGO_PKG_VERSION"),
                         &stored.speech_engine,
                     );
+                    // The same switch and the same install id, on the same
+                    // launch: a tally that needed its own consent would be a
+                    // second thing to explain to a church.
+                    castavox_core::made::send(stored.check_in, MADE_ENDPOINT, &dir, "pulpitry");
                 }
             }
 
@@ -1436,6 +1467,7 @@ pub fn run() {
             node_status,
             library_status,
             export_log,
+            made_here,
             send_feedback,
             list_translations,
             list_books,
