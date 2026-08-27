@@ -244,6 +244,38 @@ export function MediaLibrary({
                   </span>
                 </button>
 
+                {/*
+                  Whether this fills the screen or sits whole inside the frame.
+
+                  Always shown, unlike the remove button beside it. Removing is
+                  something an operator goes looking for; how a picture meets
+                  the frame is something they need to *see* -- a library where
+                  the answer is only discoverable by hovering each tile is a
+                  library where nobody knows what any of them will do.
+
+                  On the item rather than on the moment it goes live, because
+                  it is a property of the picture: a photograph fills, and a
+                  graphic with words near its edges does not, and neither
+                  changes between Sundays.
+                */}
+                <button
+                  type="button"
+                  aria-label={`${item.title}: ${fillOf(item) ? "fills the screen" : "fitted whole"}`}
+                  onClick={() => void setFill(item, !fillOf(item))}
+                  title={
+                    fillOf(item)
+                      ? "Fills the screen. Click to fit it whole instead."
+                      : "Fitted whole inside the frame. Click to fill the screen."
+                  }
+                  className={`absolute top-1 left-1 rounded px-1.5 py-0.5 text-[10.5px] leading-none focus-visible:focus-ring ${
+                    fillOf(item)
+                      ? "bg-pulpitry-teal-dim text-pulpitry-text"
+                      : "bg-pulpitry-ink/80 text-pulpitry-muted"
+                  }`}
+                >
+                  {fillOf(item) ? "Fill" : "Fit"}
+                </button>
+
                 {/* A sibling rather than nested, so clicking it cannot also
                     stage the tile it sits on. */}
                 <button
@@ -298,7 +330,11 @@ export function MediaLibrary({
                       ? "Fills the screen. Click to fit it whole instead."
                       : "Fitted whole. Click to fill the screen."
                   }
-                  className="absolute top-1 left-1 hidden rounded bg-pulpitry-ink/80 px-1.5 py-0.5 text-[11px] leading-none text-pulpitry-muted group-hover:block hover:text-pulpitry-text focus-visible:focus-ring"
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10.5px] leading-none focus-visible:focus-ring ${
+                    fillOf(item)
+                      ? "bg-pulpitry-teal-dim text-pulpitry-text"
+                      : "bg-pulpitry-ink/80 text-pulpitry-muted"
+                  }`}
                 >
                   {fillOf(item) ? "Fill" : "Fit"}
                 </button>
