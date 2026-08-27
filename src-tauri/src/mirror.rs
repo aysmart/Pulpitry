@@ -27,7 +27,7 @@ use parking_lot::Mutex;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Listener, Manager, State};
 
-use castavox_core::mirror::{self, Desk, Line, Pairing, Shown, Table};
+use castavox_core::mirror::{self, Desk, Line, Pairing, Point, Shown, Table};
 
 use crate::projector::{LiveBody, LiveContent};
 use crate::settings;
@@ -315,6 +315,35 @@ fn mirrored_table(component: &serde_json::Value) -> Option<Table> {
     Some(Table { header, rows })
 }
 
+/// A component as panels the far end can draw, if that is what it is.
+///
+/// Only where *every* point has a heading, which is the same rule the desk's
+/// own renderer uses: a row where one panel holds a bare sentence is a row
+/// with a hole in it, and the honest drawing of those points is a list.
+fn mirrored_points(component: &serde_json::Value) -> Option<Vec<Point>> {
+    if component.get("kind").and_then(|v| v.as_str()) != Some("list") {
+        return None;
+    }
+
+    let items = component.get("items")?.as_array()?;
+    // Four is the ceiling on the desk for the same reason it is here: five
+    // panels across a frame are columns too narrow to hold a sentence.
+    if items.is_empty() || items.len() > 4 {
+        return None;
+    }
+
+    let points: Vec<Point> = items
+        .iter()
+        .filter_map(|item| {
+            let heading = item.get("heading")?.as_str()?.trim().to_string();
+            let text = item.get("text")?.as_str()?.trim().to_string();
+            (!heading.is_empty() && !text.is_empty()).then_some(Point { heading, text })
+        })
+        .collect();
+
+    (points.len() == items.len()).then_some(points)
+}
+
 /// A component as the passage it cites, if that is what it is.
 fn mirrored_reference(component: &serde_json::Value) -> Option<String> {
     if component.get("kind").and_then(|v| v.as_str()) != Some("passage") {
@@ -449,6 +478,7 @@ pub fn shown_of(live: &LiveContent) -> Shown {
                 lines: lines.clone(),
                 table: None,
                 reference: String::new(),
+                points: Vec::new(),
             }
         }
         LiveBody::RichText { blocks } => Shown::Words {
@@ -459,6 +489,7 @@ pub fn shown_of(live: &LiveContent) -> Shown {
             lines: blocks.iter().map(|block| block.text.clone()).collect(),
             table: None,
             reference: String::new(),
+            points: Vec::new(),
         },
         /*
          * A composed slide, as lines a lower third can hold.
@@ -472,6 +503,7 @@ pub fn shown_of(live: &LiveContent) -> Shown {
         LiveBody::Composed { components, .. } => {
             let table = components.iter().find_map(mirrored_table);
             let reference = components.iter().find_map(mirrored_reference).unwrap_or_default();
+            let points = components.iter().find_map(mirrored_points).unwrap_or_default();
             Shown::Words {
                 title: live.caption.clone(),
                 lines: components
@@ -497,6 +529,7 @@ pub fn shown_of(live: &LiveContent) -> Shown {
                     .collect(),
                 table,
                 reference,
+                points,
             }
         }
         // Nothing a text overlay can honestly show.
@@ -583,7 +616,7 @@ mod tests {
         };
 
         match shown_of(&live) {
-            Shown::Words { title, lines, table, reference } => {
+            Shown::Words { title, lines, table, reference, .. } => {
                 assert_eq!(title, "Activity And Progress");
                 // Not repeated in the body: the overlay draws the caption as a
                 // heading, and the slide would carry its title twice.
@@ -645,9 +678,46 @@ mod tests {
         };
 
         match shown_of(&live) {
-            Shown::Words { lines, .. } => {
+            Shown::Words { lines, points, .. } => {
                 assert_eq!(lines[0], "Silence: The prophetic silence had become normal");
                 assert_eq!(lines[1], "Wickedness spread through every level");
+                // One point of the two has no heading, so these are not panels
+                // -- a row with a bare sentence in it is a row with a hole.
+                assert!(points.is_empty(), "a mixed list was sent as cards");
+            }
+            other => panic!("a composed slide showed as {other:?}"),
+        }
+    }
+
+    #[test]
+    fn headed_points_cross_as_panels_and_as_prose() {
+        let live = LiveContent {
+            body: LiveBody::Composed {
+                components: vec![
+                    serde_json::json!({"kind":"text","level":"title","text":"The Cost"}),
+                    serde_json::json!({
+                        "kind":"list",
+                        "ordered":false,
+                        "items":[
+                            {"heading":"Silence","text":"It had become normal to them"},
+                            {"heading":"Darkness","text":"It spread through every level"}
+                        ]
+                    }),
+                ],
+                layout: "cards".into(),
+            },
+            caption: "The Cost".into(),
+            ids: vec![],
+            progress: 0.0,
+        };
+
+        match shown_of(&live) {
+            Shown::Words { lines, points, .. } => {
+                // Both ways, as the table goes: a lower third has no room for
+                // panels and would rather have the prose.
+                assert_eq!(points.len(), 2);
+                assert_eq!(points[0].heading, "Silence");
+                assert_eq!(lines[0], "Silence: It had become normal to them");
             }
             other => panic!("a composed slide showed as {other:?}"),
         }
@@ -716,6 +786,7 @@ mod tests {
                 lines: vec!["Welcome".into(), "Please stand".into()],
                 table: None,
                 reference: String::new(),
+                points: Vec::new(),
             },
         );
     }
