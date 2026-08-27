@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
-import { catalogList, catalogRemove, type Item } from "../lib/catalog";
+import { catalogList, catalogRemove, catalogSave, type Item } from "../lib/catalog";
 import { importAssets } from "../lib/pictures";
 import { presentableFor } from "../lib/schedule";
 import type { Presentable } from "../lib/usePresentation";
@@ -77,6 +77,34 @@ export function MediaLibrary({
       fail(err);
     } finally {
       setBusy(false);
+    }
+  };
+
+  /** Whether an item is set to fill the screen. */
+  const fillOf = (item: Item) =>
+    (item.body.kind === "image" || item.body.kind === "media") && item.body.fill;
+
+  /**
+   * Saves the fill switch back onto the item.
+   *
+   * The whole item, because that is what the catalogue takes. The body is
+   * rebuilt rather than spread so the two kinds keep their own fields --
+   * spreading would carry `looping` onto a picture, which is a field a picture
+   * has no meaning for and would then be stored with.
+   */
+  const setFill = async (item: Item, fill: boolean) => {
+    if (item.body.kind !== "image" && item.body.kind !== "media") return;
+    try {
+      await catalogSave({
+        ...item,
+        body:
+          item.body.kind === "image"
+            ? { kind: "image", fill }
+            : { kind: "media", looping: item.body.looping, fill },
+      });
+      await refresh();
+    } catch (err) {
+      fail(err);
     }
   };
 
@@ -254,6 +282,25 @@ export function MediaLibrary({
                   <span className="block truncate text-[11px] text-pulpitry-muted">
                     {item.path ?? "file missing"}
                   </span>
+                </button>
+                {/*
+                  Whether this fills the screen or sits whole inside the frame.
+                  On the item rather than on the moment it goes live, because
+                  it is a property of the picture: a photograph fills, and a
+                  graphic with words near its edges does not, and neither
+                  changes between Sundays.
+                */}
+                <button
+                  type="button"
+                  onClick={() => void setFill(item, !fillOf(item))}
+                  title={
+                    fillOf(item)
+                      ? "Fills the screen. Click to fit it whole instead."
+                      : "Fitted whole. Click to fill the screen."
+                  }
+                  className="absolute top-1 left-1 hidden rounded bg-pulpitry-ink/80 px-1.5 py-0.5 text-[11px] leading-none text-pulpitry-muted group-hover:block hover:text-pulpitry-text focus-visible:focus-ring"
+                >
+                  {fillOf(item) ? "Fill" : "Fit"}
                 </button>
                 <button
                   type="button"

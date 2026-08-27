@@ -87,7 +87,7 @@ export function presentableFor(item: Item): Presentable | null {
       // The file is the item. Without a path there is nothing to show, which
       // is a broken row rather than a blank slide.
       return item.path
-        ? { kind: "image", itemId: item.id, title: item.title, path: item.path }
+        ? { kind: "image", itemId: item.id, title: item.title, path: item.path, fill: item.body.fill }
         : null;
     case "media":
       return item.path
@@ -97,6 +97,7 @@ export function presentableFor(item: Item): Presentable | null {
             title: item.title,
             path: item.path,
             looping: item.body.looping,
+            fill: item.body.fill,
           }
         : null;
     case "slide":

@@ -1,4 +1,4 @@
-import type { LiveBody, TextBlock } from "../lib/projector";
+import { fillsFrame, type LiveBody, type TextBlock } from "../lib/projector";
 import type { ProjectorTheme } from "../lib/theme";
 import { Backdrop } from "./Backdrop";
 import { LiveBodyView, type Extent } from "./LiveBodyView";
@@ -60,7 +60,14 @@ export function SlideCanvas({
     >
       <Backdrop theme={theme} playVideo={false} />
 
-      <div className="absolute inset-0 flex flex-col items-center justify-center px-[6cqw] py-[5cqh]">
+      {/* The same rule the projector uses, from the same function: a picture
+          meant to be the screen is not inset, or the preview would disagree
+          with the wall about where its edges are. */}
+      <div
+        className={`absolute inset-0 flex flex-col items-center justify-center ${
+          body && fillsFrame(body) ? "" : "px-[6cqw] py-[5cqh]"
+        }`}
+      >
         <LiveBodyView
           body={body ?? { kind: "richText", blocks }}
           theme={theme}

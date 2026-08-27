@@ -42,7 +42,11 @@ export async function importAssets(kind: "image" | "media"): Promise<Item[]> {
       await catalogSave(
         newItem(
           titleFor(path),
-          kind === "image" ? { kind: "image" } : { kind: "media", looping: false },
+          // Filling by default: a picture staged as content is meant to be
+          // the screen, and the operator can switch it back in the library.
+          kind === "image"
+            ? { kind: "image", fill: true }
+            : { kind: "media", looping: false, fill: true },
           path,
         ),
       ),

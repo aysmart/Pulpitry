@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import { LiveBodyView } from "./components/LiveBodyView";
-import type { LiveBody } from "./lib/projector";
+import { fillsFrame, type LiveBody } from "./lib/projector";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import {
@@ -175,7 +175,11 @@ function Projector() {
           above, which is why the containment for the text sits on the child.
         */}
         <div className="[aspect-ratio:16/9] [width:min(100cqw,177.78cqh)]">
-          <div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden px-[6cqw] py-[5cqh] [container-type:size]">
+          <div
+            className={`relative flex h-full w-full flex-col items-center justify-center overflow-hidden [container-type:size] ${
+              content && fillsFrame(content.body) ? "" : "px-[6cqw] py-[5cqh]"
+            }`}
+          >
             {content ? (
               <>
                 <LiveBodyView

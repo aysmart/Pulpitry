@@ -210,9 +210,28 @@ pub enum ItemBody {
         #[serde(default)]
         rights: SongRights,
     },
-    /// Images carry nothing beyond the file path on the item itself.
-    Image,
-    Media { looping: bool },
+    /*
+     * How a picture or a clip meets the frame.
+     *
+     * `fill` crops it to the whole screen; false fits it whole inside the
+     * frame with the backdrop showing around it. Filling is the default and
+     * the common case -- a picture staged as content is meant to *be* the
+     * screen -- but a graphic with words near its edges wants fitting, which
+     * is why this is a switch and not a rule.
+     *
+     * `#[serde(default)]` on a bool gives `false`, which is the wrong default
+     * here, so both carry it explicitly. An item saved before this reads as
+     * fitted, which is exactly how it looks today.
+     */
+    Image {
+        #[serde(default)]
+        fill: bool,
+    },
+    Media {
+        looping: bool,
+        #[serde(default)]
+        fill: bool,
+    },
     Template { theme: Box<ProjectorTheme> },
     Slide { blocks: Vec<TextBlock> },
     /**
@@ -237,7 +256,7 @@ impl ItemBody {
     pub fn kind(&self) -> &'static str {
         match self {
             ItemBody::Song { .. } => "song",
-            ItemBody::Image => "image",
+            ItemBody::Image { .. } => "image",
             ItemBody::Media { .. } => "media",
             ItemBody::Template { .. } => "template",
             ItemBody::Slide { .. } => "slide",
@@ -279,7 +298,7 @@ impl ItemBody {
                 .map(|entry| entry.label.clone())
                 .collect::<Vec<_>>()
                 .join(" "),
-            ItemBody::Image | ItemBody::Media { .. } | ItemBody::Template { .. } => String::new(),
+            ItemBody::Image { .. } | ItemBody::Media { .. } | ItemBody::Template { .. } => String::new(),
         }
     }
 }
@@ -671,8 +690,8 @@ mod tests {
                 sections: vec![SongSection { label: "Chorus".into(), lines: vec!["x".into()], components: None, layout: None }],
                 rights: SongRights::default(),
             },
-            ItemBody::Image,
-            ItemBody::Media { looping: true },
+            ItemBody::Image { fill: true },
+            ItemBody::Media { looping: true, fill: true },
             ItemBody::Template { theme: Box::new(ProjectorTheme::default()) },
             ItemBody::Slide {
                 blocks: vec![TextBlock {
@@ -1006,8 +1025,8 @@ mod tests {
         let catalog = Catalog::in_memory().expect("catalog");
         catalog.save(&song("Amazing Grace", &["a"])).expect("save");
         for (kind, path) in [
-            (ItemBody::Image, "/pictures/dove.jpg"),
-            (ItemBody::Media { looping: false }, "/clips/welcome.mp4"),
+            (ItemBody::Image { fill: true }, "/pictures/dove.jpg"),
+            (ItemBody::Media { looping: false, fill: true }, "/clips/welcome.mp4"),
         ] {
             catalog
                 .save(&Item {

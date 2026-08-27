@@ -29,13 +29,14 @@ export type Presentable =
       index: number;
       sections: SongSection[];
     }
-  | { kind: "image"; itemId: number; title: string; path: string }
+  | { kind: "image"; itemId: number; title: string; path: string; fill: boolean }
   | {
       kind: "media";
       itemId: number;
       title: string;
       path: string;
       looping: boolean;
+      fill: boolean;
     }
   | {
       kind: "slide";
@@ -116,7 +117,7 @@ export function toLiveContent(item: Presentable): LiveContent {
   }
   if (item.kind === "image") {
     return {
-      body: { kind: "image", path: item.path },
+      body: { kind: "image", path: item.path, fill: item.fill },
       caption: "",
       ids: [],
       progress: 0,
@@ -124,7 +125,7 @@ export function toLiveContent(item: Presentable): LiveContent {
   }
   if (item.kind === "media") {
     return {
-      body: { kind: "media", path: item.path, looping: item.looping },
+      body: { kind: "media", path: item.path, looping: item.looping, fill: item.fill },
       caption: "",
       ids: [],
       progress: 0,

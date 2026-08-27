@@ -284,8 +284,23 @@ export type LiveBody =
    * existed is a `richText` and still renders exactly as it did.
    */
   | { kind: "composed"; components: SlideComponent[]; layout: SlideLayout }
-  | { kind: "image"; path: string }
-  | { kind: "media"; path: string; looping: boolean };
+  | { kind: "image"; path: string; fill: boolean }
+  | { kind: "media"; path: string; looping: boolean; fill: boolean };
+
+/**
+ * Whether what is live wants the whole frame, edge to edge.
+ *
+ * Every surface that draws a slide insets it -- `px-[6cqw] py-[5cqh]` -- and
+ * that inset is right for words and wrong for a picture meant to be the
+ * screen. A filled picture inside it is a picture with a border, which reads
+ * as a mistake rather than as a margin.
+ *
+ * Asked of the body rather than decided by each frame, so the three surfaces
+ * that draw one cannot disagree about where its edges are.
+ */
+export function fillsFrame(body: LiveBody): boolean {
+  return (body.kind === "image" || body.kind === "media") && body.fill;
+}
 
 export interface LiveContent {
   body: LiveBody;

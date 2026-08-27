@@ -95,8 +95,16 @@ export interface PlanEntry {
 /** The part of a library item that differs by kind. */
 export type ItemBody =
   | { kind: "song"; sections: SongSection[]; rights: SongRights }
-  | { kind: "image" }
-  | { kind: "media"; looping: boolean }
+  /**
+   * How a picture or a clip meets the frame.
+   *
+   * `fill` crops it to the whole screen; false fits it whole inside the frame
+   * with the backdrop showing around it. Filling is the common case -- a
+   * picture staged as content is meant to *be* the screen -- but a graphic
+   * with words near its edges wants fitting, so it is a switch and not a rule.
+   */
+  | { kind: "image"; fill: boolean }
+  | { kind: "media"; looping: boolean; fill: boolean }
   | { kind: "template"; theme: ProjectorTheme }
   /**
    * A slide.

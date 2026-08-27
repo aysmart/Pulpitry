@@ -914,12 +914,25 @@ export function LiveBodyView({
         />
       );
 
+    /*
+     * Filled to the frame, or fitted whole inside it.
+     *
+     * `h-full w-full object-cover` rather than `max-*`: a picture that fills
+     * has to be *given* the frame, and a maximum only ever stops it being
+     * larger. The frame drops its own padding for this, see `fillsFrame` --
+     * without that the picture stops short of every edge and reads as a
+     * border somebody forgot to remove.
+     */
     case "image":
       return (
         <img
           src={convertFileSrc(body.path)}
           alt=""
-          className="max-h-full max-w-full object-contain"
+          className={
+            body.fill
+              ? "h-full w-full object-cover"
+              : "max-h-full max-w-full object-contain"
+          }
         />
       );
 
@@ -935,7 +948,11 @@ export function LiveBodyView({
           command={command}
           // The wall is the output whenever it exists, so it keeps the clock.
           reportProgress
-          className="max-h-full max-w-full object-contain"
+          className={
+            body.fill
+              ? "h-full w-full object-cover"
+              : "max-h-full max-w-full object-contain"
+          }
         />
       );
   }
