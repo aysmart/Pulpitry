@@ -243,7 +243,14 @@ export const measureSpeech = () => invoke<SpeechSpeed>("measure_speech");
  */
 export interface DraftSlide {
   title: string;
-  lines: string[];
+  /**
+   * The points, each with a heading where the point has one.
+   *
+   * `heading` is usually empty and that is the ordinary case: "he was
+   * faithful, he was patient, he was ready" has no headings in it, and a slide
+   * is drawn as cards only when every point has one.
+   */
+  lines: { heading: string; text: string }[];
   reference: string;
   /**
    * The words in the transcript this slide came from.

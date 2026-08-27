@@ -48,7 +48,7 @@ export type SlideComponent =
   /** A title, a statement set large, or a line of body text. */
   | { kind: "text"; text: string; level: "title" | "statement" | "body" }
   /** Parallel points. `ordered` where the preacher numbered them. */
-  | { kind: "list"; items: string[]; ordered: boolean }
+  | { kind: "list"; items: ListItem[]; ordered: boolean }
   /**
    * A comparison, a rota, a set of figures.
    *
@@ -109,6 +109,30 @@ export type ImageSource = {
  *             comparison as two headed columns rather than a ruled grid.
  * - `stacked` a heading and what sits beneath it. The common case.
  */
+/**
+ * One parallel point.
+ *
+ * A plain string, or a heading with something under it. Both shapes, because a
+ * heading is not always there to be had: "he was faithful, he was patient, he
+ * was ready" has no headings in it, and inventing three would be inventing --
+ * which is the one thing the whole of the anchoring work exists to prevent.
+ *
+ * Which shape it is decides how the list is *drawn*. Points with headings can
+ * be cards, because a card is a heading over a line and a card of one sentence
+ * is a bullet in a box, which is worse than a bullet.
+ */
+export type ListItem = string | { heading: string; text: string };
+
+/** The heading of a point, or nothing. */
+export function itemHeading(item: ListItem): string {
+  return typeof item === "string" ? "" : item.heading;
+}
+
+/** The words of a point, whichever shape it is. */
+export function itemText(item: ListItem): string {
+  return typeof item === "string" ? item : item.text;
+}
+
 export type SlideLayout = "single" | "stacked" | "split" | "section";
 
 /**
@@ -119,6 +143,27 @@ export type SlideLayout = "single" | "stacked" | "split" | "section";
  * drawn as a heading over an empty body -- which is what "those slides with
  * just a title show as broken" was.
  */
+/**
+ * The arrangement a stored slide should be drawn with.
+ *
+ * A deck keeps the layout it was saved with, and layouts outlive neither the
+ * decks nor the reasoning that produced them. "backed" was saved onto real
+ * slides and then withdrawn, and a stored name the renderer no longer has a
+ * branch for does not fail loudly -- it falls through to the last arrangement
+ * in the list and draws the slide as something nobody chose. A picture ended
+ * up over the words that way.
+ *
+ * So a name that is still known is honoured, and anything else is derived from
+ * what the slide is actually made of, which is where every layout comes from
+ * in the first place.
+ */
+export function layoutOf(stored: string | undefined, components: SlideComponent[]): SlideLayout {
+  const known: SlideLayout[] = ["single", "stacked", "split", "section"];
+  return known.includes(stored as SlideLayout)
+    ? (stored as SlideLayout)
+    : layoutFor(components);
+}
+
 export function layoutFor(components: SlideComponent[]): SlideLayout {
   const body = components.filter(
     (component) => !(component.kind === "text" && component.level === "title"),
@@ -233,7 +278,12 @@ export function componentText(component: SlideComponent): string {
     case "text":
       return component.text;
     case "list":
-      return component.items.join("\n");
+      return component.items
+        .map((item) => {
+          const heading = itemHeading(item);
+          return heading ? `${heading}: ${itemText(item)}` : itemText(item);
+        })
+        .join("\n");
     case "table":
       /*
        * Each row paired with its heading, rather than cells run together.

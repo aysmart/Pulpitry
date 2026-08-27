@@ -38,6 +38,28 @@ export interface ProjectorTheme {
   /** Colour for the reference. Empty follows the scripture's, for the same
    *  reason the typeface does. */
   referenceColor: string;
+
+  /* -- colour as structure -- */
+
+  /**
+   * The fill behind a panel: a card, a step, a quadrant.
+   *
+   * The theme has only ever described a background and some text on it, which
+   * is all a slide of centred lines needs. A slide built from shapes needs a
+   * colour that regions are made *of* — and without one those regions can only
+   * be outlined, which on a wall reads as a form to fill in rather than as a
+   * designed block.
+   *
+   * Empty derives one from the accent, so every theme that already exists gets
+   * structure without anybody opening the editor. The same idiom the reference
+   * fields use above, and for the same reason: a theme nobody has touched
+   * should keep tracking the palette it was built from rather than freeze a
+   * copy of it.
+   */
+  panelColor: string;
+  /** Text on that fill. Empty follows the body's, which the derived fill is
+   *  chosen to stay readable under. */
+  panelTextColor: string;
 }
 
 export type BackgroundKind = "color" | "gradient" | "image" | "video";
@@ -66,6 +88,10 @@ export const DEFAULT_THEME: ProjectorTheme = {
   referenceFontFamily: "",
   referenceScale: 1,
   referenceColor: "",
+  // Derived, for the reason the field explains: a theme saved before panels
+  // existed has these empty, and must look considered rather than unfinished.
+  panelColor: "",
+  panelTextColor: "",
 };
 
 /**
@@ -320,6 +346,27 @@ export function textStyle(
  * apart means the operator picks a colour and a strength rather than reasoning
  * about an eight-digit hex.
  */
+/**
+ * The fill and the text for a panel, resolved.
+ *
+ * A tint of the accent rather than a solid block of it, and that is the whole
+ * judgement here. A solid accent panel needs its own text colour, needs to
+ * contrast with both the background *and* the body text, and gets one of those
+ * wrong on some theme somebody will build. A tint sits over whatever is behind
+ * it — colour, gradient or photograph — reads as a region, and leaves the body
+ * colour still legible on it, which is why the text half can default to the
+ * body's own.
+ *
+ * A church wanting a solid brand block sets `panelColor` and gets exactly that.
+ */
+export function panelStyle(theme: ProjectorTheme): { fill: string; text: string } {
+  const accent = theme.referenceColor || theme.textColor;
+  return {
+    fill: theme.panelColor || withAlpha(accent, 0.14),
+    text: theme.panelTextColor || theme.textColor,
+  };
+}
+
 export function withAlpha(hex: string, alpha: number): string {
   const clean = hex.replace("#", "");
   const full =

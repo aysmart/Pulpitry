@@ -190,6 +190,21 @@ pub struct ProjectorTheme {
     pub reference_scale: f32,
     /// Colour for the reference line. Empty follows the scripture's.
     pub reference_color: String,
+
+    /// The fill behind a panel: a card, a step, a quadrant.
+    ///
+    /// Empty derives one from the accent, so a theme written before panels
+    /// existed gets structure without anybody opening the editor.
+    ///
+    /// Here as well as in the frontend because it has to be. `serde` drops a
+    /// field it does not know about, silently, and this struct is what every
+    /// theme is written through -- so a colour the operator chose would reach
+    /// the disk and not come back. Three separate features have been lost that
+    /// way already: a slide's components, a mirrored comparison, and a
+    /// background image.
+    pub panel_color: String,
+    /// Text on that fill. Empty follows the body's.
+    pub panel_text_color: String,
 }
 
 impl Default for ProjectorTheme {
@@ -216,6 +231,8 @@ impl Default for ProjectorTheme {
             reference_font_family: String::new(),
             reference_scale: 1.0,
             reference_color: String::new(),
+            panel_color: String::new(),
+            panel_text_color: String::new(),
         }
     }
 }

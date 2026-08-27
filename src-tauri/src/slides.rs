@@ -65,7 +65,12 @@ const MAX_SLIDES: usize = 20;
 pub struct DraftSlide {
     pub title: String,
     /// Short lines. Not a paragraph — see the module note.
-    pub lines: Vec<String>,
+    ///
+    /// Each carries a heading where the point has one, which is what lets a
+    /// slide be drawn as a row of cards rather than a row of bullets. Often it
+    /// does not: "he was faithful, he was patient, he was ready" has no
+    /// headings in it, and three invented ones would be three inventions.
+    pub lines: Vec<Point>,
     /// A passage the outline referred to, as a reference and never as text.
     /// The operator stages the real verse from the library.
     #[serde(default)]
@@ -91,6 +96,33 @@ pub struct DraftSlide {
     /// anchor's stretch of transcript or the slide does not survive.
     #[serde(default)]
     pub table: Option<SlideTable>,
+}
+
+/// One parallel point: a few words, under a heading where there is one.
+///
+/// The heading is what a card is made of. A card of one sentence is a bullet
+/// in a box, which is worse than a bullet -- so a slide whose points have no
+/// headings is drawn as a list, and nothing asks the model to supply them
+/// where the preacher did not.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Point {
+    #[serde(default)]
+    pub heading: String,
+    pub text: String,
+}
+
+impl Point {
+    /// The point as one string, for anything that wants the words and not the
+    /// shape: the anchoring check, and the flat `lines` a deck stores for a
+    /// build that predates this.
+    pub fn flat(&self) -> String {
+        if self.heading.trim().is_empty() {
+            self.text.clone()
+        } else {
+            format!("{}: {}", self.heading, self.text)
+        }
+    }
 }
 
 /// A comparison, as rows under headings.
@@ -376,7 +408,18 @@ fn body(settings: &Settings, sermon: &str, part: usize, of: usize) -> serde_json
                                 "required": ["title", "lines", "reference", "anchor", "table"],
                                 "properties": {
                                     "title": { "type": "string" },
-                                    "lines": { "type": "array", "items": { "type": "string" } },
+                                    "lines": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": ["heading", "text"],
+                                            "properties": {
+                                                "heading": { "type": "string" },
+                                                "text": { "type": "string" }
+                                            }
+                                        }
+                                    },
                                     "reference": { "type": "string" },
                                     "anchor": { "type": "string" },
                                     "table": {
@@ -409,7 +452,8 @@ fn body(settings: &Settings, sermon: &str, part: usize, of: usize) -> serde_json
                 "role": "system",
                 "content":
                     "You turn a preacher's sermon or outline into slides for a church screen. \
-                     Return JSON: {\"slides\":[{\"title\":\"…\",\"lines\":[\"…\"],\"reference\":\"…\",\
+                     Return JSON: {\"slides\":[{\"title\":\"…\",\
+                     \"lines\":[{\"heading\":\"…\",\"text\":\"…\"}],\"reference\":\"…\",\
                      \"anchor\":\"…\",\"table\":{\"header\":[\"…\",\"…\"],\"rows\":[[\"…\",\"…\"]]}}]}. \
                      \
                      Two kinds of slide, and you should be producing both. A slide of LINES, \
@@ -444,7 +488,18 @@ fn body(settings: &Settings, sermon: &str, part: usize, of: usize) -> serde_json
                      TITLE: at most seven words. Title Case. No trailing punctuation. It is \
                      a signpost, not the point itself — 'The Father Runs To Meet Him'. \
                      \
-                     LINES: at most three. Each one must make complete sense on its own, \
+                     LINES: at most three, each `{\"heading\":\"…\",\"text\":\"…\"}`. \
+                     \
+                     The HEADING is what the point is called, at most three words -- \
+                     'Fear', 'Under the Law', 'The Cost of Staying'. Give one only where \
+                     the preacher's points genuinely have names and the names are \
+                     parallel; a slide whose points all have headings is drawn as cards, \
+                     which is the strongest thing a slide can look like. Where they do \
+                     not, send `\"heading\":\"\"` and say nothing you were not told. Three \
+                     invented headings are three inventions, and a heading that merely \
+                     repeats the first words of its own text is worse than none. \
+                     \
+                     TEXT: each one must make complete sense on its own, \
                      read by somebody who has just looked up and does not know what came \
                      before it. A whole thought, not a fragment: 'The father ran while his \
                      son was still far off' — not 'Still far off'. Write it as a sentence \
@@ -623,12 +678,52 @@ fn read(content: &str) -> Result<Vec<DraftSlide>> {
      * The feature looked as though the model would not produce tables. It was
      * producing them and this was deleting them.
      */
+    /*
+     * A bare string as well as an object, and this is not politeness.
+     *
+     * The schema asks for objects, and the schema is enforced -- but the shape
+     * a model returns is the shape it returns, and a plain string is what every
+     * one of them produced for this field until the schema changed underneath
+     * it. Read only as an object, a reply of strings is a reply of nothing:
+     * every slide silently loses its lines and is then dropped for being a
+     * heading with nothing under it. That is the exact failure that made this
+     * feature look like it could not produce tables, and it cost a day.
+     *
+     * Both fields optional inside the object for the neighbouring reason:
+     * `serde`'s `default` covers a field that is absent and not one that is
+     * present and null, and a model told a heading is optional writes
+     * `"heading": null`.
+     */
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum RawPoint {
+        Plain(String),
+        Headed {
+            #[serde(default)]
+            heading: Option<String>,
+            #[serde(default)]
+            text: Option<String>,
+        },
+    }
+
+    impl RawPoint {
+        fn parts(&self) -> (&str, &str) {
+            match self {
+                RawPoint::Plain(text) => ("", text.as_str()),
+                RawPoint::Headed { heading, text } => (
+                    heading.as_deref().unwrap_or_default(),
+                    text.as_deref().unwrap_or_default(),
+                ),
+            }
+        }
+    }
+
     #[derive(Deserialize)]
     struct RawSlide {
         #[serde(default)]
         title: Option<String>,
         #[serde(default)]
-        lines: Option<Vec<String>>,
+        lines: Option<Vec<RawPoint>>,
         #[serde(default)]
         reference: Option<String>,
         #[serde(default)]
@@ -677,8 +772,13 @@ fn read(content: &str) -> Result<Vec<DraftSlide>> {
                 .lines
                 .unwrap_or_default()
                 .iter()
-                .map(|line| tidy(line))
-                .filter(|line| !line.is_empty())
+                .map(|point| {
+                    let (heading, text) = point.parts();
+                    Point { heading: tidy(heading), text: tidy(text) }
+                })
+                // A point with a heading and no words is a heading, and three
+                // of those are the headline-compression the prompt forbids.
+                .filter(|point| !point.text.is_empty())
                 .take(3)
                 .collect(),
             reference: slide
@@ -759,7 +859,36 @@ mod tests {
 
         assert_eq!(got.len(), 1, "the slide was lost with its table");
         assert!(got[0].table.is_none());
-        assert_eq!(got[0].lines, vec!["He set them side by side".to_string()]);
+        assert_eq!(
+            got[0].lines,
+            vec![Point { heading: String::new(), text: "He set them side by side".into() }],
+        );
+    }
+
+    #[test]
+    fn a_point_reads_whether_it_is_headed_or_bare() {
+        // Both shapes, because the shape a model returns is the shape it
+        // returns. Read only as objects, a reply of plain strings loses every
+        // line on every slide -- and a slide with no lines and no table is
+        // then dropped for being a heading with nothing under it, so the
+        // symptom is not "the headings are missing" but "there are no slides".
+        let got = read(
+            r#"{"slides":[
+                 {"title":"Headed","lines":[{"heading":"Fear","text":"asks what it costs to move"}],
+                  "anchor":"a"},
+                 {"title":"Bare","lines":["he simply went"],"anchor":"b"}
+               ]}"#,
+        )
+        .unwrap();
+
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].lines[0].heading, "Fear");
+        assert_eq!(got[0].lines[0].text, "asks what it costs to move");
+        assert_eq!(got[0].lines[0].flat(), "Fear: asks what it costs to move");
+
+        // No heading is the ordinary case and must not become an empty one.
+        assert!(got[1].lines[0].heading.is_empty());
+        assert_eq!(got[1].lines[0].flat(), "he simply went");
     }
 
     #[test]

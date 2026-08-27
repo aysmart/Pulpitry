@@ -10,6 +10,9 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 
 import {
   bodyText,
+  itemHeading,
+  itemText,
+  layoutOf,
   type AudioState,
   type LiveBody,
   type MediaCommand,
@@ -18,6 +21,7 @@ import {
 } from "../lib/projector";
 import {
   fontStack,
+  panelStyle,
   referenceStyle,
   textStyle,
   withAlpha,
@@ -132,6 +136,10 @@ function Composed({
     fontSize: base,
   } as CSSProperties;
 
+  // Derived where the stored name is one this build no longer draws; see
+  // `layoutOf`. A withdrawn layout must not silently become another one.
+  const layout = layoutOf(body.layout, body.components);
+
   const title = body.components.find(
     (component) => component.kind === "text" && component.level === "title",
   );
@@ -145,7 +153,7 @@ function Composed({
    * frame, it looked like a slide that had failed to load -- which is what
    * "those slides with just a title show as broken" was.
    */
-  if (body.layout === "section" && title?.kind === "text") {
+  if (layout === "section" && title?.kind === "text") {
     return (
       <div className={FRAME} style={frame}>
         <Heading text={title.text} style={style} accent={accent} base={base} scale={2.1} />
@@ -161,7 +169,7 @@ function Composed({
    * what a congregation needs is the two things beside each other, each under
    * its own heading, with air between them.
    */
-  if (body.layout === "split") {
+  if (layout === "split") {
     /*
      * A picture in its own panel, with the words beside it.
      *
@@ -261,7 +269,7 @@ function Composed({
    * Centred, because there is nothing for it to align with: the hanging rule
    * exists to tie a heading to what sits under it, and here there is neither.
    */
-  if (body.layout === "single") {
+  if (layout === "single") {
     return (
       <div className={`${FRAME} gap-[0.5em]`} style={frame}>
         {body.components.map((component, index) => (
@@ -289,6 +297,11 @@ function Composed({
       ))}
     </div>
   );
+}
+
+/** The brand's accent, or the body colour where a theme sets none. */
+function accentOf(theme: ProjectorTheme): string {
+  return theme.referenceColor || theme.textColor;
 }
 
 function Component({
@@ -347,7 +360,73 @@ function Component({
         </p>
       );
 
-    case "list":
+    case "list": {
+      const headed = component.items.filter((item) => itemHeading(item)).length;
+
+      /*
+       * Cards, where the points have headings and there are few enough.
+       *
+       * A row of panels is what a designed deck does with three parallel
+       * points, and a row of bullets is what a text dump does with them. The
+       * difference is not decoration: a card gives each point its own region,
+       * so three points read as three things rather than as a paragraph that
+       * has been broken up.
+       *
+       * Four is the ceiling. Five panels across a 16:9 frame are columns too
+       * narrow to hold a sentence, and the honest drawing of five points is a
+       * list. Headings are required because a card of one sentence is a bullet
+       * in a box, which is worse than a bullet.
+       */
+      if (headed === component.items.length && component.items.length <= 4) {
+        const panel = panelStyle(theme);
+        return (
+          <div className="flex w-full items-stretch gap-[0.5em]">
+            {component.items.map((item, index) => (
+              <div
+                key={index}
+                className="flex flex-1 flex-col gap-[0.28em] rounded-[0.14em] p-[0.6em]"
+                style={{ backgroundColor: panel.fill, color: panel.text }}
+              >
+                {component.ordered ? (
+                  <span
+                    className="tabular-nums"
+                    style={{
+                      ...style,
+                      color: accentOf(theme),
+                      fontSize: `calc(${base} * 0.62)`,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {index + 1}
+                  </span>
+                ) : null}
+                <h3
+                  style={{
+                    ...style,
+                    color: accentOf(theme),
+                    fontSize: `calc(${base} * 0.8)`,
+                    fontWeight: 700,
+                    lineHeight: 1.18,
+                  }}
+                >
+                  {itemHeading(item)}
+                </h3>
+                <p
+                  style={{
+                    ...style,
+                    color: panel.text,
+                    fontSize: `calc(${base} * 0.66)`,
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {itemText(item)}
+                </p>
+              </div>
+            ))}
+          </div>
+        );
+      }
+
       /* Ranged left, not centred. A centred list has a ragged left edge, which
          is the one thing that makes parallel points stop looking parallel. */
       return (
@@ -362,15 +441,21 @@ function Component({
               <span
                 aria-hidden={!component.ordered}
                 className="shrink-0 tabular-nums opacity-70"
-                style={{ color: theme.referenceColor || theme.textColor }}
+                style={{ color: accentOf(theme) }}
               >
-                {component.ordered ? `${index + 1}.` : "·"}
+                {component.ordered ? `${index + 1}.` : "\u00b7"}
               </span>
-              <span>{item}</span>
+              <span>
+                {itemHeading(item) ? (
+                  <strong className="font-semibold">{itemHeading(item)}: </strong>
+                ) : null}
+                {itemText(item)}
+              </span>
             </li>
           ))}
         </ol>
       );
+    }
 
     case "table":
       /* Hairlines in the text's own colour at low opacity rather than a border

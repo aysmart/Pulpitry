@@ -65,6 +65,17 @@ import { describeError, generateSlides, type DraftSlide } from "../lib/api";
  * before the model is taught to produce tables and figures -- if the shape is
  * wrong, it is much cheaper to find out here.
  */
+/**
+ * A point as one string.
+ *
+ * For everything that wants the words and not the shape: the flat `lines` a
+ * deck stores for a build that predates headings, and the blocks a slide keeps
+ * for one that predates components.
+ */
+export function flatPoint(point: { heading: string; text: string }): string {
+  return point.heading ? `${point.heading}: ${point.text}` : point.text;
+}
+
 export function componentsFor(draft: DraftSlide, picture?: ImageSource | null): SlideComponent[] {
   const components: SlideComponent[] = [];
 
@@ -113,9 +124,20 @@ export function componentsFor(draft: DraftSlide, picture?: ImageSource | null): 
 
   const [only] = draft.lines;
   if (draft.lines.length === 1 && only) {
-    components.push({ kind: "text", text: only, level: "statement" });
+    // One point is a statement, not a list of one -- and not a card either: a
+    // single panel is a box drawn round a sentence for no reason.
+    components.push({ kind: "text", text: flatPoint(only), level: "statement" });
   } else if (draft.lines.length > 1) {
-    components.push({ kind: "list", items: draft.lines, ordered: false });
+    components.push({
+      kind: "list",
+      // A point with no heading crosses as a plain string rather than as an
+      // object with an empty one, so "has a heading" stays a question about
+      // the shape of the data and not about whether a field is blank.
+      items: draft.lines.map((point) =>
+        point.heading ? { heading: point.heading, text: point.text } : point.text,
+      ),
+      ordered: false,
+    });
   }
 
   if (draft.reference) {
@@ -144,7 +166,7 @@ export function sectionFor(draft: DraftSlide, picture?: ImageSource | null) {
     label: draft.title || "Slide",
     // Kept as well as the components: a deck saved today still opens in a
     // build that predates them, and lines are what that build draws.
-    lines: [...draft.lines, ...(draft.reference ? [draft.reference] : [])],
+    lines: [...draft.lines.map(flatPoint), ...(draft.reference ? [draft.reference] : [])],
     components,
     // Derived rather than chosen. Nobody is asked and the model is not either:
     // an arrangement is a function of what the slide is made of.
@@ -165,8 +187,14 @@ export function blocksFor(draft: DraftSlide): TextBlock[] {
     });
   }
 
-  for (const text of draft.lines) {
-    blocks.push({ text, level: "body", align: "center", bold: false, italic: false });
+  for (const point of draft.lines) {
+    blocks.push({
+      text: flatPoint(point),
+      level: "body",
+      align: "center",
+      bold: false,
+      italic: false,
+    });
   }
 
   if (draft.reference) {
@@ -333,8 +361,15 @@ export function SlidesFromSermon({ onClose }: { onClose: () => void }) {
 
               {draft.lines.length > 0 ? (
                 <ul className="flex flex-col gap-0.5 text-[12.5px] leading-snug text-pulpitry-muted">
-                  {draft.lines.map((line, at) => (
-                    <li key={at}>{line}</li>
+                    {draft.lines.map((point, at) => (
+                    <li key={at}>
+                      {point.heading ? (
+                        <strong className="font-semibold text-pulpitry-text">
+                          {point.heading}:{" "}
+                        </strong>
+                      ) : null}
+                      {point.text}
+                    </li>
                   ))}
                 </ul>
               ) : null}
