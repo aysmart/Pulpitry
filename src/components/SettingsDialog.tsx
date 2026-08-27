@@ -678,7 +678,19 @@ export function SettingsDialog({
      operator a translation that is no longer on the machine. */
   const rereadLibrary = useCallback(() => {
     void libraryStatus()
-      .then((status) => setTranslations(status.translations))
+      .then((status) => {
+        setTranslations(status.translations);
+        // Removing the translation in use leaves the setting naming one that
+        // is no longer on the machine, and detection would then search a
+        // translation with no verses in it and quietly find nothing. Move to
+        // whatever remains first; the auto-save writes it like any other
+        // change.
+        setTranslation((current) =>
+          status.translations.some((entry) => entry.id === current)
+            ? current
+            : (status.translations[0]?.id ?? current),
+        );
+      })
       .catch(() => undefined);
   }, []);
 
