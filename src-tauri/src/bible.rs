@@ -1517,8 +1517,15 @@ mod tests {
             .unwrap_or_else(|_| "http://127.0.0.1:8787/catalogue.json".into());
         let base = url.rsplit_once('/').unwrap().0.to_string();
 
+        // Which pack, so the same test can check a downloaded translation and
+        // not only the one that also ships in the bundle: PACK=NIV, PACK=TPT.
+        let want = std::env::var("PACK").unwrap_or_else(|_| "KJV".into());
+
         let catalogue = castavox_core::packs::catalogue(&url).unwrap();
-        let pack = catalogue.iter().find(|p| p.id == "KJV").expect("KJV is in the catalogue");
+        let pack = catalogue
+            .iter()
+            .find(|p| p.id == want)
+            .unwrap_or_else(|| panic!("{want} is not in the catalogue"));
 
         let dir = scratch("real");
         let file = castavox_core::packs::download(pack, &base, &dir, |_| {}).unwrap();
@@ -1528,12 +1535,14 @@ mod tests {
 
         // Searched rather than counted, because a row count proves the import
         // ran and nothing about whether the index it built can find anything.
-        // Two verses say "God so loved" -- John 3:16 and 1 John 4:11 -- and
-        // expecting one was a wrong assertion rather than a wrong import.
-        let found = library
-            .phrase_search("KJV", &["God".into(), "so".into(), "loved".into()], 5)
-            .unwrap();
-        assert!(found.iter().any(|v| v.book == "John" && v.chapter == 3 && v.verse == 16));
+        // John 3:16 is in every translation we publish, including the one whose
+        // Old Testament is four books.
+        let john = library.chapter(&want, 43, 3).unwrap();
+        let verse = john
+            .iter()
+            .find(|v| v.verse == 16)
+            .unwrap_or_else(|| panic!("{want}: John 3:16 is not there"));
+        assert!(verse.text.len() > 20, "{want}: {:?}", verse.text);
     }
 
     /// A truncated pack imports nothing rather than a Bible with holes in it.
