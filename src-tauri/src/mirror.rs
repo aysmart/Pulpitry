@@ -351,7 +351,48 @@ fn component_lines(component: &serde_json::Value) -> Vec<String> {
             let one = if component.get("text").is_some() { text("text") } else { text("reference") };
             if one.is_empty() { vec![] } else { vec![one] }
         }
-        "list" => strings("items"),
+        /*
+         * A point is a string, or a heading with words under it.
+         *
+         * Read only as strings, a slide whose points carry headings crosses as
+         * a heading and nothing else -- the far screen draws the title and the
+         * body is silently empty. Nothing errors and nothing says so; the
+         * points are simply not there.
+         *
+         * Paired with its heading rather than run together, for the reason a
+         * table's rows are: "Silence: the prophetic silence had become normal"
+         * survives being read in a strip at the bottom of a frame, and
+         * "Silence the prophetic silence had become normal" is a sentence
+         * beginning with a word nobody can place.
+         */
+        "list" => component
+            .get("items")
+            .and_then(|v| v.as_array())
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| match item {
+                        serde_json::Value::String(text) => {
+                            Some(text.trim().to_string()).filter(|t| !t.is_empty())
+                        }
+                        serde_json::Value::Object(_) => {
+                            let head =
+                                item.get("heading").and_then(|v| v.as_str()).unwrap_or("").trim();
+                            let text =
+                                item.get("text").and_then(|v| v.as_str()).unwrap_or("").trim();
+                            if text.is_empty() {
+                                None
+                            } else if head.is_empty() {
+                                Some(text.to_string())
+                            } else {
+                                Some(format!("{head}: {text}"))
+                            }
+                        }
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
         "quote" => {
             let said = text("text");
             let who = text("attribution");
@@ -573,6 +614,40 @@ mod tests {
                 // statement it belonged to and read as part of the sentence.
                 assert_eq!(reference, "Joshua 1:9");
                 assert!(!lines.iter().any(|line| line.contains("Joshua")));
+            }
+            other => panic!("a composed slide showed as {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_slides_points_cross_whether_or_not_they_are_headed() {
+        // Read only as strings, a headed point is dropped -- and the failure is
+        // silent: the far screen draws the title and an empty body, with
+        // nothing anywhere saying the points were lost.
+        let live = LiveContent {
+            body: LiveBody::Composed {
+                components: vec![
+                    serde_json::json!({"kind":"text","level":"title","text":"The Cost"}),
+                    serde_json::json!({
+                        "kind":"list",
+                        "ordered":false,
+                        "items":[
+                            {"heading":"Silence","text":"The prophetic silence had become normal"},
+                            "Wickedness spread through every level"
+                        ]
+                    }),
+                ],
+                layout: "cards".into(),
+            },
+            caption: "The Cost".into(),
+            ids: vec![],
+            progress: 0.0,
+        };
+
+        match shown_of(&live) {
+            Shown::Words { lines, .. } => {
+                assert_eq!(lines[0], "Silence: The prophetic silence had become normal");
+                assert_eq!(lines[1], "Wickedness spread through every level");
             }
             other => panic!("a composed slide showed as {other:?}"),
         }
