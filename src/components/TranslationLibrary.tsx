@@ -167,6 +167,11 @@ export function TranslationLibrary({ onChange }: { onChange: () => void }) {
 
           {rows
             .filter((row) => row.language === language)
+            /* By the code, because the code is the column the eye runs down.
+               The catalogue's own order is the order translations were added
+               to it, which is a fact about us and not about what somebody is
+               looking for. */
+            .sort((a, b) => a.id.localeCompare(b.id))
             .map((row) => {
               const percent = busy[row.id];
               const downloading = percent !== undefined;
