@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
-import { openUrl } from "@tauri-apps/plugin-opener";
+
+import { describeError, sendFeedback } from "../lib/api";
 
 /**
  * A report that arrives usable, rather than "it stopped working".
@@ -13,16 +14,17 @@ import { openUrl } from "@tauri-apps/plugin-opener";
  * up front is not a form for its own sake — it is the four exchanges, asked
  * once, while the person still remembers.
  *
- * # Why it opens a mail client rather than posting
+ * # Why it posts rather than opening a mail client
  *
- * The report goes to support@castavox.com as an ordinary email. It costs no
- * endpoint, no storage and no privacy policy change, and it leaves the church
- * holding a copy in their own sent items — which matters when the thing they
- * are reporting is that something of theirs went missing.
+ * A mail link costs nothing to build and fails on exactly the machine most
+ * likely to have something to report: a church laptop with no mail client
+ * configured, where the button appears to do nothing at all. It also loses the
+ * report whenever the operator is not the person whose email account is on the
+ * machine, which at a church is most of the time.
  *
- * The cost is real and worth stating: a machine with no mail client configured
- * gets nothing, so the address is shown as text that can be copied and the body
- * is never lost behind a button that silently did nothing.
+ * So the broker takes it and sends it on. The person needs nothing but the
+ * application they are already unhappy with — and if the send fails, they are
+ * told, and given the address.
  */
 export function Feedback() {
   const [kind, setKind] = useState<"bug" | "idea">("bug");
@@ -33,6 +35,7 @@ export function Feedback() {
   const [idea, setIdea] = useState("");
   const [blocking, setBlocking] = useState(false);
   const [about, setAbout] = useState("");
+  const [sent, setSent] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -71,19 +74,28 @@ export function Feedback() {
           .join("\n\n")
       : `${idea.trim() || "—"}\n\n---\n${about}`;
 
-  const subject =
-    kind === "bug"
-      ? `Pulpitry bug${blocking ? " (blocking)" : ""}`
-      : "Pulpitry — an idea";
-
   const ready =
     kind === "bug" ? happened.trim().length > 0 : idea.trim().length > 0;
 
-  const send = () => {
-    const to = "support@castavox.com";
-    const query = new URLSearchParams({ subject, body });
-    if (email.trim()) query.set("cc", email.trim());
-    void openUrl(`mailto:${to}?${query.toString()}`);
+  const [sending, setSending] = useState(false);
+  const [outcome, setOutcome] = useState<string | null>(null);
+
+  const send = async () => {
+    setSending(true);
+    setOutcome(null);
+    try {
+      await sendFeedback({
+        kind,
+        text: body,
+        email: email.trim(),
+        platform: about,
+      });
+      setSent(true);
+    } catch (err) {
+      setOutcome(describeError(err));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -168,18 +180,35 @@ export function Feedback() {
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
-          onClick={send}
-          disabled={!ready}
+          onClick={() => void send()}
+          disabled={!ready || sending || sent}
           className="rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-1.5 text-[12px] text-pulpitry-text disabled:opacity-40 focus-visible:focus-ring"
         >
-          Write the email
+          {sending ? "Sending…" : sent ? "Sent" : "Send"}
         </button>
-        {/* Shown whether or not a mail client exists, because on a machine with
-            none the button does nothing and the address is the whole answer. */}
-        <span className="text-[11.5px] text-pulpitry-muted">
-          Opens your mail app, addressed to support@castavox.com. Nothing is
-          sent until you send it.
-        </span>
+
+        {/*
+          Three states, said in words. "Sent" is the one that matters: somebody
+          who is not sure whether it went will send it again, and a support
+          inbox with the same report three times is how the third one gets read
+          as the first.
+        */}
+        {sent ? (
+          <span className="text-[11.5px] text-pulpitry-muted">
+            Thank you — it reached us. We read every one.
+          </span>
+        ) : outcome ? (
+          // The failure names the address, because that is the thing they can
+          // still do about it.
+          <span className="text-[11.5px] leading-snug text-pulpitry-gold">
+            {outcome} You can write to support@castavox.com instead.
+          </span>
+        ) : (
+          <span className="text-[11.5px] text-pulpitry-muted">
+            Goes to support@castavox.com. Nothing else is attached — no
+            transcript, no verses, no audio.
+          </span>
+        )}
       </div>
     </div>
   );

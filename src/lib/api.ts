@@ -135,6 +135,21 @@ export const EVENT_STATUS = "speech:status";
 
 export const listAudioInputs = () => invoke<AudioDevice[]>("list_audio_inputs");
 
+/**
+ * Sends a report to the broker, which mails it to support.
+ *
+ * Through Rust because the window cannot reach another origin: the content
+ * policy that stops a projector loading anything off the network stops this
+ * too, and loosening it for one form would cost the thing that makes the
+ * application safe to run.
+ */
+export const sendFeedback = (input: {
+  kind: string;
+  text: string;
+  email: string;
+  platform: string;
+}) => invoke<void>("send_feedback", input);
+
 /** Copies the log where somebody can attach it to an email. Returns the path. */
 export const exportLog = (to: string) => invoke<string>("export_log", { to });
 

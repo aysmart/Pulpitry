@@ -334,6 +334,67 @@ struct SpeechSpeed {
 /// discards the address before anything is written down.
 const CHECK_IN_ENDPOINT: &str = "https://castavox.com/api/v1/check-in";
 
+/// Where a report goes, to be sent on by the broker.
+///
+/// Posted rather than opened as a mail link. A church laptop with no mail
+/// client configured is exactly the machine most likely to have something to
+/// report, and there the link does nothing at all -- and the operator is often
+/// not the person whose email account is on the machine.
+const FEEDBACK_ENDPOINT: &str = "https://castavox.com/api/v1/feedback";
+
+/**
+ * Sends a report to the broker, which mails it on.
+ *
+ * In Rust rather than from the window because the window cannot reach another
+ * origin -- the content policy that keeps a projector from loading anything off
+ * the network also stops this, and loosening it for one form would be paying
+ * for a form with the thing that makes the application safe to run.
+ *
+ * Errors are returned rather than swallowed, unlike the check-in. Somebody is
+ * watching this one: they pressed send. A silent failure would leave a church
+ * believing it reported something nobody will ever read.
+ */
+#[tauri::command]
+async fn send_feedback(
+    kind: String,
+    text: String,
+    email: String,
+    platform: String,
+) -> CommandResult<()> {
+    let body = serde_json::json!({
+        "kind": kind,
+        "app": "Pulpitry",
+        "version": env!("CARGO_PKG_VERSION"),
+        "platform": platform,
+        "email": email,
+        "text": text,
+    });
+
+    let response = reqwest::Client::new()
+        .post(FEEDBACK_ENDPOINT)
+        .json(&body)
+        // Long enough for a slow hall connection, short enough that somebody
+        // is not left watching a spinner wondering whether to press it again.
+        .timeout(std::time::Duration::from_secs(20))
+        .send()
+        .await
+        .map_err(|error| format!("That could not be sent. {error}"))?;
+
+    if response.status().is_success() {
+        return Ok(());
+    }
+
+    // The broker words this for a church; passing it through beats inventing a
+    // second sentence that says the same thing differently.
+    let message = response
+        .json::<serde_json::Value>()
+        .await
+        .ok()
+        .and_then(|body| body.get("error").and_then(|e| e.as_str()).map(String::from))
+        .unwrap_or_else(|| "That could not be sent just now.".into());
+    Err(message)
+}
+
 #[tauri::command]
 async fn measure_speech(
     app: AppHandle,
@@ -1375,6 +1436,7 @@ pub fn run() {
             node_status,
             library_status,
             export_log,
+            send_feedback,
             list_translations,
             list_books,
             get_chapter,

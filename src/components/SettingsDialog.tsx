@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
 import { MirrorPanel } from "./MirrorPanel";
@@ -497,6 +497,55 @@ function Row({
   );
 }
 
+/**
+ * One setting with two states, shown rather than hidden behind a dropdown.
+ *
+ * A dropdown asks somebody to open it to find out what it is set to. For two
+ * options that is a worse trade than the space it saves, and for the two here
+ * -- whether the screen moves on its own -- it is the answer an operator most
+ * wants at a glance while a service is starting.
+ *
+ * The chosen side carries the raised surface rather than the accent. The accent
+ * is what this product uses for *live*, and a settings control wearing it reads
+ * as something currently happening.
+ */
+function Switch<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (next: T) => void;
+  options: readonly (readonly [T, string])[];
+}) {
+  return (
+    <div
+      role="radiogroup"
+      className="flex w-fit gap-0.5 rounded border border-pulpitry-line bg-pulpitry-ink p-0.5"
+    >
+      {options.map(([id, label]) => {
+        const chosen = id === value;
+        return (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={chosen}
+            onClick={() => onChange(id)}
+            className={`rounded px-3 py-1 text-[12.5px] transition-colors focus-visible:focus-ring ${
+              chosen
+                ? "bg-pulpitry-raised text-pulpitry-text"
+                : "text-pulpitry-muted hover:text-pulpitry-text"
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function Section({
   title,
   note,
@@ -612,6 +661,7 @@ export function SettingsDialog({
       model.includes(".en"));
 
   const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Only when the operator actually wants it: this reaches whisper.cpp's
@@ -673,14 +723,18 @@ export function SettingsDialog({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  /**
+   * Writes the settings. Called by the watcher below, not by a button.
+   *
+   * Secrets are not written here. A key is saved when its field loses focus,
+   * because a debounce fires mid-typing and would store half an Azure key --
+   * and a half key is not a harmless intermediate state, it is a configuration
+   * that fails with an authentication error nobody can explain.
+   */
+  const persist = async () => {
     setSaving(true);
     setError(null);
     try {
-      if (key.trim()) await saveAzureKey(key.trim());
-      if (assistKey.trim()) await saveAssistKey(assistKey.trim());
-
       const next = await saveSettings({
         azureRegion: region.trim(),
         language,
@@ -706,14 +760,74 @@ export function SettingsDialog({
         projector: settings.projector,
       });
 
-      setKey("");
-      setAssistKey("");
       onSaved(next);
-      onClose();
+      setSavedAt(Date.now());
     } catch (err) {
       setError(describeError(err));
     } finally {
       setSaving(false);
+    }
+  };
+
+  /*
+   * Saved as it is changed, rather than at a button.
+   *
+   * A settings dialogue with Save and Cancel asks somebody to remember they
+   * pressed a switch, and punishes them for closing the window the way every
+   * other window closes. Nothing here is a transaction: each of these is one
+   * value the application reads next time it needs it.
+   *
+   * Debounced, because a text field would otherwise write on every keystroke.
+   * The first run is skipped -- an effect that fires on mount would save the
+   * settings the moment the dialogue opened, which turns opening it to look at
+   * something into changing the file.
+   */
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const timer = setTimeout(() => void persist(), 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    region,
+    language,
+    device,
+    translation,
+    verseDisplay,
+    assistEnabled,
+    assistEndpoint,
+    assistModel,
+    assistApiVersion,
+    updateCheck,
+    checkIn,
+    semanticEnabled,
+    semanticThreshold,
+    mirrorEnabled,
+    engine,
+    model,
+  ]);
+
+  /** A key, written when its field is done rather than as it is typed. */
+  const keepKey = async (which: "speech" | "assist", value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setError(null);
+    try {
+      if (which === "speech") {
+        await saveAzureKey(trimmed);
+        setKey("");
+        onSaved({ ...settings, hasAzureKey: true });
+      } else {
+        await saveAssistKey(trimmed);
+        setAssistKey("");
+        onSaved({ ...settings, hasAssistKey: true });
+      }
+      setSavedAt(Date.now());
+    } catch (err) {
+      setError(describeError(err));
     }
   };
 
@@ -740,8 +854,7 @@ export function SettingsDialog({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <form
-        onSubmit={submit}
+      <div
         // Wider than it was, because a rail takes 164px and the pane beside it
         // still has to hold a sentence of consequence under every setting.
         className="flex max-h-full w-full max-w-[760px] flex-col rounded-lg border border-pulpitry-line bg-pulpitry-surface shadow-2xl"
@@ -981,6 +1094,12 @@ export function SettingsDialog({
                         autoComplete="off"
                         spellCheck={false}
                         onChange={(event) => setKey(event.target.value)}
+                        // On blur, not on every keystroke: a debounce would
+                        // store half a key, which is not a harmless middle
+                        // state but a configuration that fails to authenticate.
+                        onBlur={(event) =>
+                          void keepKey("speech", event.target.value)
+                        }
                         placeholder={
                           settings.hasAzureKey
                             ? "•••••••• (leave blank to keep)"
@@ -1079,22 +1198,22 @@ export function SettingsDialog({
                   </span>
                 </label>
 
-                <label className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5">
                   <span className="text-[12px] text-pulpitry-muted">
                     When a verse is detected
                   </span>
-                  <select
+                  {/* Two states, so a switch: a dropdown asks somebody to open
+                      it to find out what it is set to, and this is the setting
+                      an operator most wants to see the answer to at a glance
+                      while a service is starting. */}
+                  <Switch
                     value={verseDisplay}
-                    onChange={(event) => setVerseDisplay(event.target.value)}
-                    className={FIELD}
-                  >
-                    <option value="manual">
-                      Wait — everything appears in the list to click
-                    </option>
-                    <option value="auto">
-                      Announced passages go live on their own
-                    </option>
-                  </select>
+                    onChange={setVerseDisplay}
+                    options={[
+                      ["manual", "Manual"],
+                      ["auto", "Auto"],
+                    ]}
+                  />
                   {/*
                     Only the announced kind, and the distinction is the whole
                     setting. A speaker naming their passage has inferred
@@ -1108,7 +1227,7 @@ export function SettingsDialog({
                     thinks were paraphrased, always wait in the list: click to
                     preview one, double-click to send it.
                   </span>
-                </label>
+                </div>
               </Section>
 
               <div className="border-t border-pulpitry-line" />
@@ -1263,6 +1382,9 @@ export function SettingsDialog({
                         autoComplete="off"
                         spellCheck={false}
                         onChange={(event) => setAssistKey(event.target.value)}
+                        onBlur={(event) =>
+                          void keepKey("assist", event.target.value)
+                        }
                         placeholder={
                           settings.hasAssistKey
                             ? "•••••••• (leave blank to keep)"
@@ -1392,23 +1514,32 @@ export function SettingsDialog({
           </div>
         </div>
 
-        <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-pulpitry-line px-5 py-3.5">
+        {/*
+          What happened, not what to press.
+          
+          Nothing here is a transaction, so there is nothing to confirm or
+          abandon -- and a Cancel button that cannot undo what it implies it
+          undoes is worse than no button. What an operator needs instead is to
+          know the change took, which is the one thing Save used to tell them
+          as a side effect.
+        */}
+        <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-pulpitry-line px-5 py-3.5">
+          <span className="text-[11.5px] text-pulpitry-muted">
+            {saving
+              ? "Saving…"
+              : savedAt
+                ? "Saved."
+                : "Changes are kept as you make them."}
+          </span>
           <button
             type="button"
             onClick={onClose}
             className="rounded border border-pulpitry-line bg-pulpitry-raised px-3.5 py-1.5 text-[13px] text-pulpitry-text focus-visible:focus-ring"
           >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded bg-pulpitry-gold px-3.5 py-1.5 text-[13px] text-pulpitry-ink disabled:opacity-50 focus-visible:focus-ring"
-          >
-            {saving ? "Saving…" : "Save"}
+            Done
           </button>
         </footer>
-      </form>
+      </div>
     </div>
   );
 }
