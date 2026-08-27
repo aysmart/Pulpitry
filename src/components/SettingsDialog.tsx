@@ -5,6 +5,7 @@ import { MirrorPanel } from "./MirrorPanel";
 import { NdiPanel } from "./NdiPanel";
 import { HostedSubscription } from "./HostedSubscription";
 import { NodeRuntimeNotice } from "./NodeRuntimeNotice";
+import { Feedback } from "./Feedback";
 
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -331,6 +332,11 @@ const PANES = [
     id: "help",
     name: "Help",
     note: "What leaves this machine, and what does not.",
+  },
+  {
+    id: "feedback",
+    name: "Feedback",
+    note: "Something wrong, or something missing.",
   },
 ] as const;
 
@@ -1083,23 +1089,24 @@ export function SettingsDialog({
                     className={FIELD}
                   >
                     <option value="manual">
-                      Wait — it appears in the list to click
+                      Wait — everything appears in the list to click
                     </option>
                     <option value="auto">
-                      Stage it in Preview automatically
+                      Announced passages go live on their own
                     </option>
                   </select>
                   {/*
-                    Preview, and never the wall. Detection is a guess: it
-                    mishears names, and a paraphrase match is a weaker claim
-                    than a quotation. Our own terms say nothing should reach a
-                    congregation without somebody deciding it should -- so this
-                    saves the operator the hunt through the list, not the
-                    decision at the end of it.
+                    Only the announced kind, and the distinction is the whole
+                    setting. A speaker naming their passage has inferred
+                    nothing; a text match can be them quoting something else in
+                    passing, and a paraphrase match is weaker still.
                   */}
                   <span className="text-[11.5px] leading-snug text-pulpitry-muted">
-                    Either way it goes no further than Preview. Nothing reaches
-                    the screen until you send it.
+                    On auto, a passage the speaker names out loud — &ldquo;turn
+                    with me to John 3&rdquo; — goes to the screen by itself.
+                    Verses merely heard in what was said, and passages the model
+                    thinks were paraphrased, always wait in the list: click to
+                    preview one, double-click to send it.
                   </span>
                 </label>
               </Section>
@@ -1308,6 +1315,15 @@ export function SettingsDialog({
             {error ? (
               <p className="text-[12px] text-pulpitry-gold">{error}</p>
             ) : null}
+
+            <Pane id="feedback" active={pane}>
+              <Section
+                title="Tell us"
+                note="Three questions, because they are the four exchanges a support thread otherwise spends establishing them — asked once, while you still remember."
+              >
+                <Feedback />
+              </Section>
+            </Pane>
 
             <Pane id="help" active={pane}>
               <Section

@@ -163,28 +163,33 @@ export default function App() {
   const [settings, setSettings] = useState<SettingsView | null>(null);
 
   /*
-   * Staging a detected verse without being asked, where the operator asked.
+   * An announced reference goes live on its own, where the operator asked.
    *
-   * Preview, never the wall. Detection is a guess -- it mishears names, and a
-   * paraphrase match is a weaker claim than a quotation -- and our own terms
-   * say nothing should reach a congregation without somebody deciding it
-   * should. So this saves the hunt through the list, not the decision.
+   * Only the announced kind. The three lists are three different claims and
+   * this is the only one where nothing was inferred: the speaker said where
+   * they were going -- "turn with me to John 3:16" -- so there is no guess to
+   * be wrong about. A text match can be the speaker quoting a different verse
+   * in passing, and a paraphrase match is weaker still; both stay in the list
+   * for a click, which is what a click is for.
    *
-   * Only the newest, and only while it is newer than what is already staged: a
-   * second detection arriving mid-reading must not pull the screen off the
-   * verse being read. The id is compared rather than the object, because the
-   * list is rebuilt on every detection.
+   * Our terms say nothing should reach a congregation without somebody
+   * deciding it should, and that still holds: the deciding is switching this
+   * on, once, for a service where the preacher announces their passages.
+   *
+   * Only the newest, and never twice. A reference arriving mid-reading must
+   * not pull the screen off the verse being read, so the id is remembered
+   * rather than the object -- the list is rebuilt on every event.
    */
-  const autoStage = settings?.verseDisplay === "auto";
-  const newest = detections[0]?.verse;
-  const stagedId = useRef<number | null>(null);
+  const autoLive = settings?.verseDisplay === "auto";
+  const announced = references[0]?.verse;
+  const shownId = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!autoStage || !newest) return;
-    if (stagedId.current === newest.id) return;
-    stagedId.current = newest.id;
-    previewVerse(newest);
-  }, [autoStage, newest, previewVerse]);
+    if (!autoLive || !announced) return;
+    if (shownId.current === announced.id) return;
+    shownId.current = announced.id;
+    showVerse(announced);
+  }, [autoLive, announced, showVerse]);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [library, setLibrary] = useState<LibraryStatus>({
     ready: false,
