@@ -47,6 +47,18 @@ CREATE TABLE IF NOT EXISTS translations (
     verse_count INTEGER NOT NULL DEFAULT 0
 );
 
+/*
+ * Translations this church has said no to.
+ *
+ * Without this, removing a bundled translation is a button that works until
+ * the next launch and then quietly undoes itself, because the import that
+ * fills an empty library on first run cannot tell "never had it" from "did not
+ * want it". One row per refusal, cleared when somebody downloads it again.
+ */
+CREATE TABLE IF NOT EXISTS declined (
+    id TEXT PRIMARY KEY
+);
+
 CREATE TABLE IF NOT EXISTS verses (
     id          INTEGER PRIMARY KEY,
     translation TEXT    NOT NULL,
@@ -382,8 +394,11 @@ impl Library {
         app: &AppHandle,
         progress: impl Fn(LibraryStatus),
     ) -> Result<()> {
+        let declined = self.declined()?;
         for (ordinal, entry) in self.manifest(app)?.into_iter().enumerate() {
-            if self.translation_is_current(&entry)? {
+            // Removed on purpose. Reimporting it here is how a Remove button
+            // becomes a button that works until Sunday.
+            if declined.contains(&entry.id) || self.translation_is_current(&entry)? {
                 continue;
             }
 
@@ -429,6 +444,14 @@ impl Library {
             }
         }
         seen
+    }
+
+    /// The ids this church has removed and does not want back.
+    fn declined(&self) -> Result<Vec<String>> {
+        let connection = self.connection.lock();
+        let mut statement = connection.prepare("SELECT id FROM declined")?;
+        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     fn manifest(&self, app: &AppHandle) -> Result<Vec<Pack>> {
@@ -572,7 +595,15 @@ impl Library {
                 .unwrap_or(0)
         };
         self.import(pack, next, path)
-            .with_context(|| format!("could not install {}", pack.id))
+            .with_context(|| format!("could not install {}", pack.id))?;
+
+        // Asked for again, so it is no longer refused: a bundled translation
+        // downloaded back should behave exactly like one that was never
+        // removed, including surviving a reinstall of the application.
+        self.connection
+            .lock()
+            .execute("DELETE FROM declined WHERE id = ?1", params![pack.id])?;
+        Ok(pack.verse_count)
     }
 
     /// Removes an installed translation and everything derived from it.
@@ -601,6 +632,10 @@ impl Library {
         )?;
         let removed = transaction.execute("DELETE FROM verses WHERE translation = ?1", params![id])?;
         transaction.execute("DELETE FROM translations WHERE id = ?1", params![id])?;
+        transaction.execute(
+            "INSERT INTO declined(id) VALUES (?1) ON CONFLICT(id) DO NOTHING",
+            params![id],
+        )?;
         transaction.commit()?;
 
         if removed == 0 {
@@ -1537,6 +1572,29 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    /// A removal outlives the launch that made it.
+    ///
+    /// `ensure_bundled_translations` fills an empty library on first run and
+    /// cannot otherwise tell "never had it" from "did not want it", so without
+    /// the refusal being written down, Remove is a button that works until
+    /// Sunday. Downloading it again clears the refusal, because a translation
+    /// asked for should behave like one never removed.
+    #[test]
+    fn a_removal_is_remembered_and_a_reinstall_forgets_it() {
+        let dir = scratch("declined");
+        let library = Library::in_memory().unwrap();
+        let first = pack_file(&dir, "AAA", &[(1, "Genesis", 1, 1, "In the beginning")]);
+        let second = pack_file(&dir, "BBB", &[(1, "Genesis", 1, 1, "In the beginning")]);
+        library.install(&pack("AAA", 1), &first).unwrap();
+        library.install(&pack("BBB", 1), &second).unwrap();
+
+        library.remove("AAA").unwrap();
+        assert_eq!(library.declined().unwrap(), vec!["AAA".to_string()]);
+
+        library.install(&pack("AAA", 1), &first).unwrap();
+        assert!(library.declined().unwrap().is_empty());
     }
 
     /// The last one stays. An application for putting scripture on a screen
