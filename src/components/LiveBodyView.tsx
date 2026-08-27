@@ -39,19 +39,29 @@ import { VideoSurface } from "./VideoSurface";
  * thing on the wall that did not match.
  */
 /**
- * The box every arrangement is drawn into.
+ * The box every arrangement is drawn into, and the thing the fit is measured
+ * against.
  *
- * A plain column, as it was before there were arrangements. It neither clips
- * nor caps its own height: the frame around it already does both, and a second
- * box trying to do it as well is how a slide lost everything below its first
- * line -- the words were there, drawn, and hidden by their own container.
+ * Every word of this is load-bearing, and each clause is a bug that happened.
  *
- * Sized from the length-based guess, like every other kind of body. It is a
- * guess and it is sometimes wrong -- a slide whose heading and rule push it a
- * line past the frame loses that line -- but measuring properly means changing
- * how every surface sizes text, which is the display-parity work and not this.
+ * `flex-1 min-h-0` gives the box the frame's own height. Without it the box
+ * hugs its contents, and `fitted` -- which asks whether scrollHeight exceeds
+ * clientHeight -- gets the same number twice and reports "fits" at every size,
+ * in both directions. That is how a five-point slide was clipped and a
+ * one-sentence slide was set at the smallest size there is.
+ *
+ * `[&>*]:shrink-0` is the other half, and without it the first half lies. A
+ * flex child in a column with `min-h-0` may shrink below its own contents, so
+ * a row of cards compressed to 66px instead of overflowing: the box reported a
+ * perfect fit while the text ran out of the panels. Nothing overflows the box
+ * now, so what the box says is true.
+ *
+ * `safe center` rather than `center`, because centred content that overflows
+ * spills from both ends and the clipped end is the top -- a slide a few pixels
+ * too tall lost its heading rather than its last line.
  */
-const FRAME = "flex w-full min-h-0 flex-1 flex-col [justify-content:safe_center]";
+const FRAME =
+  "flex w-full min-h-0 flex-1 flex-col [justify-content:safe_center] [&>*]:shrink-0";
 
 /**
  * A heading, ranged left under a hanging rule.
@@ -396,7 +406,7 @@ function Composed({
    */
   if (layout === "cards") {
     return (
-      <div data-slidebox="1" className={`${FRAME} gap-[0.7em]`} style={frame}>
+      <div ref={composedBox} className={`${FRAME} gap-[0.7em]`} style={frame}>
         {title?.kind === "text" ? (
           <Heading text={title.text} style={style} accent={accent} base={base} scale={1.35} />
         ) : null}
