@@ -60,7 +60,8 @@ const STRETCH_OVERLAP: usize = 200;
 const MAX_SLIDES: usize = 20;
 
 /// One slide, before anybody has approved it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// No `Eq`: a chart carries figures, and a float has no total ordering.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DraftSlide {
     pub title: String,
@@ -103,6 +104,10 @@ pub struct DraftSlide {
     /// has been, and only a slide that says so survives with no body.
     #[serde(default)]
     pub opens: bool,
+    /// Figures the preacher gave, where they gave any. Rare, and checked
+    /// harder than anything else on a slide.
+    #[serde(default)]
+    pub chart: Option<SlideChart>,
     /// A comparison the preacher drew, where they drew one.
     ///
     /// Often the literal shape of an argument — "under the law" beside "under
@@ -138,6 +143,29 @@ impl Point {
             format!("{}: {}", self.heading, self.text)
         }
     }
+}
+
+/// Figures the preacher actually gave: giving, attendance, growth over time.
+///
+/// The one component whose invented contents would be believed without
+/// question. A wrong sentence on a slide can be argued with from the floor; a
+/// bar chart cannot, because nobody in the room has the numbers. So every
+/// figure here is checked against the transcript and the whole chart is
+/// dropped if any one of them is not in it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SlideChart {
+    /// What the figures are of. "Weekly giving", "Sunday attendance".
+    pub label: String,
+    pub bars: Vec<ChartBar>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChartBar {
+    /// What this figure is for: a year, a month, a category.
+    pub label: String,
+    pub value: f64,
 }
 
 /// A comparison, as rows under headings.
@@ -284,6 +312,23 @@ fn keep_what_was_said(drafts: Vec<DraftSlide>, transcript: &str) -> Vec<DraftSli
 
     drafts
         .into_iter()
+        // The chart goes before the slide is judged, not with it. A slide whose
+        // figures cannot be found is still a good slide about giving; it is the
+        // chart that has to go, and dropping the whole slide would throw away
+        // words that passed their own check.
+        .map(|mut slide| {
+            if let Some(chart) = slide.chart.take() {
+                if figures_were_said(&haystack, &chart) {
+                    slide.chart = Some(chart);
+                } else {
+                    crate::log_line!(
+                        "[slides] chart dropped, figures not in the transcript: {}",
+                        slide.title
+                    );
+                }
+            }
+            slide
+        })
         .filter(|slide| {
             let anchor = flatten(&slide.anchor);
             // Short anchors match by accident: "and he said" is in every
@@ -349,6 +394,47 @@ fn was_really_said(haystack: &str, anchor: &str) -> bool {
     words
         .windows(RUN)
         .any(|window| haystack.contains(&window.join(" ")))
+}
+
+/// Whether every figure in a chart was actually said.
+///
+/// The strictest check in this file, and deliberately the strictest: a chart is
+/// the one thing on a slide that nobody in the room can contradict. A wrong
+/// sentence gets argued with afterwards; a bar labelled 4,200 is simply
+/// believed.
+///
+/// So the figure has to appear in the transcript as digits. A preacher who said
+/// "four thousand two hundred" fails this and the chart is dropped -- which is
+/// the wrong answer for that slide and the right one for the feature. Failing
+/// closed costs a chart nobody had; failing open costs a congregation a number
+/// nobody said.
+///
+/// Written with and without separators, because a transcript may carry either
+/// and the difference is a comma.
+fn figures_were_said(haystack: &str, chart: &SlideChart) -> bool {
+    chart.bars.iter().all(|bar| {
+        let whole = bar.value.round();
+        // A figure with a fractional part is a percentage or an average, and
+        // neither is a thing a preacher reads out to two decimal places.
+        if (bar.value - whole).abs() > f64::EPSILON {
+            return false;
+        }
+        let plain = format!("{}", whole as i64);
+        let grouped = {
+            let digits: Vec<char> = plain.chars().rev().collect();
+            let mut out: Vec<char> = Vec::new();
+            for (at, digit) in digits.iter().enumerate() {
+                if at > 0 && at % 3 == 0 {
+                    out.push(',');
+                }
+                out.push(*digit);
+            }
+            out.iter().rev().collect::<String>()
+        };
+        // `flatten` has already stripped the commas from the haystack, so the
+        // grouped form is checked with them stripped too.
+        haystack.contains(&plain) || haystack.contains(&flatten(&grouped))
+    })
 }
 
 /// The words alone, for comparing what was said with what a model says was said.
@@ -421,7 +507,8 @@ fn body(settings: &Settings, sermon: &str, part: usize, of: usize) -> serde_json
                                 "type": "object",
                                 "additionalProperties": false,
                                 "required": [
-                                    "title", "lines", "reference", "anchor", "table", "opens"
+                                    "title", "lines", "reference", "anchor", "table", "opens",
+                                    "chart"
                                 ],
                                 "properties": {
                                     "title": { "type": "string" },
@@ -440,6 +527,26 @@ fn body(settings: &Settings, sermon: &str, part: usize, of: usize) -> serde_json
                                     "reference": { "type": "string" },
                                     "anchor": { "type": "string" },
                                     "opens": { "type": "boolean" },
+                                    "chart": {
+                                        "type": ["object", "null"],
+                                        "additionalProperties": false,
+                                        "required": ["label", "bars"],
+                                        "properties": {
+                                            "label": { "type": "string" },
+                                            "bars": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "object",
+                                                    "additionalProperties": false,
+                                                    "required": ["label", "value"],
+                                                    "properties": {
+                                                        "label": { "type": "string" },
+                                                        "value": { "type": "number" }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
                                     "table": {
                                         "type": ["object", "null"],
                                         "additionalProperties": false,
@@ -470,7 +577,7 @@ fn body(settings: &Settings, sermon: &str, part: usize, of: usize) -> serde_json
                 "role": "system",
                 "content":
                     "You turn a preacher's sermon or outline into slides for a church screen. \
-                     Return JSON: {\"slides\":[{\"title\":\"…\",\"opens\":false,\
+                     Return JSON: {\"slides\":[{\"title\":\"…\",\"opens\":false,\"chart\":null,\
                      \"lines\":[{\"heading\":\"…\",\"text\":\"…\"}],\"reference\":\"…\",\
                      \"anchor\":\"…\",\"table\":{\"header\":[\"…\",\"…\"],\"rows\":[[\"…\",\"…\"]]}}]}. \
                      \
@@ -551,6 +658,19 @@ fn body(settings: &Settings, sermon: &str, part: usize, of: usize) -> serde_json
                      \
                      The one caution: the comparison has to be one the preacher actually \
                      drew. Do not turn a plain list of points into a table to have one. \
+                     \
+                     CHART, and this is the rarest thing here — most sermons have none, and \
+                     `\"chart\":null` is the right answer almost every time. Only where the \
+                     preacher read out FIGURES: giving, attendance, how many were baptised, \
+                     a count over several years. \
+                     {\"label\":\"Weekly giving\",\"bars\":[{\"label\":\"2023\",\"value\":4200}]} \
+                     Two to six bars. \
+                     \
+                     Every figure is checked against the transcript as digits and the chart \
+                     is thrown away if one of them is not there. Do not estimate, do not \
+                     round, do not carry a number over from another year to make the shape \
+                     look better. A chart is the one slide nobody in the room can argue \
+                     with, which is exactly why it may only carry what was said. \
                      \
                      No numbering, no bullet characters, no 'Point 1' or '2.' — the slide is \
                      the numbering. Do not compress a sentence into a headline: 'Grace we \
@@ -656,6 +776,22 @@ fn tidy(line: &str) -> String {
 /// nothing in it, or a single column, or twelve rows of a list it has decided
 /// is a table. None of those are comparisons, and a half-built table on a wall
 /// is worse than the lines it replaced.
+/// A chart with enough in it to draw, or nothing.
+///
+/// Two bars is the least that shows a change and six is the most a wall holds.
+/// A bar with no label is a column of nothing, and a negative figure is not a
+/// thing a church counts.
+fn usable_chart(chart: SlideChart) -> Option<SlideChart> {
+    let bars: Vec<ChartBar> = chart
+        .bars
+        .into_iter()
+        .filter(|bar| !bar.label.trim().is_empty() && bar.value >= 0.0 && bar.value.is_finite())
+        .collect();
+
+    (bars.len() >= 2 && bars.len() <= 6)
+        .then(|| SlideChart { label: chart.label.trim().to_string(), bars })
+}
+
 fn usable_table(table: SlideTable) -> Option<SlideTable> {
     let header: Vec<String> = table.header.iter().map(|cell| tidy(cell)).collect();
     let rows: Vec<Vec<String>> = table
@@ -764,6 +900,8 @@ fn read(content: &str) -> Result<Vec<DraftSlide>> {
         table: Option<serde_json::Value>,
         #[serde(default)]
         opens: Option<bool>,
+        #[serde(default)]
+        chart: Option<serde_json::Value>,
     }
 
     #[derive(Deserialize)]
@@ -822,6 +960,7 @@ fn read(content: &str) -> Result<Vec<DraftSlide>> {
                 .trim_end_matches('.')
                 .to_string(),
             opens: slide.opens.unwrap_or(false),
+            chart: slide.chart.and_then(|raw| serde_json::from_value(raw).ok()).and_then(usable_chart),
             // Not tidied. Every other field is cleaned up for a screen; this one
             // is quoted evidence, and cleaning it would stop it matching the
             // transcript it is meant to be found in.
@@ -867,6 +1006,7 @@ mod tests {
             reference: String::new(),
             anchor: anchor.into(),
             table: None,
+            chart: None,
             opens: false,
         }
     }
@@ -899,6 +1039,41 @@ mod tests {
             got[0].lines,
             vec![Point { heading: String::new(), text: "He set them side by side".into() }],
         );
+    }
+
+    #[test]
+    fn a_chart_survives_only_the_figures_that_were_said() {
+        let said = "last year we gave 4200 and this year it was 5100, which is the \
+                    story of a church that decided something";
+
+        let charted = |bars: Vec<(&str, f64)>| {
+            let mut slide = slide("Giving", "the story of a church that decided something");
+            slide.chart = Some(SlideChart {
+                label: "Weekly giving".into(),
+                bars: bars
+                    .into_iter()
+                    .map(|(label, value)| ChartBar { label: label.into(), value })
+                    .collect(),
+            });
+            keep_what_was_said(vec![slide], said)
+        };
+
+        // Both figures were read out, so the chart stands.
+        let kept = charted(vec![("2023", 4200.0), ("2024", 5100.0)]);
+        assert_eq!(kept.len(), 1);
+        assert!(kept[0].chart.is_some());
+
+        /*
+         * One figure invented, and the whole chart goes -- but not the slide.
+         *
+         * A slide about giving whose figures cannot be found is still a good
+         * slide about giving; it is the chart that has no business on a wall.
+         * Dropping the slide as well would throw away words that passed their
+         * own check.
+         */
+        let kept = charted(vec![("2023", 4200.0), ("2024", 6000.0)]);
+        assert_eq!(kept.len(), 1, "the slide went with its chart");
+        assert!(kept[0].chart.is_none(), "an invented figure reached the wall");
     }
 
     #[test]

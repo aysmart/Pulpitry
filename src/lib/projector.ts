@@ -69,7 +69,15 @@ export type SlideComponent =
    * transcript. A photograph of an open sky asserts nothing. It sets a mood,
    * and there is nothing about it that could be checked even in principle.
    */
-  | { kind: "figure"; source: ImageSource; caption?: string };
+  | { kind: "figure"; source: ImageSource; caption?: string }
+  /**
+   * Figures the preacher gave: giving, attendance, growth over time.
+   *
+   * The one component nobody in the room can contradict, which is why every
+   * bar is checked against the transcript before it ever gets here and the
+   * whole chart is dropped if one figure is missing. See `slides.rs`.
+   */
+  | { kind: "chart"; label: string; bars: { label: string; value: number }[] };
 
 /**
  * Where a picture came from.
@@ -385,6 +393,12 @@ export function componentText(component: SlideComponent): string {
      */
     case "figure":
       return component.caption ?? "";
+    /* The figures with their labels, which is what a screen that cannot draw
+       bars should say -- "2023: 4,200" reads; a bare 4200 does not. */
+    case "chart":
+      return [component.label, ...component.bars.map((bar) => `${bar.label}: ${bar.value}`)]
+        .filter(Boolean)
+        .join("\n");
   }
 }
 

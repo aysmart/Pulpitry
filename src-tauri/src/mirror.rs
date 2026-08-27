@@ -456,6 +456,40 @@ fn component_lines(component: &serde_json::Value) -> Vec<String> {
                 })
                 .unwrap_or_default()
         }
+        /*
+         * The figures with their labels.
+         *
+         * Sent as words rather than as a shape, unlike the comparison. A
+         * comparison is a shape a screen can rule; a chart is a shape a screen
+         * would have to *draw*, and the overlay is a text card. "2023: 4,200"
+         * carries the figures, which is what somebody wanted from a chart in
+         * the first place -- the trend is the part that needs the bars, and a
+         * strip at the bottom of a video was never going to show it.
+         */
+        "chart" => {
+            let label = text("label");
+            let bars = component
+                .get("bars")
+                .and_then(|v| v.as_array())
+                .map(|bars| {
+                    bars.iter()
+                        .filter_map(|bar| {
+                            let name = bar.get("label")?.as_str()?.trim();
+                            let value = bar.get("value")?.as_f64()?;
+                            Some(format!("{name}: {value}"))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+
+            if bars.is_empty() {
+                vec![]
+            } else if label.is_empty() {
+                vec![bars.join(" \u{b7} ")]
+            } else {
+                vec![label, bars.join(" \u{b7} ")]
+            }
+        }
         _ => vec![],
     }
 }

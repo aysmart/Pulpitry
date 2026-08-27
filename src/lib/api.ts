@@ -268,6 +268,14 @@ export interface DraftSlide {
    * Every other slide with nothing else is a failure and never reaches here.
    */
   opens: boolean;
+  /**
+   * Figures the preacher read out, where they read any.
+   *
+   * Almost always absent, and checked harder than anything else on a slide:
+   * every figure has to appear in the transcript as digits or the whole chart
+   * is dropped before it reaches here.
+   */
+  chart: { label: string; bars: { label: string; value: number }[] } | null;
   /** A comparison the preacher drew, where they drew one. Usually absent. */
   table: { header: string[]; rows: string[][] } | null;
   /**

@@ -110,6 +110,24 @@ export function componentsFor(draft: DraftSlide, picture?: ImageSource | null): 
    * things side by side made that the point, and three centred lines beneath a
    * table are the same words twice.
    */
+  /*
+   * Figures take the body, as a comparison does.
+   *
+   * A chart with three bullets beside it is a slide asking to be read twice.
+   * The preacher gave numbers; the numbers are the point.
+   */
+  if (draft.chart) {
+    components.push({
+      kind: "chart",
+      label: draft.chart.label,
+      bars: draft.chart.bars,
+    });
+    if (draft.reference) {
+      components.push({ kind: "passage", reference: draft.reference });
+    }
+    return components;
+  }
+
   if (draft.table) {
     components.push({
       kind: "table",

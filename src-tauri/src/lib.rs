@@ -1,3 +1,18 @@
+/*
+ * The slide schema outgrew `json!`'s default expansion depth.
+ *
+ * That schema is one object with a slide's shape inside it, and the shape has
+ * grown a field at a time: a table, then headings on the points, then a chart
+ * with its own bars. Nothing about it is deep for a human to read; it is deep
+ * for a macro to expand.
+ *
+ * Raised rather than worked around. The alternative was splitting the schema
+ * across two macros, which puts the shape of a slide in two places to keep the
+ * expander happy -- and this file has already paid for that kind of split
+ * three times over.
+ */
+#![recursion_limit = "256"]
+
 // Six modules now live in castavox-core, shared with Castavox rather than
 // copied into it. Named here so the rest of this file reads unchanged.
 use castavox_core::{audio, checkin, embed, exports, node, transcripts, whisper};

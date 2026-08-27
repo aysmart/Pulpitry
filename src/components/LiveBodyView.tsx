@@ -719,6 +719,77 @@ function Component({
         </figure>
       );
 
+    case "chart": {
+      /*
+       * Bars, drawn in CSS rather than on a canvas.
+       *
+       * A church chart has two to six figures in it. That is a row of divs
+       * with heights in per cent -- no library, no canvas, no second way for
+       * the type to be sized, and it scales with the slide like everything
+       * else because its height is in the same units.
+       *
+       * The figure is printed above its bar. A bar chart read from the back of
+       * a room communicates the *shape* -- up, down, flat -- and the number is
+       * what somebody actually wants; making them estimate it off an axis they
+       * cannot read is the worst of both.
+       */
+      const largest = Math.max(...component.bars.map((bar) => bar.value), 1);
+      return (
+        <figure className="flex w-full flex-col gap-[0.35em]">
+          {component.label ? (
+            <figcaption
+              className={ranged ? "text-left" : "text-center"}
+              style={{
+                ...style,
+                color: accentOf(theme),
+                fontSize: `calc(${base} * 0.62)`,
+                fontWeight: 600,
+              }}
+            >
+              {component.label}
+            </figcaption>
+          ) : null}
+          <div className="flex w-full items-end gap-[0.5em]" style={{ height: `calc(${base} * 4)` }}>
+            {component.bars.map((bar, index) => (
+              <div key={index} className="flex h-full flex-1 flex-col gap-[0.2em]">
+                <span
+                  className="text-center tabular-nums"
+                  style={{ ...style, fontSize: `calc(${base} * 0.55)`, fontWeight: 600 }}
+                >
+                  {bar.value.toLocaleString()}
+                </span>
+                {/*
+                  The bar's own plot area, and it has to be its own box.
+                  A percentage height resolves against the whole column, so with
+                  the labels taking their share every bar wanted more room than
+                  was left and flex shrank them all to the same height -- four
+                  identical bars over four different figures, which is a chart
+                  that lies about the only thing a chart is for.
+                */}
+                <div className="flex min-h-0 flex-1 items-end">
+                  <div
+                    className="w-full rounded-t-[0.06em]"
+                    style={{
+                      backgroundColor: accentOf(theme),
+                      // A floor, so a small figure beside a large one is still
+                      // a bar rather than a line nobody can see.
+                      height: `${Math.max(4, (bar.value / largest) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <span
+                  className="text-center opacity-70"
+                  style={{ ...style, fontSize: `calc(${base} * 0.5)` }}
+                >
+                  {bar.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </figure>
+      );
+    }
+
     case "passage":
       /* The reference only. The verse is staged from the library, which is the
          same rule the generator follows and the reason it never sends text. */
