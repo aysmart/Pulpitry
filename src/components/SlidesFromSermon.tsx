@@ -122,6 +122,16 @@ export function componentsFor(draft: DraftSlide, picture?: ImageSource | null): 
     return components;
   }
 
+  /*
+   * A movement beginning carries its heading and nothing else.
+   *
+   * `layoutFor` then calls it a section on its own, because a slide with no
+   * body *is* a section marker -- so nothing here has to know about layouts.
+   * The reference is dropped with the rest: a heading that opens a stretch of
+   * sermon is not a citation.
+   */
+  if (draft.opens) return components;
+
   const [only] = draft.lines;
   if (draft.lines.length === 1 && only) {
     // One point is a statement, not a list of one -- and not a card either: a

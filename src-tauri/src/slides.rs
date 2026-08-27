@@ -88,6 +88,21 @@ pub struct DraftSlide {
     /// half of its job: approving a slide stops being an act of faith.
     #[serde(default)]
     pub anchor: String,
+    /// Whether a movement of the sermon begins at this slide.
+    ///
+    /// A question about the material and not about the drawing: the renderer
+    /// decides that such a slide is set large with nothing under it, the same
+    /// way it decides a comparison is drawn as columns. The model is never
+    /// asked which arrangement to use, because an arrangement it chooses is
+    /// one it can choose differently on two consecutive Sundays.
+    ///
+    /// It also has to be explicit rather than inferred. A slide with a title
+    /// and nothing under it is *either* a movement beginning or a slide whose
+    /// lines the model failed to produce, and those are indistinguishable
+    /// without being told -- so the second kind is thrown away, as it always
+    /// has been, and only a slide that says so survives with no body.
+    #[serde(default)]
+    pub opens: bool,
     /// A comparison the preacher drew, where they drew one.
     ///
     /// Often the literal shape of an argument — "under the law" beside "under
@@ -405,7 +420,9 @@ fn body(settings: &Settings, sermon: &str, part: usize, of: usize) -> serde_json
                             "items": {
                                 "type": "object",
                                 "additionalProperties": false,
-                                "required": ["title", "lines", "reference", "anchor", "table"],
+                                "required": [
+                                    "title", "lines", "reference", "anchor", "table", "opens"
+                                ],
                                 "properties": {
                                     "title": { "type": "string" },
                                     "lines": {
@@ -422,6 +439,7 @@ fn body(settings: &Settings, sermon: &str, part: usize, of: usize) -> serde_json
                                     },
                                     "reference": { "type": "string" },
                                     "anchor": { "type": "string" },
+                                    "opens": { "type": "boolean" },
                                     "table": {
                                         "type": ["object", "null"],
                                         "additionalProperties": false,
@@ -452,18 +470,32 @@ fn body(settings: &Settings, sermon: &str, part: usize, of: usize) -> serde_json
                 "role": "system",
                 "content":
                     "You turn a preacher's sermon or outline into slides for a church screen. \
-                     Return JSON: {\"slides\":[{\"title\":\"…\",\
+                     Return JSON: {\"slides\":[{\"title\":\"…\",\"opens\":false,\
                      \"lines\":[{\"heading\":\"…\",\"text\":\"…\"}],\"reference\":\"…\",\
                      \"anchor\":\"…\",\"table\":{\"header\":[\"…\",\"…\"],\"rows\":[[\"…\",\"…\"]]}}]}. \
                      \
-                     Two kinds of slide, and you should be producing both. A slide of LINES, \
-                     and a slide of a TABLE where the preacher compared two things. Both are \
-                     described below. \
+                     FOUR KINDS OF SLIDE, and a set that is all one kind is a bad set. \
+                     A congregation looking at ten slides built the same way stops seeing \
+                     them. Every kind below is a fact about the sermon, not a choice about \
+                     how it looks -- decide by what the preacher actually did: \
                      \
-                     EVERY slide must carry one or the other. A slide with lines has \
-                     `\"table\":null`; a slide with a table has `\"lines\":[]`. A slide with \
-                     neither is a heading with nothing underneath it, and is thrown away — so \
-                     if you empty the lines, you must supply the table. \
+                     1. LINES. Two or three points under a heading. The common one. \
+                     2. A TABLE, where the preacher set two things against each other. \
+                     3. ONE LINE, where a single sentence is the whole point and carries \
+                        the weight on its own. Do not pad it out to three. \
+                     4. AN OPENING, `\"opens\":true` with `\"lines\":[]` and \
+                        `\"table\":null`: a heading alone, where the sermon turns to \
+                        something new. Its title is what the next stretch is about. Use one \
+                        wherever the preacher moved on -- a sermon in three movements wants \
+                        three of these, and they are what let the rest breathe. \
+                     \
+                     Everything except an opening must carry lines or a table. A slide with \
+                     neither and `\"opens\":false` is a heading with nothing underneath it \
+                     and is thrown away. \
+                     \
+                     Look at the whole set before you answer: if every slide has three \
+                     lines and no headings, you have described the sermon and not made \
+                     slides of it. \
                      \
                      ANCHOR, and this one is checked: six to fifteen words from the \
                      transcript that this slide came from, copied exactly as they appear. \
@@ -730,6 +762,8 @@ fn read(content: &str) -> Result<Vec<DraftSlide>> {
         anchor: Option<String>,
         #[serde(default)]
         table: Option<serde_json::Value>,
+        #[serde(default)]
+        opens: Option<bool>,
     }
 
     #[derive(Deserialize)]
@@ -787,6 +821,7 @@ fn read(content: &str) -> Result<Vec<DraftSlide>> {
                 .trim()
                 .trim_end_matches('.')
                 .to_string(),
+            opens: slide.opens.unwrap_or(false),
             // Not tidied. Every other field is cleaned up for a screen; this one
             // is quoted evidence, and cleaning it would stop it matching the
             // transcript it is meant to be found in.
@@ -814,7 +849,7 @@ fn read(content: &str) -> Result<Vec<DraftSlide>> {
          * heading with nothing under it. Whatever the instructions say, a slide
          * that carries neither lines nor a comparison has nothing on it.
          */
-        .filter(|slide| !slide.lines.is_empty() || slide.table.is_some())
+        .filter(|slide| !slide.lines.is_empty() || slide.table.is_some() || slide.opens)
         .take(MAX_SLIDES)
         .collect();
 
@@ -832,6 +867,7 @@ mod tests {
             reference: String::new(),
             anchor: anchor.into(),
             table: None,
+            opens: false,
         }
     }
 
@@ -863,6 +899,25 @@ mod tests {
             got[0].lines,
             vec![Point { heading: String::new(), text: "He set them side by side".into() }],
         );
+    }
+
+    #[test]
+    fn a_movement_may_open_with_a_heading_and_nothing_under_it() {
+        // The two look identical and are opposites: a heading with nothing
+        // under it is either the sermon turning to something new, or a slide
+        // whose lines the model failed to produce. Only the one that says so
+        // survives, because there is no way to tell them apart otherwise.
+        let got = read(
+            r#"{"slides":[
+                 {"title":"What Fear Costs","lines":[],"table":null,"opens":true,"anchor":"a"},
+                 {"title":"Nothing Here","lines":[],"table":null,"opens":false,"anchor":"b"}
+               ]}"#,
+        )
+        .unwrap();
+
+        assert_eq!(got.len(), 1, "the failed slide was kept as an opening");
+        assert_eq!(got[0].title, "What Fear Costs");
+        assert!(got[0].opens);
     }
 
     #[test]

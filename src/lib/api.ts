@@ -261,6 +261,13 @@ export interface DraftSlide {
    * and trusting one.
    */
   anchor: string;
+  /**
+   * Whether a movement of the sermon begins at this slide.
+   *
+   * A slide that opens one carries a title and nothing else, deliberately.
+   * Every other slide with nothing else is a failure and never reaches here.
+   */
+  opens: boolean;
   /** A comparison the preacher drew, where they drew one. Usually absent. */
   table: { header: string[]; rows: string[][] } | null;
   /**
