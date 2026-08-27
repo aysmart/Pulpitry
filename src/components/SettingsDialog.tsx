@@ -446,11 +446,11 @@ function Usage() {
   const madeRows = made ? (
     <Section
       title="Made on this machine"
-      note="Waiting to be reported. The count falls once it has been."
+      note="Everything this machine has written, since it was installed."
     >
       <dl className="flex flex-col divide-y divide-pulpitry-line">
-        <Row label="Summaries" value={String(made.summaries)} />
-        <Row label="Slide sets" value={String(made.slides)} />
+        <Row label="Summaries" value={made.summaries.toLocaleString()} />
+        <Row label="Slide sets" value={made.slides.toLocaleString()} />
       </dl>
     </Section>
   ) : null;

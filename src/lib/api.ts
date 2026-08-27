@@ -150,10 +150,18 @@ export const sendFeedback = (input: {
   platform: string;
 }) => invoke<void>("send_feedback", input);
 
-/** What this machine has made and not yet reported. */
+/**
+ * What this machine has made, ever.
+ *
+ * `summaries` and `slides` only ever go up; the sent counters beside them are
+ * how much the broker has heard, and exist so reporting never takes a number
+ * away from the church that earned it.
+ */
 export interface Tally {
   summaries: number;
   slides: number;
+  sentSummaries: number;
+  sentSlides: number;
 }
 
 export const madeHere = () => invoke<Tally>("made_here");
