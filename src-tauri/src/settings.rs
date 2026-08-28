@@ -138,17 +138,6 @@ pub struct Settings {
     #[serde(default = "yes")]
     pub update_check: bool,
 
-    /// Whether this installation sends the once-a-day check-in.
-    ///
-    /// Off, and only the operator turns it on. The privacy policy tells
-    /// churches that on the free local engine nothing leaves the building, and
-    /// that sentence stays true of everybody who never touches this. Opt-out
-    /// would have made it false for them without their doing anything.
-    ///
-    /// `#[serde(default)]` so an existing settings file reads as off rather
-    /// than as unset -- an upgrade must not opt anybody in.
-    #[serde(default)]
-    pub check_in: bool,
 
     /*
      * Speaking to the machine instead of reaching for it.
@@ -305,7 +294,6 @@ impl Default for Settings {
             mirror_pairings: Vec::new(),
             // Off. Only an operator turns this on.
             update_check: true,
-            check_in: false,
             semantic_enabled: true,
             // Measured against the full 31,102-verse index, and against the
             // negative class that actually matters. Announcements are easy to

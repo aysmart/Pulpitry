@@ -1567,13 +1567,16 @@ pub fn run() {
             provision_local_model(app.handle());
 
             /*
-             * The once-a-day check-in, if this church switched it on.
+             * The once-a-day check-in, from every installation.
              *
-             * Reads the stored setting and does nothing whatever when it is
-             * off: no identifier is written, no thread is started, no request
-             * is made. The privacy policy tells churches on the free local
-             * engine that nothing leaves the building, and for anybody who has
-             * not touched the switch that stays literally true.
+             * There is no switch. A count that measures only the churches who
+             * agreed to be counted is a floor with an unknown gap above it, and
+             * every conclusion drawn from it is wrong in the same direction.
+             *
+             * The policy used to say that on the free local engine nothing
+             * leaves the building. That is no longer true and the policy has
+             * been changed to say so. See `castavox_core::checkin` for what
+             * that costs and what keeps it defensible.
              *
              * Failure is silent and never delays this. `send` returns
              * immediately and does its work on its own thread.
@@ -1582,17 +1585,15 @@ pub fn run() {
                 let stored = settings::load(app.handle()).unwrap_or_default();
                 if let Ok(dir) = app.path().app_data_dir() {
                     checkin::send(
-                        stored.check_in,
                         CHECK_IN_ENDPOINT,
                         &dir,
                         "pulpitry",
                         env!("CARGO_PKG_VERSION"),
                         &stored.speech_engine,
                     );
-                    // The same switch and the same install id, on the same
-                    // launch: a tally that needed its own consent would be a
-                    // second thing to explain to a church.
-                    castavox_core::made::send(stored.check_in, MADE_ENDPOINT, &dir, "pulpitry");
+                    // The same install id on the same launch: two notes rather
+                    // than two decisions, and the policy describes them together.
+                    castavox_core::made::send(MADE_ENDPOINT, &dir, "pulpitry");
                 }
             }
 

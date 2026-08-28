@@ -686,7 +686,6 @@ export function SettingsDialog({
   const [timing, setTiming] = useState(false);
 
   const [updateCheck, setUpdateCheck] = useState(settings.updateCheck);
-  const [checkIn, setCheckIn] = useState(settings.checkIn);
   const [semanticEnabled, setSemanticEnabled] = useState(
     settings.semanticEnabled,
   );
@@ -886,7 +885,6 @@ export function SettingsDialog({
         assistModel: assistModel.trim(),
         assistApiVersion: assistApiVersion.trim(),
         updateCheck,
-        checkIn,
         semanticEnabled,
         semanticThreshold,
         mirrorEnabled,
@@ -945,7 +943,6 @@ export function SettingsDialog({
     assistModel,
     assistApiVersion,
     updateCheck,
-    checkIn,
     semanticEnabled,
     semanticThreshold,
     mirrorEnabled,
@@ -1717,21 +1714,25 @@ export function SettingsDialog({
                 </label>
               </Section>
               <div className="border-t border-pulpitry-line" />
+              {/*
+                No switch, and the text has to be straight about that.
+
+                A screen that lists what is sent and offers no way to decline is
+                doing the one thing it can still honestly do: telling somebody
+                exactly what leaves their machine. Wording it as though it were
+                a courtesy would be worse than saying nothing.
+              */}
               <Section
                 title="Telling us this installation exists"
-                note="Once a day, if you switch it on: a random identifier made on this machine, which application and version, your operating system, what kind of processor it has, which transcription engine you chose, and how many summaries and slide sets this installation has made. Two counts, and nothing about any of them. Your country is worked out from the connection and the address is discarded. Never your machine's name, never your address, and never a transcript, a verse or a filename — there is no field for any of those. It never delays anything, and if it cannot be sent nothing happens."
+                note="Once a day, every installation sends: a random identifier made on this machine, which application and version, your operating system, what kind of processor it has, which transcription engine you chose, and how many summaries and slide sets this installation has made. Two counts, and nothing about what is in any of them. Your country is worked out from the connection and the address is discarded. Never your machine's name, never your address, and never a transcript, a verse or a filename — there is no field for any of those. It never delays anything, and if it cannot be sent nothing happens."
               >
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={checkIn}
-                    onChange={(event) => setCheckIn(event.target.checked)}
-                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-                  />
-                  <span className="text-[13px] text-pulpitry-text">
-                    Send a daily check-in
-                  </span>
-                </label>
+                <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                  This one cannot be turned off. It is how we know how many
+                  churches run this, on what, and on which release — questions we
+                  were otherwise guessing at. If you would rather not be counted,
+                  write to support@castavox.com and we will delete what is held
+                  against your installation.
+                </span>
               </Section>
 
               {/*

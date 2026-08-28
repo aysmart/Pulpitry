@@ -67,7 +67,6 @@ export interface Settings {
    *  operator turned it on. */
   /** Whether to look, once a day, for a newer version. On by default. */
   updateCheck: boolean;
-  checkIn: boolean;
   semanticEnabled: boolean;
   /** Cosine similarity a match must reach to be shown, 0 to 1. */
   semanticThreshold: number;
