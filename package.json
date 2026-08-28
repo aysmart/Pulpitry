@@ -1,7 +1,7 @@
 {
   "name": "pulpitry",
   "productName": "Pulpitry",
-  "version": "0.7.7",
+  "version": "0.8.0",
   "description": "Live speech transcription, Bible verse detection, and worship presentation for church services.",
   "private": true,
   "type": "module",
