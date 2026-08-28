@@ -109,7 +109,7 @@ export interface OriginalWord {
  * operator who opened the panel on one should see nothing rather than a
  * complaint.
  */
-export const originalWords = (book: number, chapter: number, verse: number) =>
+export const originalWords = (book: string, chapter: number, verse: number) =>
   invoke<OriginalWord[]>("original_words", { book, chapter, verse });
 
 /** One Strong's entry, from the bundled brief lexicons. */

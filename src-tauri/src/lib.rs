@@ -813,11 +813,11 @@ fn bible_attributions(app: AppHandle, library: State<'_, Arc<Library>>) -> Vec<S
 #[tauri::command]
 fn original_words(
     library: State<'_, Arc<Library>>,
-    book: i64,
+    book: String,
     chapter: i64,
     verse: i64,
 ) -> CommandResult<Vec<bible::OriginalWord>> {
-    library.original(book, chapter, verse).map_err(to_message)
+    library.original(&book, chapter, verse).map_err(to_message)
 }
 
 /// What a Strong's number means. Asked when the operator opens a word.

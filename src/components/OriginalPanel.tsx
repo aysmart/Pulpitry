@@ -102,7 +102,7 @@ export function OriginalPanel({
 
     let live = true;
     setLooking(true);
-    void originalWords(verse.bookNumber, verse.chapter, verse.verse)
+    void originalWords(verse.book, verse.chapter, verse.verse)
       .then((found) => live && setWords(found))
       // A reference panel that cannot answer says nothing. It is not worth an
       // error in front of somebody running a service.

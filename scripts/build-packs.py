@@ -3,6 +3,7 @@
 Builds downloadable translation packs from a scraped-JSON source tree.
 
     python3 scripts/build-packs.py --source <repo>/json --out ../packs NIV ESV
+    python3 scripts/build-packs.py --scrollmapper CPDV.json --out ../packs CPDV
 
 Output, per translation, in the pack format the applications download:
 
@@ -82,6 +83,20 @@ BOOKS = [
 ]
 OLD_TESTAMENT = 39
 
+# Books a Catholic Bible has and a Protestant one does not, in the order a
+# parish reads them. The order is the point: putting these at the end would be a
+# Protestant Bible with an appendix, which is not what anybody is reading from.
+DEUTEROCANON = {
+    "Tobit", "Judith", "Wisdom", "Sirach", "Baruch",
+    "1 Maccabees", "2 Maccabees",
+}
+
+# The scrollmapper files spell some books their own way.
+RENAME = {
+    "Revelation of John": "Revelation",
+    "Song of Songs": "Song of Solomon",
+}
+
 # What each pack calls itself. The year is the edition a church would name, not
 # the first publication: a Bible bought today that says "NIV" is the 2011 text.
 TRANSLATIONS = {
@@ -95,7 +110,13 @@ TRANSLATIONS = {
     "MSG":   ("The Message", 2002),
     "AMP":   ("Amplified Bible", 2015),
     "TPT":   ("The Passion Translation", 2020),
+    "CPDV":  ("Catholic Public Domain Version", 2009),
 }
+
+# Translations whose canon is not the sixty-six. Their books are numbered in
+# their own order, which is what `book_number` has always meant -- an order
+# within one translation -- and is only now being asked to mean it.
+CANON = {"CPDV": "catholic"}
 
 # A bracketed footnote anchor: a, b, c ... aa, ab ... bx. Anything longer, and
 # any two letters outside that sequence, is the Amplified Bible's own text.
@@ -169,6 +190,97 @@ def gaps(complete: dict, have: dict) -> tuple[int, list[str]]:
             chapters.append((counted, f"{BOOKS[book - 1]} {chapter}"))
     chapters.sort(reverse=True)
     return total, [name for _, name in chapters]
+
+
+def from_scrollmapper(path: Path) -> tuple[list[str], dict]:
+    """Reads a scrollmapper JSON Bible into `(books in order, verses by book)`.
+
+    A different shape from the scraped tree the other translations come from --
+    nested chapters rather than a file per chapter -- but the same three facts
+    per verse, so it lands in the same builder.
+
+    Roman numerals are spelled out in that file ("I Samuel"); ours are digits,
+    and a reference somebody types is matched against what is in the database.
+    """
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    order: list[str] = []
+    verses: dict[str, dict[int, dict[int, str]]] = {}
+
+    for book in raw["books"]:
+        name = book["name"]
+        for numeral, digit in (("III ", "3 "), ("II ", "2 "), ("I ", "1 ")):
+            if name.startswith(numeral):
+                name = digit + name[len(numeral):]
+                break
+        name = RENAME.get(name, name)
+
+        order.append(name)
+        verses[name] = {
+            chapter["chapter"]: {v["verse"]: v["text"] for v in chapter["verses"]}
+            for chapter in book["chapters"]
+        }
+    return order, verses
+
+
+def build_scrollmapper(path: Path, out: Path, code: str) -> dict:
+    """Builds a pack whose canon is its own, in its own order.
+
+    Numbered 1..n through the books as that Bible orders them, which is what
+    `book_number` has always meant: an order within one translation. It only
+    now matters, because until now every translation we shipped had the same
+    sixty-six in the same order and the number looked universal.
+
+    Anything past the canon is dropped. The file carries five appendices after
+    Revelation -- the Prayer of Manasses, 1 and 2 Esdras, an additional Psalm,
+    Laodiceans -- which are not in the Catholic canon and would read as a Bible
+    with extra books in it.
+    """
+    name, year = TRANSLATIONS[code]
+    order, verses = from_scrollmapper(path)
+
+    # Everything up to and including the last canonical book. For the Catholic
+    # canon that is Revelation, and the appendices sit after it.
+    end = order.index("Revelation") + 1
+    order = order[:end]
+
+    rows: list[str] = []
+    for number, book in enumerate(order, start=1):
+        for chapter in sorted(verses[book]):
+            for verse in sorted(verses[book][chapter]):
+                text = clean(verses[book][chapter][verse])
+                if text:
+                    rows.append(f"{number}\t{book}\t{chapter}\t{verse}\t{text}")
+
+    body = "".join(f"{row}\n" for row in rows)
+    packed = gzip.compress(body.encode("utf-8"), 9, mtime=0)
+    (out / f"{code}.tsv.gz").write_bytes(packed)
+
+    added = [book for book in order if book in DEUTEROCANON]
+    entry = {
+        "id": code,
+        "name": name,
+        "year": year,
+        "file": f"{code}.tsv.gz",
+        "verseCount": len(rows),
+        "checksum": hashlib.sha256(body.encode("utf-8")).hexdigest()[:16],
+        "sha256": hashlib.sha256(packed).hexdigest(),
+        "bytes": len(packed),
+        "language": "English",
+        "missingVerses": 0,
+    }
+    if added:
+        entry["note"] = (
+            f"The Catholic canon: {len(order)} books, including "
+            + ", ".join(added)
+            + "."
+        )
+
+    (out / f"{code}.json").write_text(json.dumps(entry, indent=2) + "\n")
+    print(
+        f"{code:6} {len(rows):6} verses  {len(order):2} books  "
+        f"{len(packed) / 1024 / 1024:4.2f} MB  {len(added)} deuterocanonical"
+    )
+    return entry
 
 
 def build(source: Path, out: Path, code: str, complete: dict) -> dict:
@@ -281,7 +393,12 @@ def build(source: Path, out: Path, code: str, complete: dict) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", required=True, type=Path)
+    parser.add_argument("--source", type=Path, help="the scraped json/ tree")
+    parser.add_argument(
+        "--scrollmapper",
+        type=Path,
+        help="a single scrollmapper JSON Bible, for a translation whose canon is its own",
+    )
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument(
         "--reference",
@@ -297,10 +414,19 @@ def main() -> int:
         raise SystemExit(f"not translations this script knows: {', '.join(unknown)}")
 
     args.out.mkdir(parents=True, exist_ok=True)
-    complete = versification(args.reference)
-    total = sum(
-        build(args.source, args.out, code, complete)["bytes"] for code in args.codes
-    )
+
+    if args.scrollmapper:
+        total = sum(
+            build_scrollmapper(args.scrollmapper, args.out, code)["bytes"]
+            for code in args.codes
+        )
+    else:
+        if not args.source:
+            raise SystemExit("one of --source or --scrollmapper is needed")
+        complete = versification(args.reference)
+        total = sum(
+            build(args.source, args.out, code, complete)["bytes"] for code in args.codes
+        )
     print(f"\n{len(args.codes)} translations, {total / 1024 / 1024:.1f} MB")
     return 0
 

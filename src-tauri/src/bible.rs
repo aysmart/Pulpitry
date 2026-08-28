@@ -543,7 +543,19 @@ impl Library {
     /// versification difference, a verse number a translation carries and the
     /// original does not -- none of those is a fault, and an operator who
     /// opened the panel on one should see nothing rather than a complaint.
-    pub fn original(&self, book_number: i64, chapter: i64, verse: i64) -> Result<Vec<OriginalWord>> {
+    /// The Greek or Hebrew behind one verse, addressed by book name.
+    ///
+    /// By name and not by number, because the number belongs to whichever
+    /// translation is on screen and the interlinear belongs to none of them. A
+    /// Catholic Bible numbers John fiftieth; looking that up here would return
+    /// Philippians' Greek as the original of what the operator is reading.
+    ///
+    /// A book the interlinear does not have -- every deuterocanonical one --
+    /// returns nothing rather than somebody else's words.
+    pub fn original(&self, book: &str, chapter: i64, verse: i64) -> Result<Vec<OriginalWord>> {
+        let Some(book_number) = castavox_core::canon::interlinear_book(book) else {
+            return Ok(Vec::new());
+        };
         let connection = self.connection.lock();
         let mut statement = connection.prepare(
             "SELECT original, transliteration, gloss, strongs, morphology, lemma
