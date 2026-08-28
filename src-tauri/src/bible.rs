@@ -260,6 +260,13 @@ impl Library {
             // the one whose licence would never be recorded.
             library::backfill_licence(&self.connection.lock(), &entry)?;
 
+            // Described but not carried. The manifest lists every translation
+            // we publish so it can also serve as the licence register; only
+            // some of them have a file here to import.
+            if !entry.bundled {
+                continue;
+            }
+
             // Removed on purpose. Reimporting it here is how a Remove button
             // becomes a button that works until Sunday.
             if declined.contains(&entry.id) || self.translation_is_current(&entry)? {
@@ -1179,6 +1186,7 @@ mod tests {
             sha256: String::new(),
             bytes: 0,
             language: "English".into(),
+            bundled: true,
             note: None,
             missing_verses: 0,
             licence: None,

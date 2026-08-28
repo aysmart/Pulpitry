@@ -24,6 +24,33 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir = resolve(root, "src-tauri/resources");
+/* Built, published, but not carried inside the application. */
+const packDir = resolve(root, "packs");
+
+/*
+ * What ships inside the installer.
+ *
+ * Not all of them, since there is a library to download the rest from. The set
+ * is chosen so the application works with no internet at all in every language
+ * it claims to support: the King James and the World English Bible for
+ * traditional and modern English, and every non-English text we have.
+ *
+ * The twelve left out are all English alternatives. A church offline with the
+ * KJV and the WEB can still read every verse; a church offline in Yoruba with
+ * neither could not, which is why the trimming stops at English.
+ */
+const BUNDLED = new Set([
+  "KJV",
+  "WEB",
+  "FRA",
+  "POR",
+  "SPA",
+  "SWH",
+  "HAU",
+  "IBO",
+  "YOR",
+  "TWI",
+]);
 
 const ARUL = "https://raw.githubusercontent.com/aruljohn/Bible-kjv/master";
 const SCROLL = "https://raw.githubusercontent.com/scrollmapper/bible_databases/master/formats/json";
@@ -412,6 +439,7 @@ async function main() {
   }
 
   mkdirSync(outputDir, { recursive: true });
+  mkdirSync(packDir, { recursive: true });
   const manifest = [];
 
   for (const entry of selected) {
@@ -432,7 +460,10 @@ async function main() {
     const file = `${entry.id}.tsv.gz`;
     // Level 9: written once here, read on every first launch.
     const packed = gzipSync(Buffer.from(body, "utf8"), { level: 9 });
-    writeFileSync(resolve(outputDir, file), packed);
+    writeFileSync(
+      resolve(BUNDLED.has(entry.id) ? outputDir : packDir, file),
+      packed,
+    );
 
     manifest.push({
       id: entry.id,
@@ -449,6 +480,10 @@ async function main() {
       // Lets the app notice a corrected text on upgrade. Verse counts alone
       // would not: fixing wording changes no counts.
       checksum: createHash("sha256").update(body).digest("hex").slice(0, 16),
+      // Listed either way. The manifest is also the register of which texts
+      // carry a licence obliging us to name somebody, and an entry dropped for
+      // being unbundled would take that obligation with it.
+      bundled: BUNDLED.has(entry.id),
     });
 
     const megabytes = (packed.length / 1024 / 1024).toFixed(1);

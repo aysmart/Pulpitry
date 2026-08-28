@@ -5,7 +5,8 @@
     "year": 1611,
     "file": "KJV.tsv.gz",
     "verseCount": 31102,
-    "checksum": "a8f1dafb0f618365"
+    "checksum": "a8f1dafb0f618365",
+    "bundled": true
   },
   {
     "id": "ASV",
@@ -13,7 +14,8 @@
     "year": 1901,
     "file": "ASV.tsv.gz",
     "verseCount": 31086,
-    "checksum": "5cf4f36cf1fb5dfc"
+    "checksum": "5cf4f36cf1fb5dfc",
+    "bundled": false
   },
   {
     "id": "BSB",
@@ -21,7 +23,8 @@
     "year": 2023,
     "file": "BSB.tsv.gz",
     "verseCount": 31086,
-    "checksum": "1df463efe2e10abe"
+    "checksum": "1df463efe2e10abe",
+    "bundled": false
   },
   {
     "id": "NHEB",
@@ -29,7 +32,8 @@
     "year": 2010,
     "file": "NHEB.tsv.gz",
     "verseCount": 31097,
-    "checksum": "06778d06103c68d1"
+    "checksum": "06778d06103c68d1",
+    "bundled": false
   },
   {
     "id": "BBE",
@@ -37,7 +41,8 @@
     "year": 1949,
     "file": "BBE.tsv.gz",
     "verseCount": 31086,
-    "checksum": "6d4da5c275d1752d"
+    "checksum": "6d4da5c275d1752d",
+    "bundled": false
   },
   {
     "id": "YLT",
@@ -45,7 +50,8 @@
     "year": 1898,
     "file": "YLT.tsv.gz",
     "verseCount": 31102,
-    "checksum": "43f04bf220dccec7"
+    "checksum": "43f04bf220dccec7",
+    "bundled": false
   },
   {
     "id": "DARBY",
@@ -53,7 +59,8 @@
     "year": 1890,
     "file": "DARBY.tsv.gz",
     "verseCount": 31099,
-    "checksum": "42c1b09afc6e7d99"
+    "checksum": "42c1b09afc6e7d99",
+    "bundled": false
   },
   {
     "id": "WEBSTER",
@@ -61,7 +68,8 @@
     "year": 1833,
     "file": "WEBSTER.tsv.gz",
     "verseCount": 31102,
-    "checksum": "9fbc9e0b992e5cdb"
+    "checksum": "9fbc9e0b992e5cdb",
+    "bundled": false
   },
   {
     "id": "GENEVA",
@@ -69,7 +77,8 @@
     "year": 1599,
     "file": "GENEVA.tsv.gz",
     "verseCount": 31064,
-    "checksum": "3a5a549c413bfa9f"
+    "checksum": "3a5a549c413bfa9f",
+    "bundled": false
   },
   {
     "id": "DRC",
@@ -77,7 +86,8 @@
     "year": 1752,
     "file": "DRC.tsv.gz",
     "verseCount": 31432,
-    "checksum": "20fd978dccf6f7b9"
+    "checksum": "20fd978dccf6f7b9",
+    "bundled": false
   },
   {
     "id": "WEB",
@@ -85,7 +95,8 @@
     "year": 2000,
     "file": "WEB.tsv.gz",
     "verseCount": 31098,
-    "checksum": "3f560df1a446e8b7"
+    "checksum": "3f560df1a446e8b7",
+    "bundled": true
   },
   {
     "id": "FBV",
@@ -93,9 +104,10 @@
     "year": 2023,
     "file": "FBV.tsv.gz",
     "licence": "CC BY-SA 4.0",
-    "attribution": "Free Bible Version © Dr. Jonathan Gallagher",
+    "attribution": "Free Bible Version \u00a9 Dr. Jonathan Gallagher",
     "verseCount": 31087,
-    "checksum": "0252535d6d4d21c2"
+    "checksum": "0252535d6d4d21c2",
+    "bundled": false
   },
   {
     "id": "MSB",
@@ -103,7 +115,8 @@
     "year": 2024,
     "file": "MSB.tsv.gz",
     "verseCount": 31098,
-    "checksum": "da800602337eb4d8"
+    "checksum": "da800602337eb4d8",
+    "bundled": false
   },
   {
     "id": "WEBU",
@@ -111,27 +124,30 @@
     "year": 2022,
     "file": "WEBU.tsv.gz",
     "verseCount": 31098,
-    "checksum": "11cff5c5fe4977e1"
+    "checksum": "11cff5c5fe4977e1",
+    "bundled": false
   },
   {
     "id": "YOR",
-    "name": "Bíbélì Mímọ́ (Yoruba)",
+    "name": "B\u00edb\u00e9l\u00ec M\u00edm\u1ecd\u0301 (Yoruba)",
     "year": 2017,
     "file": "YOR.tsv.gz",
     "licence": "CC BY-SA 4.0",
-    "attribution": "Biblica® open edition © Biblica, Inc.",
+    "attribution": "Biblica\u00ae open edition \u00a9 Biblica, Inc.",
     "verseCount": 31087,
-    "checksum": "c54f34362070d88e"
+    "checksum": "c54f34362070d88e",
+    "bundled": true
   },
   {
     "id": "IBO",
-    "name": "Baịbụlụ Nsọ (Igbo)",
+    "name": "Ba\u1ecbb\u1ee5l\u1ee5 Ns\u1ecd (Igbo)",
     "year": 2018,
     "file": "IBO.tsv.gz",
     "licence": "CC BY-SA 4.0",
-    "attribution": "Biblica® open edition © Biblica, Inc.",
+    "attribution": "Biblica\u00ae open edition \u00a9 Biblica, Inc.",
     "verseCount": 31103,
-    "checksum": "08779b27ff3add2a"
+    "checksum": "08779b27ff3add2a",
+    "bundled": true
   },
   {
     "id": "HAU",
@@ -139,9 +155,10 @@
     "year": 2020,
     "file": "HAU.tsv.gz",
     "licence": "CC BY-SA 4.0",
-    "attribution": "Biblica® open edition © Biblica, Inc.",
+    "attribution": "Biblica\u00ae open edition \u00a9 Biblica, Inc.",
     "verseCount": 31087,
-    "checksum": "b6f8c72161cce67e"
+    "checksum": "b6f8c72161cce67e",
+    "bundled": true
   },
   {
     "id": "SWH",
@@ -149,9 +166,10 @@
     "year": 2018,
     "file": "SWH.tsv.gz",
     "licence": "CC BY-SA 4.0",
-    "attribution": "Biblica® open edition © Biblica, Inc.",
+    "attribution": "Biblica\u00ae open edition \u00a9 Biblica, Inc.",
     "verseCount": 31103,
-    "checksum": "cd5ba33bdb65bed8"
+    "checksum": "cd5ba33bdb65bed8",
+    "bundled": true
   },
   {
     "id": "TWI",
@@ -159,32 +177,36 @@
     "year": 2020,
     "file": "TWI.tsv.gz",
     "licence": "CC BY-SA 4.0",
-    "attribution": "Biblica® open edition © Biblica, Inc.",
+    "attribution": "Biblica\u00ae open edition \u00a9 Biblica, Inc.",
     "verseCount": 31100,
-    "checksum": "68386d1cccb7f2b8"
+    "checksum": "68386d1cccb7f2b8",
+    "bundled": true
   },
   {
     "id": "FRA",
-    "name": "Louis Segond (Français)",
+    "name": "Louis Segond (Fran\u00e7ais)",
     "year": 1910,
     "file": "FRA.tsv.gz",
     "verseCount": 31170,
-    "checksum": "5b32bf48fecb27b5"
+    "checksum": "5b32bf48fecb27b5",
+    "bundled": true
   },
   {
     "id": "SPA",
-    "name": "Reina Valera (Español)",
+    "name": "Reina Valera (Espa\u00f1ol)",
     "year": 1909,
     "file": "SPA.tsv.gz",
     "verseCount": 31084,
-    "checksum": "eb85551a9fc1b4bb"
+    "checksum": "eb85551a9fc1b4bb",
+    "bundled": true
   },
   {
     "id": "POR",
-    "name": "Bíblia Livre (Português)",
+    "name": "B\u00edblia Livre (Portugu\u00eas)",
     "year": 2018,
     "file": "POR.tsv.gz",
     "verseCount": 31102,
-    "checksum": "9c31e36d603fffe0"
+    "checksum": "9c31e36d603fffe0",
+    "bundled": true
   }
 ]
