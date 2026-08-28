@@ -12,6 +12,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { save } from "@tauri-apps/plugin-dialog";
 
 import {
+  bibleAttributions,
   libraryStatus,
   onLibraryStatus,
   type LibraryStatus,
@@ -662,6 +663,9 @@ export function SettingsDialog({
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [logNote, setLogNote] = useState<string | null>(null);
+  /* Who the text licences oblige us to name. Read from what is installed, so
+     it follows a translation a church downloaded or removed. */
+  const [credits, setCredits] = useState<string[]>([]);
 
   const saveLog = async () => {
     setLogNote(null);
@@ -717,6 +721,9 @@ export function SettingsDialog({
       .catch(() => undefined);
     void listAudioInputs()
       .then((found) => live && setDevices(found))
+      .catch(() => undefined);
+    void bibleAttributions()
+      .then((lines) => live && setCredits(lines))
       .catch(() => undefined);
     return () => {
       live = false;
@@ -1578,7 +1585,7 @@ export function SettingsDialog({
               <div className="border-t border-pulpitry-line" />
               <Section
                 title="Telling us this installation exists"
-                note="Once a day, if you switch it on: a random identifier made on this machine, which application and version, your operating system, what kind of processor it has, and which transcription engine you chose. Your country is worked out from the connection and the address is discarded. Never your machine's name, never your address, and never a transcript, a verse or a filename — there is no field for any of those. It never delays anything, and if it cannot be sent nothing happens."
+                note="Once a day, if you switch it on: a random identifier made on this machine, which application and version, your operating system, what kind of processor it has, which transcription engine you chose, and how many summaries and slide sets this installation has made. Two counts, and nothing about any of them. Your country is worked out from the connection and the address is discarded. Never your machine's name, never your address, and never a transcript, a verse or a filename — there is no field for any of those. It never delays anything, and if it cannot be sent nothing happens."
               >
                 <label className="flex items-center gap-2">
                   <input
@@ -1592,6 +1599,38 @@ export function SettingsDialog({
                   </span>
                 </label>
               </Section>
+
+              {/*
+                Not a credits screen.
+
+                Several of the translations are CC BY-SA. That licence permits
+                the commercial use we make of the text and asks to be told who
+                wrote it in return, so this is how we meet the terms rather
+                than a courtesy — which is why it sits in Help beside the other
+                obligations and not behind an About box somebody may never
+                open. Hidden when there is nothing to say: a church that
+                removed every one of those texts owes nobody anything.
+              */}
+              {credits.length > 0 && (
+                <>
+                  <div className="border-t border-pulpitry-line" />
+                  <Section
+                    title="Text licences"
+                    note="Some of the translations installed here are used under a licence that asks us to name their source."
+                  >
+                    <div className="flex flex-col gap-1">
+                      {credits.map((line) => (
+                        <span
+                          key={line}
+                          className="text-[12px] leading-snug text-pulpitry-text"
+                        >
+                          {line}
+                        </span>
+                      ))}
+                    </div>
+                  </Section>
+                </>
+              )}
             </Pane>
           </div>
         </div>

@@ -176,3 +176,14 @@ export const onTranslationProgress = (
   listen<TranslationProgress>("translation-progress", (event) =>
     handle(event.payload),
   );
+
+/**
+ * The texts whose licence obliges us to name them.
+ *
+ * CC BY-SA permits the commercial use we make of these and asks for
+ * attribution in return, so showing them is a condition of shipping the text
+ * rather than a credit we chose to give. Read from what is installed, so it
+ * stays right for a translation a church downloaded.
+ */
+export const bibleAttributions = (): Promise<string[]> =>
+  invoke<string[]>("bible_attributions");

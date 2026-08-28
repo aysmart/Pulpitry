@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { bibleAttributions } from "../lib/bible";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -34,7 +34,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
-    void invoke<string[]>("bible_attributions")
+    void bibleAttributions()
       .then(setCredits)
       .catch(() => setCredits([]));
   }, []);
@@ -76,8 +76,9 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
         </p>
 
         <p className="mt-4 text-[13px] leading-relaxed text-pulpitry-text">
-          An operator&rsquo;s desk for a church service: scripture, songs, slides and media on a
-          projector, with the passage a speaker is quoting found as they say it.
+          An operator&rsquo;s desk for a church service: scripture, songs,
+          slides and media on a projector, with the passage a speaker is quoting
+          found as they say it.
         </p>
 
         {/* Whose it is. The first version of this dialog listed everybody
@@ -99,22 +100,25 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
         <ul className="mt-2 flex flex-col gap-1.5 text-[12.5px] leading-snug text-pulpitry-muted">
           <li>
             Transcription on this machine by{" "}
-            {link("https://github.com/ggerganov/whisper.cpp", "whisper.cpp")}, which is MIT
-            licensed. The models are fetched from its own repository.
+            {link("https://github.com/ggerganov/whisper.cpp", "whisper.cpp")},
+            which is MIT licensed. The models are fetched from its own
+            repository.
           </li>
           <li>
-            Twenty-two Bible translations, about 684,000 verses, bundled and searched on this
-            machine — including Yoruba, Igbo, Hausa, Swahili, Twi, French, Spanish and Portuguese.
-            All of them are here: nothing is fetched from anywhere and nothing needs a key, so the
-            library works with the network unplugged. Most are public domain; the rest are shared
-            under Creative Commons and credited below. Translations still under copyright, such as
-            the NIV and ESV, are simply not included — putting their words in a download is
-            redistribution, whatever key it was fetched with.
+            Twenty-two Bible translations, about 684,000 verses, bundled and
+            searched on this machine — including Yoruba, Igbo, Hausa, Swahili,
+            Twi, French, Spanish and Portuguese. All of them are here: nothing
+            is fetched from anywhere and nothing needs a key, so the library
+            works with the network unplugged. Most are public domain; the rest
+            are shared under Creative Commons and credited below. Translations
+            still under copyright, such as the NIV and ESV, are simply not
+            included — putting their words in a download is redistribution,
+            whatever key it was fetched with.
           </li>
           <li>266 public-domain hymns.</li>
           <li>
-            Paraphrase matching by a sentence-embedding model that runs here, so no text leaves
-            this machine for it.
+            Paraphrase matching by a sentence-embedding model that runs here, so
+            no text leaves this machine for it.
           </li>
         </ul>
 
@@ -144,8 +148,8 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <p className="mt-6 text-[11.5px] leading-relaxed text-pulpitry-muted">
-          Everything except hosted transcription and the assistant works with no account and no
-          network at all.
+          Everything except hosted transcription and the assistant works with no
+          account and no network at all.
         </p>
 
         <div className="mt-6 flex justify-end">
