@@ -146,6 +146,17 @@ pub struct Detector {
     translation: Mutex<String>,
     transcript: Mutex<Transcript>,
     last_interim: Mutex<Option<Instant>>,
+    /*
+     * Reading the same stream for an instruction rather than a reference.
+     *
+     * Here because this is the one funnel every word passes through: the local
+     * engine, Azure's stream and a typed transcript all arrive at `on_final`
+     * and `on_interim`, and a listener anywhere else would hear some of them
+     * and not others.
+     *
+     * `None` until a church turns it on.
+     */
+    commands: Mutex<Option<castavox_core::commands::Listener>>,
     recent: Mutex<Vec<(i64, Instant)>>,
     /// Separate from verse suppression: a reference and a quotation of the same
     /// verse are different events and both worth surfacing.
@@ -170,6 +181,7 @@ impl Detector {
             translation: Mutex::new(translation),
             transcript: Mutex::new(Transcript::default()),
             last_interim: Mutex::new(None),
+            commands: Mutex::new(None),
             recent: Mutex::new(Vec::new()),
             recent_spoken: Mutex::new(Vec::new()),
             queue,
@@ -208,7 +220,35 @@ impl Detector {
 
     /// Hands a settled segment to the detection thread. Dropped if detection
     /// has fallen behind — skipping a segment is better than growing a backlog.
+    /// Turns listening for instructions on, off, or on with different words.
+    pub fn set_commands(&self, listener: Option<castavox_core::commands::Listener>) {
+        *self.commands.lock() = listener;
+    }
+
+    /// Reads the text for an instruction and tells the window about it.
+    ///
+    /// Ahead of the interim throttle rather than behind it. The throttle exists
+    /// so the database is not searched several times a second; a command costs
+    /// a string comparison, and the whole point of speaking one is that it acts
+    /// before the operator could have reached the laptop.
+    ///
+    /// `ended` separates an utterance that is finished from one still being
+    /// revised, which is the only thing that tells a repeat from a revision --
+    /// as text they are identical.
+    fn listen_for_command(&self, text: &str, ended: bool) {
+        let heard = {
+            let mut listener = self.commands.lock();
+            let Some(listener) = listener.as_mut() else { return };
+            listener.hear(text, ended)
+        };
+        if let Some(command) = heard {
+            // The window acts on it: only that end knows what is staged.
+            let _ = self.app.emit("voice-command", command);
+        }
+    }
+
     pub fn on_final(&self, text: &str) {
+        self.listen_for_command(text, true);
         let _ = self.queue.try_send((Segment::Final, text.to_string()));
     }
 
@@ -219,6 +259,7 @@ impl Detector {
     /// the speaker has paused. Rate-limited because interim results arrive
     /// several times a second and each one costs a full pass.
     pub fn on_interim(&self, text: &str) {
+        self.listen_for_command(text, false);
         {
             let mut last = self.last_interim.lock();
             if last.is_some_and(|when| when.elapsed() < INTERIM_INTERVAL) {

@@ -93,6 +93,40 @@ fn view(mut settings: Settings) -> SettingsView {
     }
 }
 
+/**
+ * Points the listener at the current settings and the installed translations.
+ *
+ * Rebuilt rather than mutated whenever either changes, because it holds the
+ * names every translation answers to -- and a church that has just downloaded
+ * the ESV should be able to ask for it by name without restarting.
+ */
+fn apply_voice(app: &tauri::AppHandle, detector: &Arc<Detector>, settings: &Settings) {
+    // The wake word may be empty. It is a second way to be heard, not the thing
+    // that makes listening possible: without one an instruction still works, it
+    // just has to be the whole of what was said.
+    if !settings.voice_commands {
+        detector.set_commands(None);
+        return;
+    }
+    let named: Vec<(String, String)> = app
+        .try_state::<Arc<Library>>()
+        .map(|library| {
+            library
+                .translations()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|t| (t.id, t.name))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    detector.set_commands(Some(castavox_core::commands::Listener::new(
+        &settings.wake_word,
+        &named,
+        &settings.voice_phrases,
+    )));
+}
+
 #[tauri::command]
 fn save_settings(
     app: tauri::AppHandle,
@@ -136,6 +170,8 @@ fn save_settings(
             speech.model_changed();
         }
     }
+    apply_voice(&app, &detector, &settings);
+
     if let Some(mirror) = app.try_state::<Arc<mirror::Mirror>>() {
         mirror.configure(&settings);
     }
@@ -702,6 +738,12 @@ async fn remove_translation(
 fn announce(app: &AppHandle, library: &Library) {
     if let Ok(status) = library.status() {
         let _ = app.emit(bible::EVENT_LIBRARY, status);
+    }
+    // The listener holds the names every translation answers to, so one just
+    // downloaded should be askable for by name and one just removed should
+    // stop being.
+    if let Some(detector) = app.try_state::<Arc<Detector>>() {
+        apply_voice(app, &detector, &settings::load(app).unwrap_or_default());
     }
 }
 
@@ -1593,6 +1635,11 @@ pub fn run() {
                 saved.translation.clone(),
             );
             app.manage(Arc::clone(&detector));
+            apply_voice(
+                app.handle(),
+                &detector,
+                &settings::load(app.handle()).unwrap_or_default(),
+            );
 
             // Shares the database file with the library and the catalogue, in
             // its own tables and on its own connection.

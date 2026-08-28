@@ -149,6 +149,24 @@ pub struct Settings {
     /// than as unset -- an upgrade must not opt anybody in.
     #[serde(default)]
     pub check_in: bool,
+
+    /*
+     * Speaking to the machine instead of reaching for it.
+     *
+     * Off until a church turns it on. The failure worth designing against is a
+     * screen that moves because of something a preacher said, which is worse
+     * than a feature nobody found.
+     */
+    #[serde(default)]
+    pub voice_commands: bool,
+    /// A second way to be heard rather than a requirement: with one set,
+    /// anything said after it counts. Empty is fine — an instruction then has
+    /// to be the whole of what was said.
+    #[serde(default)]
+    pub wake_word: String,
+    /// A church's own words, pointed at actions we already have.
+    #[serde(default)]
+    pub voice_phrases: Vec<castavox_core::commands::Phrase>,
     pub semantic_enabled: bool,
     /// Cosine similarity a match must reach to be shown, 0 to 1.
     pub semantic_threshold: f32,
@@ -276,6 +294,9 @@ impl Default for Settings {
             assist_model: String::new(),
             assist_api_version: DEFAULT_ASSIST_API_VERSION.into(),
             speech_engine: "local".to_string(),
+            voice_commands: false,
+            wake_word: String::new(),
+            voice_phrases: Vec::new(),
             ndi_enabled: false,
             ndi_name: String::new(),
             hosted_device_id: String::new(),

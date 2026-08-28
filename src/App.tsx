@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { AboutDialog } from "./components/AboutDialog";
 import { HistoryDialog } from "./components/HistoryDialog";
@@ -535,6 +535,52 @@ export default function App() {
       stop?.();
     };
   }, [toggleProjector, toggleSecond, toggleListening, clearLive]);
+
+  /*
+   * Doing what the operator said.
+   *
+   * The Rust side decides what was heard and this end decides what it means,
+   * because only this end knows what is staged. Deliberately the same actions
+   * the keyboard already has: the value is an operator not having to look down,
+   * not a spoken language for driving a projector.
+   */
+  useEffect(() => {
+    let active = true;
+    let stop: UnlistenFn | undefined;
+
+    void listen<{ action: string; translation?: string }>(
+      "voice-command",
+      ({ payload }) => {
+        switch (payload.action) {
+          case "nextVerse":
+            void step(true);
+            break;
+          case "previousVerse":
+            void step(false);
+            break;
+          case "clear":
+            clearLive();
+            break;
+          case "switch":
+            // A translation nobody has installed is ignored rather than
+            // reported. The listener only ever names one that is in the
+            // library, so this guards a race -- somebody removing it while the
+            // words were in the air -- and is not worth interrupting a service
+            // for.
+            if (payload.translation) selectTranslation(payload.translation);
+            break;
+        }
+      },
+    ).then((off) => {
+      if (active) stop = off;
+      else off();
+    });
+
+    return () => {
+      active = false;
+      stop?.();
+    };
+  }, [step, clearLive, selectTranslation]);
 
   return (
     <div className="flex h-full flex-col bg-pulpitry-ink text-pulpitry-text">

@@ -304,6 +304,55 @@ function describeSize(bytes: number): string {
     : `${Math.round(bytes / 1024 ** 2)} MB`;
 }
 
+/**
+ * The action an operator wrote, as the Rust side names it.
+ *
+ * Deliberately a short list. A custom phrase means one of the things the
+ * application already does; the value is "shema" meaning next verse to one
+ * church, not a scripting language.
+ */
+function actionFor(said: string): string | null {
+  const want = said.trim().toLowerCase();
+  if (want.startsWith("prev") || want.startsWith("back"))
+    return "previousVerse";
+  if (want.startsWith("next") || want.startsWith("forward")) return "nextVerse";
+  if (want.startsWith("clear") || want.startsWith("blank")) return "clear";
+  return null;
+}
+
+/** The same in reverse, for showing back what was saved. */
+const WORDS_FOR: Record<string, string> = {
+  previousVerse: "previous verse",
+  nextVerse: "next verse",
+  clear: "clear",
+};
+
+/**
+ * One phrase per line, "what I say = what it does".
+ *
+ * A line whose action is not one we have is dropped rather than refused. A
+ * dialog that will not accept a change because of a typo in an optional field,
+ * ten minutes before a service, when the operator came here to alter something
+ * else, is a worse failure than a phrase that quietly does not work.
+ */
+function parsePhrases(
+  text: string,
+): { said: string; does: { action: string } }[] {
+  return text
+    .split("\n")
+    .map((line) => {
+      const at = line.indexOf("=");
+      if (at <= 0) return null;
+      const said = line.slice(0, at).trim();
+      const action = actionFor(line.slice(at + 1));
+      return said && action ? { said, does: { action } } : null;
+    })
+    .filter(
+      (phrase): phrase is { said: string; does: { action: string } } =>
+        phrase !== null,
+    );
+}
+
 const FIELD =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-2 text-[13px] text-pulpitry-text outline-none focus-visible:focus-ring";
 
@@ -660,6 +709,14 @@ export function SettingsDialog({
   const [device, setDevice] = useState<string | null>(settings.inputDeviceId);
   const [translation, setTranslation] = useState(settings.translation);
   const [verseDisplay, setVerseDisplay] = useState(settings.verseDisplay);
+  const [voiceCommands, setVoiceCommands] = useState(settings.voiceCommands);
+  const [wakeWord, setWakeWord] = useState(settings.wakeWord);
+  /* Edited as text, one phrase per line: "what I say = what it does". */
+  const [voicePhrases, setVoicePhrases] = useState(() =>
+    settings.voicePhrases
+      .map((phrase) => `${phrase.said} = ${WORDS_FOR[phrase.does.action]}`)
+      .join("\n"),
+  );
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [logNote, setLogNote] = useState<string | null>(null);
@@ -821,6 +878,9 @@ export function SettingsDialog({
         inputDeviceId: device,
         translation,
         verseDisplay,
+        voiceCommands,
+        wakeWord: wakeWord.trim(),
+        voicePhrases: parsePhrases(voicePhrases),
         assistEnabled,
         assistEndpoint: assistEndpoint.trim(),
         assistModel: assistModel.trim(),
@@ -877,6 +937,9 @@ export function SettingsDialog({
     device,
     translation,
     verseDisplay,
+    voiceCommands,
+    wakeWord,
+    voicePhrases,
     assistEnabled,
     assistEndpoint,
     assistModel,
@@ -1249,6 +1312,77 @@ export function SettingsDialog({
                     Forget speech key
                   </button>
                 ) : null}
+              </Section>
+
+              <div className="border-t border-pulpitry-line" />
+
+              <Section
+                title="Speaking to Pulpitry"
+                note="Needs transcription running. On this machine a sentence is transcribed once you stop speaking, so an instruction lands a beat late; on a subscription or Azure it lands as you say it."
+              >
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={voiceCommands}
+                    onChange={(event) => setVoiceCommands(event.target.checked)}
+                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                  />
+                  <span className="text-[13px] text-pulpitry-text">
+                    Act on what I say
+                  </span>
+                </label>
+
+                {/*
+                  Said plainly because the failure it guards against happens in
+                  front of a congregation: an instruction has to be the whole of
+                  what was said, so a reading that mentions the next verse
+                  leaves the screen alone.
+                */}
+                <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                  Say what you want on its own &mdash; &ldquo;next verse&rdquo;,
+                  &ldquo;previous verse&rdquo;, &ldquo;clear the screen&rdquo;,
+                  or the name of a translation: &ldquo;give me the King
+                  James&rdquo;. It has to be the whole thing you say; the same
+                  words inside a sentence are left alone. Only the last breath
+                  or two counts.
+                </span>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-pulpitry-muted">
+                    Wake word
+                  </span>
+                  <input
+                    value={wakeWord}
+                    onChange={(event) => setWakeWord(event.target.value)}
+                    placeholder="Optional"
+                    className={FIELD}
+                  />
+                  <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                    A second way in rather than a requirement. With one set,
+                    anything you say after it counts &mdash; worth having for a
+                    phrase you expect to hear from the pulpit.
+                  </span>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-pulpitry-muted">
+                    Your own words
+                  </span>
+                  <textarea
+                    value={voicePhrases}
+                    onChange={(event) => setVoicePhrases(event.target.value)}
+                    rows={4}
+                    placeholder={
+                      "shema = next verse\nback = previous verse\nrest = clear"
+                    }
+                    className={`${FIELD} font-mono`}
+                  />
+                  <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                    One per line: what you say, then what it does. A church says
+                    things its own way, and the list above is ours rather than
+                    yours.
+                  </span>
+                </label>
               </Section>
             </Pane>
 

@@ -26,6 +26,12 @@ export interface Settings {
    * decision.
    */
   verseDisplay: string;
+  /** Whether the application acts on what is said. */
+  voiceCommands: boolean;
+  /** A second way to be heard, not a requirement. Empty is fine. */
+  wakeWord: string;
+  /** A church's own words, pointed at actions we already have. */
+  voicePhrases: { said: string; does: { action: string } }[];
 
   /**
    * Which recogniser turns audio into words: "azure", "local" or "hosted".
