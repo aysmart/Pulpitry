@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { adjacentVerse, type Verse } from "./bible";
+import { adjacentVerse, getChapter, listBooks, type Verse } from "./bible";
 import type { SongSection } from "./catalog";
 import {
   componentText,
@@ -29,7 +29,13 @@ export type Presentable =
       index: number;
       sections: SongSection[];
     }
-  | { kind: "image"; itemId: number; title: string; path: string; fill: boolean }
+  | {
+      kind: "image";
+      itemId: number;
+      title: string;
+      path: string;
+      fill: boolean;
+    }
   | {
       kind: "media";
       itemId: number;
@@ -125,7 +131,12 @@ export function toLiveContent(item: Presentable): LiveContent {
   }
   if (item.kind === "media") {
     return {
-      body: { kind: "media", path: item.path, looping: item.looping, fill: item.fill },
+      body: {
+        kind: "media",
+        path: item.path,
+        looping: item.looping,
+        fill: item.fill,
+      },
       caption: "",
       ids: [],
       progress: 0,
@@ -382,6 +393,70 @@ export function usePresentation() {
   const canStepBack =
     preview?.kind === "scripture" ||
     (preview?.kind === "lyric" && preview.index > 0);
+  /**
+   * Shows the staged passage again in another translation.
+   *
+   * Changing translation mid-service means one thing: this verse, in that
+   * wording. Leaving the old text on the wall is the single outcome nobody
+   * asked for — and it was what happened, because changing translation only
+   * ever changed what the *next* lookup would search.
+   *
+   * Found again by book name rather than by the number it had. A book's number
+   * belongs to the canon it is in: John is the forty-third book of a Protestant
+   * Bible and the fiftieth of a Catholic one, so carrying the number across
+   * would put Philippians on the screen.
+   *
+   * Silent about everything it cannot do. A translation without that book, or
+   * without that verse — some omit a handful — leaves the screen as it was,
+   * which is a better answer than blanking it during a reading.
+   */
+  const retranslate = useCallback(
+    async (into: string) => {
+      const staged = preview;
+      if (!staged || staged.kind !== "scripture" || staged.verses.length === 0)
+        return;
+      const first = staged.verses[0];
+      if (!first || first.translation === into) return;
+
+      try {
+        const books = await listBooks(into);
+        const numbers = new Map(
+          books.map((book) => [book.name.toLowerCase(), book.number]),
+        );
+
+        // One request per chapter, not per verse: a passage is almost always
+        // inside one, and a range of ten verses should not be ten round trips.
+        const chapters = new Map<string, Verse[]>();
+        const found: Verse[] = [];
+        for (const verse of staged.verses) {
+          const number = numbers.get(verse.book.toLowerCase());
+          if (number === undefined) return;
+
+          const at = `${number}:${verse.chapter}`;
+          let loaded = chapters.get(at);
+          if (!loaded) {
+            loaded = await getChapter(into, number, verse.chapter);
+            chapters.set(at, loaded);
+          }
+          const match = loaded.find((entry) => entry.verse === verse.verse);
+          if (!match) return;
+          found.push(match);
+        }
+
+        // Only back to air if it was on air. Staging something is a decision
+        // the operator makes separately from showing it, and a translation
+        // change must not quietly promote a preview to the wall.
+        if (liveKey && liveKey === keyOf(staged))
+          show({ kind: "scripture", verses: found });
+        else setPreview({ kind: "scripture", verses: found });
+      } catch {
+        // A lookup that fails leaves the reading alone. There is nothing here
+        // an operator could act on mid-service.
+      }
+    },
+    [preview, liveKey, show],
+  );
+
   const canStepForward =
     preview?.kind === "scripture" ||
     (preview?.kind === "lyric" && preview.index < preview.sections.length - 1);
@@ -399,6 +474,7 @@ export function usePresentation() {
     showVerse,
     showVerses,
     showItem,
+    retranslate,
     clearLive,
     wind,
     step,

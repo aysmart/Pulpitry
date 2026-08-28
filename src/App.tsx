@@ -93,6 +93,7 @@ export default function App() {
     keyOf,
     display,
     clearLive,
+    retranslate,
     wind,
     step,
     canStepBack,
@@ -399,12 +400,17 @@ export default function App() {
   const selectTranslation = useCallback(
     (id: string) => {
       setTranslation(id);
+      // What is staged follows the choice. Changing translation during a
+      // service means "this verse, in that wording" -- it is the only reason
+      // to change one mid-reading -- and this is the same whether the operator
+      // used the dropdown or said it out loud.
+      void retranslate(id);
       if (!settings || settings.translation === id) return;
       void saveSettings({ ...settings, translation: id })
         .then(setSettings)
         .catch((err) => setError(describeError(err)));
     },
-    [settings],
+    [settings, retranslate],
   );
 
   /**
