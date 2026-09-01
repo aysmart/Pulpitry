@@ -25,6 +25,7 @@ import {
   clearAzureKey,
   describeError,
   exportLog,
+  getSettings,
   hostedStatus,
   madeHere,
   listAudioInputs,
@@ -1014,7 +1015,30 @@ export function SettingsDialog({
                 title="Subscription"
                 note="Hosted transcription and the assistant, metered against your plan. The applications work without one."
               >
-                <HostedSubscription onActivationChange={setHosted} />
+                <HostedSubscription
+                  onActivationChange={(activated) => {
+                    setHosted(activated);
+                    /*
+                     * Re-read what the window knows, not just what this dialog
+                     * knows.
+                     *
+                     * Activating writes a device token to the credential store
+                     * and changes no stored setting, so nothing else here had
+                     * any reason to look again -- and the main window decides
+                     * whether Start Listening can work from
+                     * `hasHostedSubscription`, which is read from that store.
+                     *
+                     * Without this, a church that has just pasted a valid
+                     * licence presses Start Listening and is sent back to this
+                     * page, over and over, until they happen to change the
+                     * engine and back -- which saves settings, and a save is
+                     * the only thing that was refreshing this.
+                     */
+                    void getSettings()
+                      .then(onSaved)
+                      .catch(() => undefined);
+                  }}
+                />
                 {/* Named rather than assumed. A church without a plan has no
                     way from here to the thing that sells one, and "contact us"
                     is not a price. */}
@@ -1728,10 +1752,10 @@ export function SettingsDialog({
               >
                 <span className="text-[11.5px] leading-snug text-pulpitry-muted">
                   This one cannot be turned off. It is how we know how many
-                  churches run this, on what, and on which release — questions we
-                  were otherwise guessing at. If you would rather not be counted,
-                  write to support@castavox.com and we will delete what is held
-                  against your installation.
+                  churches run this, on what, and on which release — questions
+                  we were otherwise guessing at. If you would rather not be
+                  counted, write to support@castavox.com and we will delete what
+                  is held against your installation.
                 </span>
               </Section>
 

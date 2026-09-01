@@ -6,7 +6,7 @@ import {
   presentableText,
   type Presentable,
 } from "../lib/usePresentation";
-import { ChapterNavigator } from "./ChapterNavigator";
+import { ChapterNavigator, type ChapterJump } from "./ChapterNavigator";
 import type { ProjectorTheme } from "../lib/theme";
 import type { Ticker } from "../lib/projector";
 import type { ScheduleController } from "../lib/useSchedule";
@@ -42,6 +42,7 @@ export function ScripturePanel({
   previewVerseIds,
   liveVerseIds,
   follow,
+  jump,
   history,
   schedule,
   onStageEntry,
@@ -67,6 +68,7 @@ export function ScripturePanel({
   liveVerseIds: number[];
   /** The staged verse the chapter list should follow. */
   follow: Verse | null;
+  jump: ChapterJump | null;
   history: Presentable[];
   schedule: ScheduleController;
   onStageEntry: (index: number) => Promise<Presentable | null>;
@@ -138,6 +140,7 @@ export function ScripturePanel({
             previewVerseIds={previewVerseIds}
             liveVerseIds={liveVerseIds}
             follow={follow}
+            jump={jump}
           />
         )
       ) : null}

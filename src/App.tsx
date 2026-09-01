@@ -8,6 +8,7 @@ import { OriginalPanel } from "./components/OriginalPanel";
 import { Panel, PanelCount } from "./components/Panel";
 import { QueueRail } from "./components/QueueRail";
 import { ScripturePanel } from "./components/ScripturePanel";
+import type { ChapterJump } from "./components/ChapterNavigator";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SlidesFromSermon } from "./components/SlidesFromSermon";
 import { PreviewPanel, StagePanel } from "./components/StagePanel";
@@ -221,6 +222,8 @@ export default function App() {
   const update = useUpdate(settings?.updateCheck ?? false);
 
   const [error, setError] = useState<string | null>(null);
+  /* Where a spoken instruction asked the chapter browser to go. */
+  const [jump, setJump] = useState<ChapterJump | null>(null);
   const [displays, setDisplays] = useState<Display[]>([]);
   const [projector, setProjector] = useState<ProjectorState>({
     open: false,
@@ -554,30 +557,54 @@ export default function App() {
     let active = true;
     let stop: UnlistenFn | undefined;
 
-    void listen<{ action: string; translation?: string }>(
-      "voice-command",
-      ({ payload }) => {
-        switch (payload.action) {
-          case "nextVerse":
-            void step(true);
-            break;
-          case "previousVerse":
-            void step(false);
-            break;
-          case "clear":
-            clearLive();
-            break;
-          case "switch":
-            // A translation nobody has installed is ignored rather than
-            // reported. The listener only ever names one that is in the
-            // library, so this guards a race -- somebody removing it while the
-            // words were in the air -- and is not worth interrupting a service
-            // for.
-            if (payload.translation) selectTranslation(payload.translation);
-            break;
-        }
-      },
-    ).then((off) => {
+    void listen<{
+      action: string;
+      translation?: string;
+      chapter?: number | null;
+      verse?: number;
+    }>("voice-command", ({ payload }) => {
+      switch (payload.action) {
+        case "nextVerse":
+          void step(true);
+          break;
+        case "previousVerse":
+          void step(false);
+          break;
+        case "clear":
+          clearLive();
+          break;
+        case "nextChapter":
+          setJump({ chapter: null, by: 1, verse: 0, at: Date.now() });
+          break;
+        case "previousChapter":
+          setJump({ chapter: null, by: -1, verse: 0, at: Date.now() });
+          break;
+        case "chapter":
+          setJump({
+            chapter: payload.chapter ?? null,
+            verse: 0,
+            at: Date.now(),
+          });
+          break;
+        case "passage":
+          // A null chapter is "verse nine" said on its own, which keeps the
+          // chapter the reading is already in.
+          setJump({
+            chapter: payload.chapter ?? null,
+            verse: payload.verse ?? 0,
+            at: Date.now(),
+          });
+          break;
+        case "switch":
+          // A translation nobody has installed is ignored rather than
+          // reported. The listener only ever names one that is in the
+          // library, so this guards a race -- somebody removing it while the
+          // words were in the air -- and is not worth interrupting a service
+          // for.
+          if (payload.translation) selectTranslation(payload.translation);
+          break;
+      }
+    }).then((off) => {
       if (active) stop = off;
       else off();
     });
@@ -842,6 +869,7 @@ export default function App() {
              the Greek beside it are never looking at different places. */
             liveVerseIds={live?.ids ?? []}
             follow={originalVerse}
+            jump={jump}
             history={history}
             schedule={schedule}
             onStageEntry={stageEntry}
