@@ -457,6 +457,74 @@ export function usePresentation() {
     [preview, liveKey, show],
   );
 
+  /**
+   * Goes where a spoken instruction asked, and takes the screen with it.
+   *
+   * Deliberately the same shape as `step`, because it is the same act: it
+   * works from what is *staged* rather than from wherever the chapter browser
+   * happens to be pointing, and it carries the screen under exactly the same
+   * rule -- if what it replaced was live, the new one is live.
+   *
+   * Reading the browser instead was the first attempt and was wrong three ways
+   * at once: it staged the previous chapter's verse because the new one had
+   * not arrived, it needed saying twice for the same reason, and a chapter and
+   * verse together did nothing at all.
+   *
+   * A chapter the book does not have comes back empty and nothing moves:
+   * "chapter ninety" in a book with five is a misheard number, and going to
+   * the last chapter would look like the instruction worked.
+   */
+  const goToPassage = useCallback(
+    async ({
+      book,
+      chapter,
+      by,
+      verse,
+    }: {
+      book: string | null;
+      chapter: number | null;
+      by: number;
+      verse: number | null;
+    }) => {
+      if (preview?.kind !== "scripture") return;
+      const from = preview.verses[0];
+      if (!from) return;
+
+      // The book, when one was named. Looked up in the translation being read,
+      // so a canon without that book simply does not move.
+      let bookNumber = from.bookNumber;
+      let open = from.chapter;
+      if (book) {
+        const found = (await listBooks(from.translation)).find(
+          (entry) => entry.name.toLowerCase() === book.toLowerCase(),
+        );
+        if (!found) return;
+        if (found.number !== bookNumber) open = 1;
+        bookNumber = found.number;
+      }
+
+      const wanted = by !== 0 ? open + by : (chapter ?? open);
+      if (wanted < 1) return;
+
+      const verses = await getChapter(from.translation, bookNumber, wanted);
+      if (verses.length === 0) return;
+
+      // A chapter asked for with no verse starts at its first, because that is
+      // where a reading starts.
+      const target = verses.find((entry) => entry.verse === (verse ?? 1));
+      if (!target) return;
+
+      const next: Presentable = { kind: "scripture", verses: [target] };
+      const wasLive = liveKey === keyOf(preview);
+      setPreview(next);
+      if (wasLive) {
+        setLiveKey(keyOf(next));
+        void setLive(toLiveContent(next));
+      }
+    },
+    [preview, liveKey],
+  );
+
   const canStepForward =
     preview?.kind === "scripture" ||
     (preview?.kind === "lyric" && preview.index < preview.sections.length - 1);
@@ -474,6 +542,7 @@ export function usePresentation() {
     showVerse,
     showVerses,
     showItem,
+    goToPassage,
     retranslate,
     clearLive,
     wind,

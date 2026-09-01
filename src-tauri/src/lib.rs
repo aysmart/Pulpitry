@@ -120,9 +120,25 @@ fn apply_voice(app: &tauri::AppHandle, detector: &Arc<Detector>, settings: &Sett
         })
         .unwrap_or_default();
 
+    // Book names from the translation being read, so a reference said aloud is
+    // matched against the spellings this library actually has -- and a Catholic
+    // canon's extra books can be asked for by name like any other.
+    let books: Vec<String> = app
+        .try_state::<Arc<Library>>()
+        .map(|library| {
+            library
+                .books(&settings.translation)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|book| book.name)
+                .collect()
+        })
+        .unwrap_or_default();
+
     detector.set_commands(Some(castavox_core::commands::Listener::new(
         &settings.wake_word,
         &named,
+        &books,
         &settings.voice_phrases,
     )));
 }

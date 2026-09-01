@@ -8,7 +8,6 @@ import { OriginalPanel } from "./components/OriginalPanel";
 import { Panel, PanelCount } from "./components/Panel";
 import { QueueRail } from "./components/QueueRail";
 import { ScripturePanel } from "./components/ScripturePanel";
-import type { ChapterJump } from "./components/ChapterNavigator";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SlidesFromSermon } from "./components/SlidesFromSermon";
 import { PreviewPanel, StagePanel } from "./components/StagePanel";
@@ -66,6 +65,19 @@ import { useTranscript } from "./lib/useTranscript";
  * model that has been downloaded, a subscription an activated licence. Nothing
  * here checks that they are *correct* -- only that the operator has been asked.
  */
+/** An instruction the operator spoke, as the Rust side reports it. */
+interface VoiceCommand {
+  action: string;
+  translation?: string;
+  /** Null for a reference within the book being read. */
+  book?: string | null;
+  /** Null for "verse nine" said on its own, which keeps the chapter open. */
+  chapter?: number | null;
+  /** A relative chapter move: 1 for "next chapter", -1 for "previous". */
+  by?: number;
+  verse?: number | null;
+}
+
 function ready(settings: SettingsView | null): boolean {
   if (!settings) return false;
   switch (settings.speechEngine) {
@@ -94,6 +106,7 @@ export default function App() {
     keyOf,
     display,
     clearLive,
+    goToPassage,
     retranslate,
     wind,
     step,
@@ -222,8 +235,6 @@ export default function App() {
   const update = useUpdate(settings?.updateCheck ?? false);
 
   const [error, setError] = useState<string | null>(null);
-  /* Where a spoken instruction asked the chapter browser to go. */
-  const [jump, setJump] = useState<ChapterJump | null>(null);
   const [displays, setDisplays] = useState<Display[]>([]);
   const [projector, setProjector] = useState<ProjectorState>({
     open: false,
@@ -553,58 +564,57 @@ export default function App() {
    * the keyboard already has: the value is an operator not having to look down,
    * not a spoken language for driving a projector.
    */
+  /*
+   * Registered once, and reached through a ref.
+   *
+   * Every action here reads what is currently staged, so a handler capturing
+   * those values would have to be re-registered on every change -- and each
+   * re-registration tears down a listener and adds another, which drops
+   * whatever arrives in between. An instruction lost that way looks exactly
+   * like the operator having to say it twice.
+   */
+  const onVoiceCommand = useRef<(payload: VoiceCommand) => void>(() => {});
+  onVoiceCommand.current = (payload: VoiceCommand) => {
+    switch (payload.action) {
+      case "nextVerse":
+        void step(true);
+        break;
+      case "previousVerse":
+        void step(false);
+        break;
+      case "clear":
+        clearLive();
+        break;
+      case "passage":
+        // One shape for every way of asking. A null book is the one being
+        // read, a null chapter the one already open, and `by` a relative move
+        // -- so "next chapter verse nine" and "John nine eight" arrive here
+        // the same way.
+        void goToPassage({
+          book: payload.book ?? null,
+          chapter: payload.chapter ?? null,
+          by: payload.by ?? 0,
+          verse: payload.verse ?? null,
+        });
+        break;
+      case "switch":
+        // A translation nobody has installed is ignored rather than
+        // reported. The listener only ever names one that is in the
+        // library, so this guards a race -- somebody removing it while the
+        // words were in the air -- and is not worth interrupting a service
+        // for.
+        if (payload.translation) selectTranslation(payload.translation);
+        break;
+    }
+  };
+
   useEffect(() => {
     let active = true;
     let stop: UnlistenFn | undefined;
 
-    void listen<{
-      action: string;
-      translation?: string;
-      chapter?: number | null;
-      verse?: number;
-    }>("voice-command", ({ payload }) => {
-      switch (payload.action) {
-        case "nextVerse":
-          void step(true);
-          break;
-        case "previousVerse":
-          void step(false);
-          break;
-        case "clear":
-          clearLive();
-          break;
-        case "nextChapter":
-          setJump({ chapter: null, by: 1, verse: 0, at: Date.now() });
-          break;
-        case "previousChapter":
-          setJump({ chapter: null, by: -1, verse: 0, at: Date.now() });
-          break;
-        case "chapter":
-          setJump({
-            chapter: payload.chapter ?? null,
-            verse: 0,
-            at: Date.now(),
-          });
-          break;
-        case "passage":
-          // A null chapter is "verse nine" said on its own, which keeps the
-          // chapter the reading is already in.
-          setJump({
-            chapter: payload.chapter ?? null,
-            verse: payload.verse ?? 0,
-            at: Date.now(),
-          });
-          break;
-        case "switch":
-          // A translation nobody has installed is ignored rather than
-          // reported. The listener only ever names one that is in the
-          // library, so this guards a race -- somebody removing it while the
-          // words were in the air -- and is not worth interrupting a service
-          // for.
-          if (payload.translation) selectTranslation(payload.translation);
-          break;
-      }
-    }).then((off) => {
+    void listen<VoiceCommand>("voice-command", ({ payload }) =>
+      onVoiceCommand.current(payload),
+    ).then((off) => {
       if (active) stop = off;
       else off();
     });
@@ -613,7 +623,7 @@ export default function App() {
       active = false;
       stop?.();
     };
-  }, [step, clearLive, selectTranslation]);
+  }, []);
 
   return (
     <div className="flex h-full flex-col bg-pulpitry-ink text-pulpitry-text">
@@ -869,7 +879,6 @@ export default function App() {
              the Greek beside it are never looking at different places. */
             liveVerseIds={live?.ids ?? []}
             follow={originalVerse}
-            jump={jump}
             history={history}
             schedule={schedule}
             onStageEntry={stageEntry}

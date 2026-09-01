@@ -18,23 +18,6 @@ import { describeError } from "../lib/api";
  * "1 cor 13:4") it navigates there, and if it does not it falls back to
  * full-text search. That saves the operator from choosing a mode mid-service.
  */
-/**
- * Where a spoken instruction asked the chapter browser to go.
- *
- * `at` rises every time so the same instruction given twice moves twice: an
- * effect keyed on the values alone would treat "chapter four" said again, after
- * the operator had wandered off, as nothing to do.
- */
-export interface ChapterJump {
-  /** Absolute chapter, or null to keep the one already open. */
-  chapter: number | null;
-  /** Relative move, for "next chapter" and "previous chapter". */
-  by?: number;
-  /** 0 for the top of the chapter. */
-  verse: number;
-  at: number;
-}
-
 export function ChapterNavigator({
   translation,
   translations,
@@ -44,7 +27,6 @@ export function ChapterNavigator({
   previewVerseIds,
   liveVerseIds,
   follow,
-  jump,
 }: {
   translation: string;
   translations: Translation[];
@@ -66,8 +48,6 @@ export function ChapterNavigator({
    * had to find it by hand while the sentence they were following moved on.
    */
   follow: Verse | null;
-  /** Where a spoken instruction asked the browser to go. */
-  jump: ChapterJump | null;
 }) {
   const [books, setBooks] = useState<Book[]>([]);
   const [bookNumber, setBookNumber] = useState(1);
@@ -152,29 +132,6 @@ export function ChapterNavigator({
     setFocusVerse(follow.verse);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [followedId]);
-
-  /*
-   * A chapter asked for out loud.
-   *
-   * Outside the book it is ignored rather than clamped: "chapter ninety" in a
-   * book with five is a misheard number, and going to chapter five instead
-   * would look like the instruction worked.
-   */
-  useEffect(() => {
-    if (!jump) return;
-    const here = books.find((book) => book.number === bookNumber);
-    if (!here) return;
-
-    const wanted = jump.by ? chapter + jump.by : (jump.chapter ?? chapter);
-    if (wanted < 1 || wanted > here.chapters) return;
-
-    setChapter(wanted);
-    // A search list showing instead of the chapter would move underneath it,
-    // where nobody can see it happen.
-    setResults(null);
-    setFocusVerse(jump.verse > 0 ? jump.verse : null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jump?.at]);
 
   // Bring a referenced verse into view once its chapter has rendered.
   useEffect(() => {
