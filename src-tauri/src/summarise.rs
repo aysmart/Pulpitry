@@ -570,9 +570,10 @@ fn advise(failure: &castavox_core::assistant::Failure, hosted: bool) -> anyhow::
          */
         Failure::Unreachable(detail) if castavox_core::assistant::is_nothing_listening(detail) => {
             anyhow!(
-                "Nothing answered at the model's address. Check it under Settings — a model on \
-                 another machine needs that machine's address rather than localhost — and that \
-                 the model is running there."
+                "Nothing answered at the model's address. Check that the model's own server is \
+                 started — an application being open is not the same as its server running — and \
+                 that the address matches it. A model on another machine needs that machine's \
+                 address rather than localhost."
             )
         }
         Failure::Unreachable(_) => anyhow!(
