@@ -323,6 +323,109 @@ function parsePhrases(
     );
 }
 
+/**
+ * Where a church's own model lives, and how it expects to be asked.
+ *
+ * A list rather than three empty boxes and a documentation search. The endpoint
+ * is filled in; the model name is not, because a list of model names is wrong
+ * within a month and wrong in the way that stops somebody using one that
+ * exists.
+ *
+ * Most of these share one shape, because most of the industry copied OpenAI's.
+ */
+const ASSIST_PRESETS: {
+  id: string;
+  label: string;
+  endpoint: string;
+  shape: string;
+  model: string;
+}[] = [
+  {
+    id: "ollama",
+    label: "On this machine — Ollama",
+    endpoint: "http://localhost:11434/v1",
+    shape: "openAi",
+    model: "llama3.1",
+  },
+  {
+    id: "lmstudio",
+    label: "On this machine — LM Studio",
+    endpoint: "http://localhost:1234/v1",
+    shape: "openAi",
+    model: "",
+  },
+  {
+    id: "openai",
+    label: "OpenAI",
+    endpoint: "https://api.openai.com/v1",
+    shape: "openAi",
+    model: "gpt-4o-mini",
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    endpoint: "https://api.anthropic.com",
+    shape: "anthropic",
+    model: "claude-sonnet-4-5",
+  },
+  {
+    id: "gemini",
+    label: "Google Gemini",
+    endpoint: "https://generativelanguage.googleapis.com/v1beta/openai",
+    shape: "openAi",
+    model: "gemini-2.0-flash",
+  },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    endpoint: "https://api.deepseek.com/v1",
+    shape: "openAi",
+    model: "deepseek-chat",
+  },
+  {
+    id: "grok",
+    label: "Grok (xAI)",
+    endpoint: "https://api.x.ai/v1",
+    shape: "openAi",
+    model: "grok-2-latest",
+  },
+  {
+    id: "mistral",
+    label: "Mistral",
+    endpoint: "https://api.mistral.ai/v1",
+    shape: "openAi",
+    model: "mistral-large-latest",
+  },
+  {
+    id: "groq",
+    label: "Groq",
+    endpoint: "https://api.groq.com/openai/v1",
+    shape: "openAi",
+    model: "llama-3.3-70b-versatile",
+  },
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    endpoint: "https://openrouter.ai/api/v1",
+    shape: "openAi",
+    model: "",
+  },
+  {
+    id: "azure",
+    label: "Azure OpenAI or AI Foundry",
+    endpoint: "",
+    shape: "azure",
+    model: "",
+  },
+  {
+    id: "other",
+    label: "Something else",
+    endpoint: "",
+    shape: "openAi",
+    model: "",
+  },
+];
+
 const FIELD =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-2 text-[13px] text-pulpitry-text outline-none focus-visible:focus-ring";
 
@@ -647,6 +750,16 @@ export function SettingsDialog({
   const [assistApiVersion, setAssistApiVersion] = useState(
     settings.assistApiVersion,
   );
+  const [assistShape, setAssistShape] = useState(settings.assistShape);
+  /* Which row of the list the stored endpoint came from, so reopening shows
+     what was chosen rather than resetting to the top. */
+  const [assistPreset, setAssistPreset] = useState(
+    () =>
+      ASSIST_PRESETS.find(
+        (preset) =>
+          preset.endpoint !== "" && preset.endpoint === settings.assistEndpoint,
+      )?.id ?? (settings.assistShape === "azure" ? "azure" : "other"),
+  );
   const [assistKey, setAssistKey] = useState("");
 
   const [mirrorEnabled, setMirrorEnabled] = useState(settings.mirrorEnabled);
@@ -851,6 +964,7 @@ export function SettingsDialog({
         assistEndpoint: assistEndpoint.trim(),
         assistModel: assistModel.trim(),
         assistApiVersion: assistApiVersion.trim(),
+        assistShape,
         updateCheck,
         semanticEnabled,
         semanticThreshold,
@@ -906,6 +1020,7 @@ export function SettingsDialog({
     voicePhrases,
     assistEnabled,
     assistEndpoint,
+    assistShape,
     assistModel,
     assistApiVersion,
     updateCheck,
@@ -1454,14 +1569,51 @@ export function SettingsDialog({
                         className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
                       />
                       <span className="text-[13px] text-pulpitry-text">
-                        Suggest paraphrased scripture using an Azure AI Foundry
-                        model
+                        Suggest paraphrased scripture using a model of your own
                       </span>
                     </label>
 
                     <label className="flex flex-col gap-1.5">
                       <span className="text-[12px] text-pulpitry-muted">
-                        Endpoint
+                        Where the model is
+                      </span>
+                      <select
+                        value={assistPreset}
+                        onChange={(event) => {
+                          const chosen = ASSIST_PRESETS.find(
+                            (preset) => preset.id === event.target.value,
+                          );
+                          if (!chosen) return;
+                          setAssistPreset(chosen.id);
+                          setAssistShape(chosen.shape);
+                          // Filled in, not forced: a church with its own
+                          // gateway can still edit the address afterwards.
+                          if (chosen.endpoint)
+                            setAssistEndpoint(chosen.endpoint);
+                          if (chosen.model && !assistModel.trim())
+                            setAssistModel(chosen.model);
+                        }}
+                        className={FIELD}
+                      >
+                        {ASSIST_PRESETS.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.label}
+                          </option>
+                        ))}
+                      </select>
+                      {/* The one place plain http is allowed, and worth saying
+                          so where somebody is choosing it. */}
+                      <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                        A model on this machine costs nothing per request and
+                        nothing leaves the building. One at a provider is faster
+                        and better at long services, and you pay them directly —
+                        we never see the key or the bill.
+                      </span>
+                    </label>
+
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[12px] text-pulpitry-muted">
+                        Address
                       </span>
                       <input
                         value={assistEndpoint}
@@ -1469,7 +1621,7 @@ export function SettingsDialog({
                         onChange={(event) =>
                           setAssistEndpoint(event.target.value)
                         }
-                        placeholder="https://your-resource.services.ai.azure.com/models"
+                        placeholder="https://…"
                         className={FIELD}
                       />
                     </label>
@@ -1489,19 +1641,24 @@ export function SettingsDialog({
                           className={FIELD}
                         />
                       </label>
-                      <label className="flex flex-1 flex-col gap-1.5">
-                        <span className="text-[12px] text-pulpitry-muted">
-                          API version
-                        </span>
-                        <input
-                          value={assistApiVersion}
-                          spellCheck={false}
-                          onChange={(event) =>
-                            setAssistApiVersion(event.target.value)
-                          }
-                          className={FIELD}
-                        />
-                      </label>
+                      {/* Azure's alone. The others either ignore it or answer
+                          a 404 when it is appended, so asking everybody for one
+                          would be asking most churches for a wrong answer. */}
+                      {assistShape === "azure" ? (
+                        <label className="flex flex-1 flex-col gap-1.5">
+                          <span className="text-[12px] text-pulpitry-muted">
+                            API version
+                          </span>
+                          <input
+                            value={assistApiVersion}
+                            spellCheck={false}
+                            onChange={(event) =>
+                              setAssistApiVersion(event.target.value)
+                            }
+                            className={FIELD}
+                          />
+                        </label>
+                      ) : null}
                     </div>
 
                     <label className="flex flex-col gap-1.5">

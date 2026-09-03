@@ -204,6 +204,7 @@ pub fn generate(settings: &Settings, key: &str, sermon: &str) -> Result<Vec<Draf
         endpoint: settings.assist_endpoint.clone(),
         model: settings.assist_model.clone(),
         api_version: settings.assist_api_version.clone(),
+        shape: crate::assist::shape_of(&settings.assist_shape),
     };
     let base;
     let route = if hosted {

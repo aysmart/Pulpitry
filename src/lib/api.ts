@@ -61,6 +61,14 @@ export interface Settings {
   assistEndpoint: string;
   assistModel: string;
   assistApiVersion: string;
+  /**
+   * How the chosen service expects to be asked: "openAi", "azure" or
+   * "anthropic".
+   *
+   * Most services speak OpenAI's, which is why it is the default for anything
+   * typed by hand.
+   */
+  assistShape: string;
 
   /** Local, offline paraphrase matching against an embedding index. */
   /** Whether this installation sends the once-a-day check-in. Off unless the

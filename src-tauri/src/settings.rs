@@ -60,6 +60,19 @@ pub struct Settings {
     /// Deployment or model name, e.g. gpt-4o-mini or Llama-3.3-70B-Instruct.
     pub assist_model: String,
     pub assist_api_version: String,
+    /**
+     * How the chosen service expects to be asked.
+     *
+     * "openAi" for most of them -- OpenAI itself, DeepSeek, Grok, Mistral,
+     * Groq, OpenRouter, Gemini's compatibility endpoint, and Ollama or LM
+     * Studio on this machine. "azure" for Azure OpenAI and AI Foundry.
+     * "anthropic" for Claude.
+     *
+     * Absent on a settings file written before there was a choice, and Azure
+     * is what those files described.
+     */
+    #[serde(default = "shape_before_the_others")]
+    pub assist_shape: String,
 
     /// Offering what is on the projector to a Castavox on the same wifi.
     ///
@@ -280,6 +293,7 @@ impl Default for Settings {
             assist_endpoint: String::new(),
             assist_model: String::new(),
             assist_api_version: DEFAULT_ASSIST_API_VERSION.into(),
+            assist_shape: "openAi".into(),
             speech_engine: "local".to_string(),
             voice_commands: false,
             wake_word: String::new(),
@@ -332,6 +346,11 @@ fn settings_path(app: &AppHandle) -> Result<PathBuf> {
 /// thematic speech through. Anyone still carrying it never chose it, so lift
 /// it to the measured value rather than leaving them with the bad one.
 const MISCALIBRATED_THRESHOLD: f32 = 0.60;
+
+/// What a settings file written before the choice existed was describing.
+fn shape_before_the_others() -> String {
+    "azure".to_string()
+}
 
 pub fn load(app: &AppHandle) -> Result<Settings> {
     let path = settings_path(app)?;

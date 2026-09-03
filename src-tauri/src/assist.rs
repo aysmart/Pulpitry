@@ -99,6 +99,7 @@ struct Config {
     endpoint: String,
     model: String,
     api_version: String,
+    shape: String,
     key: String,
     translation: String,
     /// Set when the operator is on a Castavox subscription, in which case the
@@ -130,7 +131,21 @@ impl Config {
             endpoint: self.endpoint.clone(),
             model: self.model.clone(),
             api_version: self.api_version.clone(),
+            shape: shape_of(&self.shape),
         }
+    }
+}
+
+/// The stored name, as castavox-core's shape.
+///
+/// Anything unrecognised is OpenAI's, which is the shape most services speak
+/// and the one a church typing an endpoint by hand most likely wants.
+pub fn shape_of(stored: &str) -> castavox_core::assistant::Shape {
+    use castavox_core::assistant::Shape;
+    match stored {
+        "azure" => Shape::Azure,
+        "anthropic" => Shape::Anthropic,
+        _ => Shape::OpenAi,
     }
 }
 
@@ -227,6 +242,7 @@ impl Assistant {
             endpoint: settings.assist_endpoint.clone(),
             model: settings.assist_model.clone(),
             api_version: settings.assist_api_version.clone(),
+            shape: settings.assist_shape.clone(),
             key,
             translation: settings.translation.clone(),
             device_token,
@@ -732,6 +748,7 @@ mod tests {
             endpoint: endpoint.to_string(),
             model: "gpt-4o-mini".into(),
             api_version: "2024-05-01-preview".into(),
+            shape: "azure".into(),
             key: "secret-key".into(),
             translation: "KJV".into(),
             // These exercise a church's own deployment; the hosted route is
