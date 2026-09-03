@@ -34,7 +34,6 @@ fn manual() -> String {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
-    pub azure_region: String,
     pub language: String,
     pub input_device_id: Option<String>,
     /// The translation the operator is working in. Verse detection searches
@@ -100,7 +99,7 @@ pub struct Settings {
 
     /// Local embedding-based paraphrase matching. Offline and free, so it is on
     /// by default; the index costs a couple of minutes to build once.
-    /// Which recogniser turns audio into words: "local", "azure" or "hosted".
+    /// Which recogniser turns audio into words: "local" or "hosted".
     ///
     /// A new install gets the local engine: it costs nothing, needs no account
     /// and no network, and it is what most churches should be using. Azure was
@@ -267,13 +266,12 @@ impl Default for ProjectorTheme {
 /// on disk, and the answer there is always Azure: it was the only engine when
 /// that file was written.
 fn engine_before_the_local_one() -> String {
-    "azure".to_string()
+    "local".to_string()
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            azure_region: String::new(),
             language: "en-US".into(),
             input_device_id: None,
             translation: "KJV".into(),
@@ -315,7 +313,6 @@ impl Default for Settings {
 pub struct SettingsView {
     #[serde(flatten)]
     pub settings: Settings,
-    pub has_azure_key: bool,
     pub has_assist_key: bool,
     /// Whether this machine has been activated on a hosted subscription, which
     /// is what decides if the third engine is offered at all.
@@ -345,7 +342,31 @@ pub fn load(app: &AppHandle) -> Result<Settings> {
     // A corrupt settings file should not stop the app from opening.
     let mut settings: Settings = serde_json::from_str(&raw).unwrap_or_default();
     correct_miscalibrated_threshold(&mut settings);
+    retire_own_azure(app, &mut settings);
     Ok(settings)
+}
+
+/**
+ * Moves a church off the Azure Speech engine, which has been withdrawn.
+ *
+ * A church could once stream through an Azure Speech account of its own. That
+ * choice is gone, and an installation still holding it has to land somewhere on
+ * the next launch.
+ *
+ * **This machine, not the subscription.** Local costs them nothing and keeps
+ * them working; moving them onto a paid engine because we withdrew a free one
+ * would be a bill they never agreed to.
+ *
+ * The key goes with it. It is a secret we asked a church to give us, no longer
+ * read anywhere, and a stored credential nothing uses is only ever a liability.
+ */
+fn retire_own_azure(app: &AppHandle, settings: &mut Settings) {
+    if settings.speech_engine != "azure" {
+        return;
+    }
+    settings.speech_engine = "local".into();
+    let _ = clear_azure_key();
+    let _ = save(app, settings);
 }
 
 fn correct_miscalibrated_threshold(settings: &mut Settings) {
@@ -395,19 +416,7 @@ pub fn has_assist_key() -> bool {
     matches!(load_assist_key(), Ok(Some(_)))
 }
 
-pub fn save_azure_key(key: &str) -> Result<()> {
-    entry()?
-        .set_password(key)
-        .context("could not save the Azure key to the OS credential store")
-}
 
-pub fn load_azure_key() -> Result<Option<String>> {
-    match entry()?.get_password() {
-        Ok(key) => Ok(Some(key)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(err) => Err(anyhow::Error::new(err).context("could not read the Azure key")),
-    }
-}
 
 pub fn clear_azure_key() -> Result<()> {
     match entry()?.delete_credential() {
@@ -416,9 +425,6 @@ pub fn clear_azure_key() -> Result<()> {
     }
 }
 
-pub fn has_azure_key() -> bool {
-    matches!(load_azure_key(), Ok(Some(_)))
-}
 
 pub fn save_hosted_token(token: &str) -> Result<()> {
     entry_for(KEYCHAIN_HOSTED_ACCOUNT)?

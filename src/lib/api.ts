@@ -11,7 +11,6 @@ export interface AudioDevice {
 }
 
 export interface Settings {
-  azureRegion: string;
   language: string;
   inputDeviceId: string | null;
   /** Verse detection searches this translation. */
@@ -34,13 +33,14 @@ export interface Settings {
   voicePhrases: { said: string; does: { action: string } }[];
 
   /**
-   * Which recogniser turns audio into words: "azure", "local" or "hosted".
+   * Which recogniser turns audio into words: "local" or "hosted".
    *
-   * Azure streams and needs an account; its free tier is about five hours a
-   * month. The local engine runs whisper.cpp on this machine, needs nothing,
-   * and is a beat behind because a model cannot transcribe a sentence until
-   * it ends. Hosted streams like Azure but on our account, metered against a
-   * plan, so a church needs no Azure account at all.
+   * This machine costs nothing and transcribes a sentence once it ends, so a
+   * verse arrives a second or two later. Hosted streams on our account,
+   * metered against a plan, so a church needs no account of its own.
+   *
+   * A church could once bring an Azure Speech account of its own. That was
+   * withdrawn; anything unrecognised here reads as this machine.
    */
   speechEngine: string;
   /** This machine, to a hosted subscription. Not a secret. */
@@ -112,7 +112,6 @@ export const downloadSpeechModel = (file: string) =>
   invoke<void>("download_speech_model", { file });
 
 export interface SettingsView extends Settings {
-  hasAzureKey: boolean;
   hasAssistKey: boolean;
   /** Whether this machine has been activated on a hosted subscription. */
   hasHostedSubscription: boolean;
@@ -208,11 +207,6 @@ export const getSettings = () => invoke<SettingsView>("get_settings");
 
 export const saveSettings = (settings: Settings) =>
   invoke<SettingsView>("save_settings", { settings });
-
-export const saveAzureKey = (key: string) =>
-  invoke<void>("save_azure_key", { key });
-
-export const clearAzureKey = () => invoke<void>("clear_azure_key");
 
 export const saveAssistKey = (key: string) =>
   invoke<void>("save_assist_key", { key });

@@ -61,9 +61,9 @@ import { useTranscript } from "./lib/useTranscript";
 /**
  * Whether the chosen engine has what it needs to start.
  *
- * Each wants something different: Azure a key and a region, this machine a
- * model that has been downloaded, a subscription an activated licence. Nothing
- * here checks that they are *correct* -- only that the operator has been asked.
+ * Each wants something different: this machine a model that has been
+ * downloaded, a subscription an activated licence. Nothing here checks that
+ * they are *correct* -- only that the operator has been asked.
  */
 /** An instruction the operator spoke, as the Rust side reports it. */
 interface VoiceCommand {
@@ -83,10 +83,13 @@ function ready(settings: SettingsView | null): boolean {
   switch (settings.speechEngine) {
     case "local":
       return settings.speechModel.trim().length > 0;
-    case "hosted":
-      return settings.hasHostedSubscription;
     default:
-      return settings.hasAzureKey && settings.azureRegion.trim().length > 0;
+      // Two engines, and the subscription is the only one with anything to
+      // check. Anything unrecognised -- an installation still holding the
+      // withdrawn Azure engine -- reads as hosted's neighbour rather than as a
+      // third thing, and `settings.rs` has already moved it to local by the
+      // time this runs.
+      return settings.hasHostedSubscription;
   }
 }
 
@@ -392,9 +395,9 @@ export default function App() {
         // the operator straight to the place that fixes it rather than
         // reporting a failure.
         //
-        // What counts as ready depends on the engine, and asking for an Azure
-        // key regardless -- as this did -- sent anyone transcribing on this
-        // machine to Settings to enter a key they had rightly never bought.
+        // What counts as ready depends on the engine. It once asked everybody
+        // for an Azure key, which sent anyone transcribing on this machine to
+        // Settings to enter a key they had rightly never bought.
         if (!ready(settings)) {
           setSettingsOpen(true);
           return;
@@ -1081,7 +1084,7 @@ export default function App() {
       {historyOpen ? (
         <HistoryDialog
           onClose={() => setHistoryOpen(false)}
-          engine={settings?.speechEngine ?? "azure"}
+          engine={settings?.speechEngine ?? "local"}
         />
       ) : null}
 

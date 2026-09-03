@@ -460,15 +460,6 @@ impl SpeechManager {
             );
             env.insert("CASTAVOX_DEVICE_TOKEN".to_string(), token.clone());
             device_token = Some(token);
-        } else {
-            let key = settings::load_azure_key()?
-                .filter(|k| !k.trim().is_empty())
-                .ok_or_else(|| anyhow!("FATAL: Add your Azure Speech key in Settings to start transcribing."))?;
-            if settings.azure_region.trim().is_empty() {
-                return Err(anyhow!("FATAL: Set your Azure Speech region in Settings to start transcribing."));
-            }
-            env.insert("CASTAVOX_SPEECH_KEY".to_string(), key);
-            env.insert("CASTAVOX_SPEECH_REGION".to_string(), settings.azure_region.clone());
         }
 
         /*

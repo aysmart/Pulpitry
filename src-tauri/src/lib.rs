@@ -87,7 +87,6 @@ fn view(mut settings: Settings) -> SettingsView {
 
     SettingsView {
         settings,
-        has_azure_key: settings::has_azure_key(),
         has_assist_key: settings::has_assist_key(),
         has_hosted_subscription: settings::has_hosted_token(),
     }
@@ -262,20 +261,6 @@ fn clear_assist_key(
         assistant.configure(&settings);
     }
     Ok(())
-}
-
-#[tauri::command]
-fn save_azure_key(key: String) -> CommandResult<()> {
-    let key = key.trim();
-    if key.is_empty() {
-        return Err("The Azure Speech key cannot be empty.".into());
-    }
-    settings::save_azure_key(key).map_err(to_message)
-}
-
-#[tauri::command]
-fn clear_azure_key() -> CommandResult<()> {
-    settings::clear_azure_key().map_err(to_message)
 }
 
 #[tauri::command]
@@ -1743,8 +1728,6 @@ pub fn run() {
             ndi_set,
             get_settings,
             save_settings,
-            save_azure_key,
-            clear_azure_key,
             save_assist_key,
             clear_assist_key,
             start_transcription,

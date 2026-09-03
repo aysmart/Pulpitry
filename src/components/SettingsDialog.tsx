@@ -22,7 +22,6 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 
 import {
   clearAssistKey,
-  clearAzureKey,
   describeError,
   exportLog,
   getSettings,
@@ -31,7 +30,6 @@ import {
   listAudioInputs,
   measureSpeech,
   saveAssistKey,
-  saveAzureKey,
   saveSettings,
   speechModels,
   downloadSpeechModel,
@@ -42,35 +40,6 @@ import {
   type SettingsView,
   type SpeechModel,
 } from "../lib/api";
-
-/** Azure Speech regions, by the identifier the SDK expects. */
-const REGIONS = [
-  "australiaeast",
-  "brazilsouth",
-  "canadacentral",
-  "centralindia",
-  "centralus",
-  "eastasia",
-  "eastus",
-  "eastus2",
-  "francecentral",
-  "germanywestcentral",
-  "japaneast",
-  "koreacentral",
-  "northeurope",
-  "norwayeast",
-  "southafricanorth",
-  "southcentralus",
-  "southeastasia",
-  "swedencentral",
-  "switzerlandnorth",
-  "uaenorth",
-  "uksouth",
-  "westeurope",
-  "westus",
-  "westus2",
-  "westus3",
-];
 
 /**
  * What can be spoken, and which engine can hear it.
@@ -670,9 +639,7 @@ export function SettingsDialog({
   onClose: () => void;
   onSaved: (next: SettingsView) => void;
 }) {
-  const [region, setRegion] = useState(settings.azureRegion);
   const [language, setLanguage] = useState(settings.language);
-  const [key, setKey] = useState("");
 
   const [assistEnabled, setAssistEnabled] = useState(settings.assistEnabled);
   const [assistEndpoint, setAssistEndpoint] = useState(settings.assistEndpoint);
@@ -873,7 +840,6 @@ export function SettingsDialog({
     setError(null);
     try {
       const next = await saveSettings({
-        azureRegion: region.trim(),
         language,
         inputDeviceId: device,
         translation,
@@ -931,7 +897,6 @@ export function SettingsDialog({
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    region,
     language,
     device,
     translation,
@@ -951,37 +916,31 @@ export function SettingsDialog({
     model,
   ]);
 
-  /** A key, written when its field is done rather than as it is typed. */
-  const keepKey = async (which: "speech" | "assist", value: string) => {
+  /**
+   * A key, written when its field is done rather than as it is typed.
+   *
+   * One key now. There were two while a church could bring its own Azure
+   * Speech account; the assistant's is the only one left.
+   */
+  const keepKey = async (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return;
     setError(null);
     try {
-      if (which === "speech") {
-        await saveAzureKey(trimmed);
-        setKey("");
-        onSaved({ ...settings, hasAzureKey: true });
-      } else {
-        await saveAssistKey(trimmed);
-        setAssistKey("");
-        onSaved({ ...settings, hasAssistKey: true });
-      }
+      await saveAssistKey(trimmed);
+      setAssistKey("");
+      onSaved({ ...settings, hasAssistKey: true });
       setSavedAt(Date.now());
     } catch (err) {
       setError(describeError(err));
     }
   };
 
-  const forget = async (which: "speech" | "assist") => {
+  const forget = async () => {
     setError(null);
     try {
-      if (which === "speech") {
-        await clearAzureKey();
-        onSaved({ ...settings, hasAzureKey: false });
-      } else {
-        await clearAssistKey();
-        onSaved({ ...settings, hasAssistKey: false });
-      }
+      await clearAssistKey();
+      onSaved({ ...settings, hasAssistKey: false });
     } catch (err) {
       setError(describeError(err));
     }
@@ -1113,17 +1072,14 @@ export function SettingsDialog({
                       Castavox subscription
                       {hosted ? "" : " — needs a licence key"}
                     </option>
-                    <option value="azure">
-                      Azure Speech — your own account
-                    </option>
                   </select>
                   <span className="text-[11.5px] leading-snug text-pulpitry-muted">
                     This machine transcribes a sentence once it ends, so a verse
                     arrives a second or two later — but it needs no account, no
-                    key and no network, and it costs nothing per hour. The other
-                    two stream: words appear as they are spoken and a verse can
-                    be found mid-sentence. A Castavox subscription does that
-                    without your church having to open an Azure account at all.
+                    key and no network, and it costs nothing per hour. A
+                    subscription streams: words appear as they are spoken and a
+                    verse can be found mid-sentence. It does that without your
+                    church having to open an Azure account at all.
                   </span>
                 </label>
 
@@ -1241,59 +1197,6 @@ export function SettingsDialog({
                   <NodeRuntimeNotice />
                 )}
 
-                {engine === "azure" ? (
-                  <>
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[12px] text-pulpitry-muted">
-                        Azure Speech key
-                        {settings.hasAzureKey ? (
-                          <span className="ml-2 text-pulpitry-teal">
-                            stored in your keychain
-                          </span>
-                        ) : null}
-                      </span>
-                      <input
-                        type="password"
-                        value={key}
-                        autoComplete="off"
-                        spellCheck={false}
-                        onChange={(event) => setKey(event.target.value)}
-                        // On blur, not on every keystroke: a debounce would
-                        // store half a key, which is not a harmless middle
-                        // state but a configuration that fails to authenticate.
-                        onBlur={(event) =>
-                          void keepKey("speech", event.target.value)
-                        }
-                        placeholder={
-                          settings.hasAzureKey
-                            ? "•••••••• (leave blank to keep)"
-                            : "Paste your key"
-                        }
-                        className={FIELD}
-                      />
-                    </label>
-
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[12px] text-pulpitry-muted">
-                        Region
-                      </span>
-                      <input
-                        list="pulpitry-azure-regions"
-                        value={region}
-                        spellCheck={false}
-                        onChange={(event) => setRegion(event.target.value)}
-                        placeholder="e.g. uksouth"
-                        className={FIELD}
-                      />
-                      <datalist id="pulpitry-azure-regions">
-                        {REGIONS.map((name) => (
-                          <option key={name} value={name} />
-                        ))}
-                      </datalist>
-                    </label>
-                  </>
-                ) : null}
-
                 {/* Every engine uses it now, except an .en model, which cannot do
                 anything but English -- told to decode Yoruba it produces
                 English-shaped nonsense rather than Yoruba, so the choice is not
@@ -1323,16 +1226,6 @@ export function SettingsDialog({
                     ) : null}
                   </label>
                 )}
-
-                {engine === "azure" && settings.hasAzureKey ? (
-                  <button
-                    type="button"
-                    onClick={() => void forget("speech")}
-                    className="self-start rounded px-1 py-0.5 text-[11.5px] text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
-                  >
-                    Forget speech key
-                  </button>
-                ) : null}
               </Section>
 
               <div className="border-t border-pulpitry-line" />
@@ -1626,9 +1519,7 @@ export function SettingsDialog({
                         autoComplete="off"
                         spellCheck={false}
                         onChange={(event) => setAssistKey(event.target.value)}
-                        onBlur={(event) =>
-                          void keepKey("assist", event.target.value)
-                        }
+                        onBlur={(event) => void keepKey(event.target.value)}
                         placeholder={
                           settings.hasAssistKey
                             ? "•••••••• (leave blank to keep)"
@@ -1641,7 +1532,7 @@ export function SettingsDialog({
                     {settings.hasAssistKey ? (
                       <button
                         type="button"
-                        onClick={() => void forget("assist")}
+                        onClick={() => void forget()}
                         className="self-start rounded px-1 py-0.5 text-[11.5px] text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
                       >
                         Forget model key

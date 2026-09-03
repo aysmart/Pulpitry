@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
 
-import { hostedActivate, hostedDeactivate, hostedStatus, type HostedView } from "../lib/api";
+import {
+  hostedActivate,
+  hostedDeactivate,
+  hostedStatus,
+  type HostedView,
+} from "../lib/api";
 
 /**
  * The Castavox subscription, in Settings.
  *
- * A church on a plan transcribes on our Azure account instead of buying one.
+ * A church on a plan transcribes on our account instead of opening one.
  * What this needs from the operator is a licence key, once per machine; what it
  * owes them afterwards is a straight answer about how many hours are left,
  * because that is the number that decides whether Sunday works.
@@ -38,7 +43,9 @@ const day = new Intl.DateTimeFormat(undefined, {
  * correctly anyway.
  */
 function barColour(fraction: number): string {
-  return fraction >= 0.8 ? "var(--color-pulpitry-gold)" : "var(--color-pulpitry-teal)";
+  return fraction >= 0.8
+    ? "var(--color-pulpitry-gold)"
+    : "var(--color-pulpitry-teal)";
 }
 
 export function HostedSubscription({
@@ -65,7 +72,8 @@ export function HostedSubscription({
       })
       .catch(() => {
         // Settings must open whatever the network is doing.
-        if (live) setState({ activated: false, entitlement: null, notice: null });
+        if (live)
+          setState({ activated: false, entitlement: null, notice: null });
       });
     return () => {
       live = false;
@@ -101,7 +109,11 @@ export function HostedSubscription({
   }
 
   if (state === null) {
-    return <p className="text-[11.5px] text-pulpitry-muted">Checking your subscription…</p>;
+    return (
+      <p className="text-[11.5px] text-pulpitry-muted">
+        Checking your subscription…
+      </p>
+    );
   }
 
   if (!state.activated) {
@@ -136,13 +148,16 @@ export function HostedSubscription({
           </div>
         </label>
         {error ? (
-          <p role="alert" className="text-[11.5px] leading-snug text-pulpitry-gold">
+          <p
+            role="alert"
+            className="text-[11.5px] leading-snug text-pulpitry-gold"
+          >
             {error}
           </p>
         ) : (
           <p className="text-[11.5px] leading-snug text-pulpitry-muted">
-            Transcribe on our account instead of buying an Azure one. Type the key the way it
-            is written; spacing and capitals do not matter.
+            Transcribe on our account instead of buying an Azure one. Type the
+            key the way it is written; spacing and capitals do not matter.
           </p>
         )}
       </div>
@@ -201,20 +216,27 @@ export function HostedSubscription({
             <p className="text-[11.5px] text-pulpitry-muted">
               {Object.entries(plan.byApp)
                 .filter(([, seconds]) => seconds > 0)
-                .map(([app, seconds]) => `${app}: ${Math.round(seconds / 360) / 10} hr`)
+                .map(
+                  ([app, seconds]) =>
+                    `${app}: ${Math.round(seconds / 360) / 10} hr`,
+                )
                 .join(" · ")}
             </p>
           ) : null}
 
           {plan.status !== "active" ? (
-            <p role="alert" className="text-[11.5px] leading-snug text-pulpitry-gold">
-              This subscription is {plan.status}. Transcription will not start until it is
-              renewed.
+            <p
+              role="alert"
+              className="text-[11.5px] leading-snug text-pulpitry-gold"
+            >
+              This subscription is {plan.status}. Transcription will not start
+              until it is renewed.
             </p>
           ) : plan.warnAt ? (
             <p className="text-[11.5px] leading-snug text-pulpitry-muted">
-              {Math.round(plan.warnAt * 100)}% of this month&rsquo;s hours are used. More can be
-              added at any time, and this machine can always fall back to transcribing locally.
+              {Math.round(plan.warnAt * 100)}% of this month&rsquo;s hours are
+              used. More can be added at any time, and this machine can always
+              fall back to transcribing locally.
             </p>
           ) : null}
         </>
@@ -227,7 +249,10 @@ export function HostedSubscription({
       )}
 
       {error ? (
-        <p role="alert" className="text-[11.5px] leading-snug text-pulpitry-gold">
+        <p
+          role="alert"
+          className="text-[11.5px] leading-snug text-pulpitry-gold"
+        >
           {error}
         </p>
       ) : null}
