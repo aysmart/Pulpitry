@@ -221,6 +221,21 @@ export const saveAssistKey = (key: string) =>
 
 export const clearAssistKey = () => invoke<void>("clear_assist_key");
 
+/**
+ * One real request to the configured model, answered with a sentence.
+ *
+ * Takes what is in the dialog rather than what is saved: somebody testing a
+ * new address has not pressed Save yet. `key` is what they have just typed;
+ * leave it out to test the key already stored.
+ */
+export const testAssistModel = (fields: {
+  endpoint: string;
+  model: string;
+  apiVersion: string;
+  shape: string;
+  key?: string;
+}) => invoke<string>("test_assist_model", fields);
+
 export const startTranscription = () => invoke<void>("start_transcription");
 
 export const stopTranscription = () => invoke<void>("stop_transcription");

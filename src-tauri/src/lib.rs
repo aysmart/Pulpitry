@@ -263,6 +263,52 @@ fn clear_assist_key(
     Ok(())
 }
 
+/// One real request to the church's own model, so they learn it works now
+/// rather than during a service.
+///
+/// Takes what is in the dialog rather than what is saved: an operator testing
+/// a new address has not pressed Save yet, and asking them to save a setting
+/// before they can find out whether it is right has it backwards. The key is
+/// the same -- freshly typed if they typed one, otherwise the stored one.
+///
+/// Blocking, on a thread of its own: this waits on somebody else's model, and
+/// a local one on a busy laptop can take tens of seconds.
+#[tauri::command]
+async fn test_assist_model(
+    endpoint: String,
+    model: String,
+    api_version: String,
+    shape: String,
+    key: Option<String>,
+) -> CommandResult<String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let key = match key.map(|typed| typed.trim().to_string()) {
+            Some(typed) if !typed.is_empty() => typed,
+            // Nothing typed, so they are testing the key already in the
+            // credential store. An empty one falls through to "fill it in".
+            _ => settings::load_assist_key().ok().flatten().unwrap_or_default(),
+        };
+        let deployment = castavox_core::assistant::Deployment {
+            endpoint: endpoint.trim().to_string(),
+            model: model.trim().to_string(),
+            api_version: api_version.trim().to_string(),
+            shape: assist::shape_of(&shape),
+        };
+        let client = reqwest::blocking::Client::builder()
+            // Long enough for a small model on a church laptop, short enough
+            // that a wrong address does not hold the dialog for a minute.
+            .timeout(std::time::Duration::from_secs(45))
+            .build()
+            .map_err(|error| error.to_string())?;
+        castavox_core::assistant::check(
+            &client,
+            &castavox_core::assistant::Route::Own { deployment: &deployment, key: &key },
+        )
+    })
+    .await
+    .map_err(|error| format!("The test could not be run: {error}"))?
+}
+
 #[tauri::command]
 fn start_transcription(manager: State<'_, Arc<SpeechManager>>) -> CommandResult<()> {
     manager.start().map_err(to_message)
@@ -1730,6 +1776,7 @@ pub fn run() {
             save_settings,
             save_assist_key,
             clear_assist_key,
+            test_assist_model,
             start_transcription,
             stop_transcription,
             speech_status,

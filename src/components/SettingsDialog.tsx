@@ -22,6 +22,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 
 import {
   clearAssistKey,
+  testAssistModel,
   describeError,
   exportLog,
   getSettings,
@@ -44,10 +45,10 @@ import {
 /**
  * What can be spoken, and which engine can hear it.
  *
- * The three engines disagree, and a picker that hides that sells a church
+ * The two engines disagree, and a picker that hides that sells a church
  * something that produces nonsense: ask a Castavox subscription for Swahili and
- * it answers confidently in the wrong language. `hosted`, `azure` and `local`
- * say who can actually do each one.
+ * it answers confidently in the wrong language. `hosted` and `local` say which
+ * can actually do each one.
  *
  * Yoruba and Hausa are local-only, which inverts the usual advice — for those
  * languages this machine is not the compromise, it is the only thing that
@@ -62,171 +63,149 @@ const LANGUAGES = [
     code: "en-US",
     label: "English (United States)",
     hosted: true,
-    azure: true,
     local: true,
   },
   {
     code: "en-GB",
     label: "English (United Kingdom)",
     hosted: true,
-    azure: true,
     local: true,
   },
   {
     code: "en-NG",
     label: "English (Nigeria)",
     hosted: true,
-    azure: true,
     local: true,
   },
   {
     code: "en-GH",
     label: "English (Ghana)",
     hosted: true,
-    azure: true,
     local: true,
   },
   {
     code: "en-KE",
     label: "English (Kenya)",
     hosted: true,
-    azure: true,
     local: true,
   },
   {
     code: "en-ZA",
     label: "English (South Africa)",
     hosted: true,
-    azure: true,
     local: true,
   },
   {
     code: "en-IN",
     label: "English (India)",
     hosted: true,
-    azure: true,
     local: true,
   },
   {
     code: "en-AU",
     label: "English (Australia)",
     hosted: true,
-    azure: true,
     local: true,
   },
   {
     code: "en-CA",
     label: "English (Canada)",
     hosted: true,
-    azure: true,
     local: true,
   },
-  { code: "yo-NG", label: "Yoruba", hosted: false, azure: false, local: true },
-  { code: "ha-NG", label: "Hausa", hosted: false, azure: false, local: true },
+  { code: "yo-NG", label: "Yoruba", hosted: false, local: true },
+  { code: "ha-NG", label: "Hausa", hosted: false, local: true },
   {
     code: "sw-KE",
     label: "Swahili (Kenya)",
     hosted: false,
-    azure: true,
     local: true,
   },
   {
     code: "sw-TZ",
     label: "Swahili (Tanzania)",
     hosted: false,
-    azure: true,
     local: true,
   },
   {
     code: "fr-FR",
     label: "French (France)",
     hosted: true,
-    azure: true,
     local: true,
   },
   {
     code: "fr-CA",
     label: "French (Canada)",
     hosted: true,
-    azure: true,
     local: true,
   },
   {
     code: "es-ES",
     label: "Spanish (Spain)",
     hosted: true,
-    azure: true,
     local: true,
   },
   {
     code: "es-MX",
     label: "Spanish (Mexico)",
     hosted: true,
-    azure: true,
     local: true,
   },
   {
     code: "pt-BR",
     label: "Portuguese (Brazil)",
     hosted: true,
-    azure: true,
     local: true,
   },
   {
     code: "pt-PT",
     label: "Portuguese (Portugal)",
     hosted: true,
-    azure: true,
     local: true,
   },
-  { code: "de-DE", label: "German", hosted: true, azure: true, local: true },
-  { code: "it-IT", label: "Italian", hosted: true, azure: true, local: true },
-  { code: "nl-NL", label: "Dutch", hosted: true, azure: true, local: true },
-  { code: "hi-IN", label: "Hindi", hosted: true, azure: true, local: true },
-  { code: "ru-RU", label: "Russian", hosted: true, azure: true, local: true },
-  { code: "ja-JP", label: "Japanese", hosted: true, azure: true, local: true },
-  { code: "pl-PL", label: "Polish", hosted: true, azure: true, local: true },
+  { code: "de-DE", label: "German", hosted: true, local: true },
+  { code: "it-IT", label: "Italian", hosted: true, local: true },
+  { code: "nl-NL", label: "Dutch", hosted: true, local: true },
+  { code: "hi-IN", label: "Hindi", hosted: true, local: true },
+  { code: "ru-RU", label: "Russian", hosted: true, local: true },
+  { code: "ja-JP", label: "Japanese", hosted: true, local: true },
+  { code: "pl-PL", label: "Polish", hosted: true, local: true },
   {
     code: "zh-CN",
     label: "Chinese (Mandarin)",
     hosted: false,
-    azure: true,
     local: true,
   },
-  { code: "ko-KR", label: "Korean", hosted: false, azure: true, local: true },
+  { code: "ko-KR", label: "Korean", hosted: false, local: true },
   {
     code: "ar-EG",
     label: "Arabic (Egypt)",
     hosted: false,
-    azure: true,
     local: true,
   },
-  { code: "am-ET", label: "Amharic", hosted: false, azure: true, local: true },
+  { code: "am-ET", label: "Amharic", hosted: false, local: true },
   {
     code: "af-ZA",
     label: "Afrikaans",
     hosted: false,
-    azure: true,
     local: true,
   },
-  { code: "zu-ZA", label: "Zulu", hosted: false, azure: true, local: false },
-  { code: "tl-PH", label: "Tagalog", hosted: false, azure: true, local: true },
+  { code: "zu-ZA", label: "Zulu", hosted: false, local: false },
+  { code: "tl-PH", label: "Tagalog", hosted: false, local: true },
   {
     code: "id-ID",
     label: "Indonesian",
     hosted: false,
-    azure: true,
     local: true,
   },
   {
     code: "uk-UA",
     label: "Ukrainian",
     hosted: false,
-    azure: true,
     local: true,
   },
-  { code: "ro-RO", label: "Romanian", hosted: false, azure: true, local: true },
-  { code: "ta-IN", label: "Tamil", hosted: false, azure: true, local: true },
+  { code: "ro-RO", label: "Romanian", hosted: false, local: true },
+  { code: "ta-IN", label: "Tamil", hosted: false, local: true },
 ];
 
 /**
@@ -240,27 +219,14 @@ function languageWarning(code: string, engine: string): string | null {
   const language = LANGUAGES.find((entry) => entry.code === code);
   if (!language) return null;
 
-  const works =
-    engine === "hosted"
-      ? language.hosted
-      : engine === "azure"
-        ? language.azure
-        : language.local;
-  if (works) return null;
+  const hosted = engine === "hosted";
+  if (hosted ? language.hosted : language.local) return null;
 
   const instead: string[] = [];
-  if (language.local && engine !== "local") instead.push("this machine");
-  if (language.azure && engine !== "azure")
-    instead.push("your own Azure account");
-  if (language.hosted && engine !== "hosted")
-    instead.push("a Castavox subscription");
+  if (language.local && hosted) instead.push("this machine");
+  if (language.hosted && !hosted) instead.push("a Castavox subscription");
 
-  const named =
-    engine === "hosted"
-      ? "A Castavox subscription"
-      : engine === "azure"
-        ? "Azure"
-        : "This machine";
+  const named = hosted ? "A Castavox subscription" : "This machine";
 
   return instead.length === 0
     ? `${named} cannot transcribe ${language.label}, and nor can the others. The Bible can still be searched and displayed in it; only listening is unavailable.`
@@ -761,6 +727,16 @@ export function SettingsDialog({
       )?.id ?? (settings.assistShape === "azure" ? "azure" : "other"),
   );
   const [assistKey, setAssistKey] = useState("");
+  /**
+   * What Test last said, and whether one is in flight. Kept next to the fields
+   * rather than in the dialog's error line: it is an answer about these
+   * settings, and it is as often good news as bad.
+   */
+  const [assistTest, setAssistTest] = useState<{
+    ok: boolean;
+    said: string;
+  } | null>(null);
+  const [testing, setTesting] = useState(false);
 
   const [mirrorEnabled, setMirrorEnabled] = useState(settings.mirrorEnabled);
   const [speed, setSpeed] = useState<string | null>(null);
@@ -895,7 +871,7 @@ export function SettingsDialog({
         setModelNote(
           found.length
             ? `One was chosen for this machine and downloaded; this is here to change it. Larger is more accurate and slower — if transcription starts arriving behind the speaker, come back and take the next one down. ${found.length} available.`
-            : "No models could be listed. Check the connection, or use Azure for now.",
+            : "No models could be listed. Check the connection, or use a Castavox subscription for now.",
         );
       })
       .catch((err) => !cancelled && setModelNote(String(err)));
@@ -1061,6 +1037,32 @@ export function SettingsDialog({
     }
   };
 
+  /**
+   * Ask the model one question and say what came back.
+   *
+   * Deliberately tests what is on screen rather than what is stored, so a new
+   * address can be checked before it is saved. A key typed but not yet saved
+   * is sent with it; leaving the box empty tests the stored one.
+   */
+  const testModel = async () => {
+    setTesting(true);
+    setAssistTest(null);
+    try {
+      const said = await testAssistModel({
+        endpoint: assistEndpoint,
+        model: assistModel,
+        apiVersion: assistApiVersion,
+        shape: assistShape,
+        key: assistKey.trim() || undefined,
+      });
+      setAssistTest({ ok: true, said });
+    } catch (err) {
+      setAssistTest({ ok: false, said: describeError(err) });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   return (
     <div
       data-dialog
@@ -1083,85 +1085,16 @@ export function SettingsDialog({
 
           <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto px-5 py-4">
             <Pane id="account" active={pane}>
-              {/* Always mounted, so the engine picker knows whether a licence
-                  is active even while somebody is looking at another pane. */}
-              <Section
-                title="Subscription"
-                note="Hosted transcription and the assistant, metered against your plan. The applications work without one."
-              >
-                <HostedSubscription
-                  onActivationChange={(activated) => {
-                    setHosted(activated);
-                    /*
-                     * Re-read what the window knows, not just what this dialog
-                     * knows.
-                     *
-                     * Activating writes a device token to the credential store
-                     * and changes no stored setting, so nothing else here had
-                     * any reason to look again -- and the main window decides
-                     * whether Start Listening can work from
-                     * `hasHostedSubscription`, which is read from that store.
-                     *
-                     * Without this, a church that has just pasted a valid
-                     * licence presses Start Listening and is sent back to this
-                     * page, over and over, until they happen to change the
-                     * engine and back -- which saves settings, and a save is
-                     * the only thing that was refreshing this.
-                     */
-                    void getSettings()
-                      .then(onSaved)
-                      .catch(() => undefined);
-                  }}
-                />
-                {/* Named rather than assumed. A church without a plan has no
-                    way from here to the thing that sells one, and "contact us"
-                    is not a price. */}
-                <p className="text-[11.5px] leading-snug text-pulpitry-muted">
-                  {hosted
-                    ? "Changing plan, or adding hours: "
-                    : "Plans and prices: "}
-                  <button
-                    type="button"
-                    onClick={() => void openUrl("https://castavox.com/pricing")}
-                    className="text-pulpitry-gold underline-offset-2 hover:underline focus-visible:focus-ring"
-                  >
-                    castavox.com/pricing
-                  </button>
-                </p>
-              </Section>
-            </Pane>
+              {/*
+                Everything that answers "what will this cost me, and what do I
+                need for it".
 
-            <Pane id="audio" active={pane}>
-              <Section
-                title="Microphone"
-                note="Which input the words are heard on. The engine below decides what happens to them."
-              >
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-[12px] text-pulpitry-muted">Input</span>
-                  <select
-                    value={device ?? ""}
-                    onChange={(event) => setDevice(event.target.value || null)}
-                    className={FIELD}
-                  >
-                    <option value="">System default</option>
-                    {devices.map((entry) => (
-                      <option key={entry.id} value={entry.id}>
-                        {entry.name}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="text-[11.5px] leading-snug text-pulpitry-muted">
-                    {devices.length === 1
-                      ? "One input on this machine."
-                      : `${devices.length} inputs on this machine.`}{" "}
-                    A desk feed heard through a laptop microphone is the
-                    commonest reason detection misses everything.
-                  </span>
-                </label>
-              </Section>
-
-              <div className="border-t border-pulpitry-line" />
-
+                The engine decides the rest of the pane. A subscription needs a
+                licence key and nothing else; this machine needs a model to
+                transcribe with, and — only if you want the summaries — one to
+                think with. Neither church should have to read past the other's
+                settings to find its own.
+              */}
               <Section
                 title="Transcription"
                 note="Where the words come from. Verse detection is local either way and needs no network."
@@ -1193,29 +1126,10 @@ export function SettingsDialog({
                     arrives a second or two later — but it needs no account, no
                     key and no network, and it costs nothing per hour. A
                     subscription streams: words appear as they are spoken and a
-                    verse can be found mid-sentence. It does that without your
-                    church having to open an Azure account at all.
+                    verse can be found mid-sentence, with nothing to set up
+                    beyond the key below.
                   </span>
                 </label>
-
-                {/* Only what the chosen engine actually uses. An Azure key sitting
-                under "This machine" reads as something that must be filled in,
-                and the field that does matter is lost among three that do not. */}
-                {/* The licence lives in Account now. Naming it here is the whole
-                point: an engine that needs one, and a place to go and get it. */}
-                {engine === "hosted" && !hosted ? (
-                  <p className="text-[11.5px] leading-snug text-pulpitry-muted">
-                    This engine needs a licence key.{" "}
-                    <button
-                      type="button"
-                      onClick={() => setPane("account")}
-                      className="text-pulpitry-gold underline-offset-2 hover:underline focus-visible:focus-ring"
-                    >
-                      Enter one in Account
-                    </button>
-                    .
-                  </p>
-                ) : null}
 
                 {engine === "local" ? (
                   <label className="flex flex-col gap-1.5">
@@ -1307,8 +1221,8 @@ export function SettingsDialog({
                     ) : null}
                   </label>
                 ) : (
-                  /* Azure and a subscription both stream through the Node bridge,
-                 so both need a runtime. Only transcribing here does not. */
+                  /* A subscription streams through the Node bridge, so it needs a
+                 runtime. Transcribing on this machine does not. */
                   <NodeRuntimeNotice />
                 )}
 
@@ -1342,6 +1256,239 @@ export function SettingsDialog({
                   </label>
                 )}
               </Section>
+
+              <div className="border-t border-pulpitry-line" />
+
+              {engine === "hosted" ? (
+                <Section
+                  title="Subscription"
+                  note="Hosted transcription and the assistant, metered against your plan. The applications work without one."
+                >
+                  <HostedSubscription
+                    onActivationChange={(activated) => {
+                      setHosted(activated);
+                      /*
+                       * Re-read what the window knows, not just what this dialog
+                       * knows.
+                       *
+                       * Activating writes a device token to the credential store
+                       * and changes no stored setting, so nothing else here had
+                       * any reason to look again -- and the main window decides
+                       * whether Start Listening can work from
+                       * `hasHostedSubscription`, which is read from that store.
+                       *
+                       * Without this, a church that has just pasted a valid
+                       * licence presses Start Listening and is sent back to this
+                       * page, over and over, until they happen to change the
+                       * engine and back -- which saves settings, and a save is
+                       * the only thing that was refreshing this.
+                       */
+                      void getSettings()
+                        .then(onSaved)
+                        .catch(() => undefined);
+                    }}
+                  />
+                  {/* Named rather than assumed. A church without a plan has no
+                      way from here to the thing that sells one, and "contact us"
+                      is not a price. */}
+                  <p className="text-[11.5px] leading-snug text-pulpitry-muted">
+                    {hosted
+                      ? "Changing plan, or adding hours: "
+                      : "Plans and prices: "}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void openUrl("https://castavox.com/pricing")
+                      }
+                      className="text-pulpitry-gold underline-offset-2 hover:underline focus-visible:focus-ring"
+                    >
+                      castavox.com/pricing
+                    </button>
+                  </p>
+                </Section>
+              ) : (
+                <Section
+                  title="A model of your own"
+                  note="For the summaries and the paraphrase matching only — never for transcription, which happens on this machine either way. A small model running here gives a rougher summary and takes longer; that is the model, not a fault."
+                >
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[12px] text-pulpitry-muted">
+                      Where the model is
+                    </span>
+                    <select
+                      value={assistPreset}
+                      onChange={(event) => {
+                        const chosen = ASSIST_PRESETS.find(
+                          (preset) => preset.id === event.target.value,
+                        );
+                        if (!chosen) return;
+                        setAssistPreset(chosen.id);
+                        setAssistShape(chosen.shape);
+                        // Filled in, not forced: a church with its own
+                        // gateway can still edit the address afterwards.
+                        if (chosen.endpoint) setAssistEndpoint(chosen.endpoint);
+                        if (chosen.model && !assistModel.trim())
+                          setAssistModel(chosen.model);
+                      }}
+                      className={FIELD}
+                    >
+                      {ASSIST_PRESETS.map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.label}
+                        </option>
+                      ))}
+                    </select>
+                    {/* The one place plain http is allowed, and worth saying
+                            so where somebody is choosing it. */}
+                    <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                      A model on this machine costs nothing per request and
+                      nothing leaves the building. One at a provider is faster
+                      and better at long services, and you pay them directly —
+                      we never see the key or the bill.
+                    </span>
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[12px] text-pulpitry-muted">
+                      Address
+                    </span>
+                    <input
+                      value={assistEndpoint}
+                      spellCheck={false}
+                      onChange={(event) =>
+                        setAssistEndpoint(event.target.value)
+                      }
+                      placeholder="https://…"
+                      className={FIELD}
+                    />
+                  </label>
+
+                  <div className="flex gap-3">
+                    <label className="flex flex-[2] flex-col gap-1.5">
+                      <span className="text-[12px] text-pulpitry-muted">
+                        Model or deployment
+                      </span>
+                      <input
+                        value={assistModel}
+                        spellCheck={false}
+                        onChange={(event) => setAssistModel(event.target.value)}
+                        placeholder="e.g. gpt-4o-mini"
+                        className={FIELD}
+                      />
+                    </label>
+                    {/* Azure's alone. The others either ignore it or answer
+                            a 404 when it is appended, so asking everybody for one
+                            would be asking most churches for a wrong answer. */}
+                    {assistShape === "azure" ? (
+                      <label className="flex flex-1 flex-col gap-1.5">
+                        <span className="text-[12px] text-pulpitry-muted">
+                          API version
+                        </span>
+                        <input
+                          value={assistApiVersion}
+                          spellCheck={false}
+                          onChange={(event) =>
+                            setAssistApiVersion(event.target.value)
+                          }
+                          className={FIELD}
+                        />
+                      </label>
+                    ) : null}
+                  </div>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[12px] text-pulpitry-muted">
+                      Model key
+                      {settings.hasAssistKey ? (
+                        <span className="ml-2 text-pulpitry-teal">
+                          stored in your keychain
+                        </span>
+                      ) : null}
+                    </span>
+                    <input
+                      type="password"
+                      value={assistKey}
+                      autoComplete="off"
+                      spellCheck={false}
+                      onChange={(event) => setAssistKey(event.target.value)}
+                      onBlur={(event) => void keepKey(event.target.value)}
+                      placeholder={
+                        settings.hasAssistKey
+                          ? "•••••••• (leave blank to keep)"
+                          : "Paste your key"
+                      }
+                      className={FIELD}
+                    />
+                  </label>
+
+                  {/* Said before a service rather than discovered during one.
+                      One real request, and the answer names the step that
+                      failed rather than only that something did. */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void testModel()}
+                      disabled={testing}
+                      className="rounded border border-pulpitry-line px-2 py-1 text-[12px] text-pulpitry-text transition-colors hover:border-pulpitry-gold disabled:opacity-40 focus-visible:focus-ring"
+                    >
+                      {testing ? "Asking the model…" : "Test"}
+                    </button>
+                    {assistTest ? (
+                      <span
+                        className={`text-[11.5px] leading-snug ${
+                          assistTest.ok
+                            ? "text-pulpitry-teal"
+                            : "text-pulpitry-gold"
+                        }`}
+                      >
+                        {assistTest.said}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {settings.hasAssistKey ? (
+                    <button
+                      type="button"
+                      onClick={() => void forget()}
+                      className="self-start rounded px-1 py-0.5 text-[11.5px] text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
+                    >
+                      Forget model key
+                    </button>
+                  ) : null}
+                </Section>
+              )}
+            </Pane>
+
+            <Pane id="audio" active={pane}>
+              <Section
+                title="Microphone"
+                note="Which input the words are heard on. The engine below decides what happens to them."
+              >
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] text-pulpitry-muted">Input</span>
+                  <select
+                    value={device ?? ""}
+                    onChange={(event) => setDevice(event.target.value || null)}
+                    className={FIELD}
+                  >
+                    <option value="">System default</option>
+                    {devices.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[11.5px] leading-snug text-pulpitry-muted">
+                    {devices.length === 1
+                      ? "One input on this machine."
+                      : `${devices.length} inputs on this machine.`}{" "}
+                    A desk feed heard through a laptop microphone is the
+                    commonest reason detection misses everything.
+                  </span>
+                </label>
+              </Section>
+
+              <div className="border-t border-pulpitry-line" />
 
               <div className="border-t border-pulpitry-line" />
 
@@ -1529,175 +1676,33 @@ export function SettingsDialog({
                 </label>
               </Section>
               <div className="border-t border-pulpitry-line" />
-              {engine === "hosted" ? (
-                <>
-                  <div className="border-t border-pulpitry-line" />
-                  <Section
-                    title="Model assistance"
-                    note="Included in your subscription. Suggests passages the speaker paraphrases rather than quotes, and writes the summary afterwards. The model proposes references only — every verse shown is read from your local library, so it cannot invent scripture."
-                  >
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={assistEnabled}
-                        onChange={(event) =>
-                          setAssistEnabled(event.target.checked)
-                        }
-                        className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-                      />
-                      <span className="text-[13px] text-pulpitry-text">
-                        Suggest paraphrased scripture
-                      </span>
-                    </label>
-                  </Section>
-                </>
-              ) : (
-                <>
-                  <div className="border-t border-pulpitry-line" />
 
-                  <Section
-                    title="Model assistance"
-                    note="Optional. Suggests passages the speaker paraphrases rather than quotes. The model proposes references only — every verse shown is read from your local library, so it cannot invent scripture."
-                  >
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={assistEnabled}
-                        onChange={(event) =>
-                          setAssistEnabled(event.target.checked)
-                        }
-                        className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-                      />
-                      <span className="text-[13px] text-pulpitry-text">
-                        Suggest paraphrased scripture using a model of your own
-                      </span>
-                    </label>
-
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[12px] text-pulpitry-muted">
-                        Where the model is
-                      </span>
-                      <select
-                        value={assistPreset}
-                        onChange={(event) => {
-                          const chosen = ASSIST_PRESETS.find(
-                            (preset) => preset.id === event.target.value,
-                          );
-                          if (!chosen) return;
-                          setAssistPreset(chosen.id);
-                          setAssistShape(chosen.shape);
-                          // Filled in, not forced: a church with its own
-                          // gateway can still edit the address afterwards.
-                          if (chosen.endpoint)
-                            setAssistEndpoint(chosen.endpoint);
-                          if (chosen.model && !assistModel.trim())
-                            setAssistModel(chosen.model);
-                        }}
-                        className={FIELD}
-                      >
-                        {ASSIST_PRESETS.map((preset) => (
-                          <option key={preset.id} value={preset.id}>
-                            {preset.label}
-                          </option>
-                        ))}
-                      </select>
-                      {/* The one place plain http is allowed, and worth saying
-                          so where somebody is choosing it. */}
-                      <span className="text-[11.5px] leading-snug text-pulpitry-muted">
-                        A model on this machine costs nothing per request and
-                        nothing leaves the building. One at a provider is faster
-                        and better at long services, and you pay them directly —
-                        we never see the key or the bill.
-                      </span>
-                    </label>
-
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[12px] text-pulpitry-muted">
-                        Address
-                      </span>
-                      <input
-                        value={assistEndpoint}
-                        spellCheck={false}
-                        onChange={(event) =>
-                          setAssistEndpoint(event.target.value)
-                        }
-                        placeholder="https://…"
-                        className={FIELD}
-                      />
-                    </label>
-
-                    <div className="flex gap-3">
-                      <label className="flex flex-[2] flex-col gap-1.5">
-                        <span className="text-[12px] text-pulpitry-muted">
-                          Model or deployment
-                        </span>
-                        <input
-                          value={assistModel}
-                          spellCheck={false}
-                          onChange={(event) =>
-                            setAssistModel(event.target.value)
-                          }
-                          placeholder="e.g. gpt-4o-mini"
-                          className={FIELD}
-                        />
-                      </label>
-                      {/* Azure's alone. The others either ignore it or answer
-                          a 404 when it is appended, so asking everybody for one
-                          would be asking most churches for a wrong answer. */}
-                      {assistShape === "azure" ? (
-                        <label className="flex flex-1 flex-col gap-1.5">
-                          <span className="text-[12px] text-pulpitry-muted">
-                            API version
-                          </span>
-                          <input
-                            value={assistApiVersion}
-                            spellCheck={false}
-                            onChange={(event) =>
-                              setAssistApiVersion(event.target.value)
-                            }
-                            className={FIELD}
-                          />
-                        </label>
-                      ) : null}
-                    </div>
-
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[12px] text-pulpitry-muted">
-                        Model key
-                        {settings.hasAssistKey ? (
-                          <span className="ml-2 text-pulpitry-teal">
-                            stored in your keychain
-                          </span>
-                        ) : null}
-                      </span>
-                      <input
-                        type="password"
-                        value={assistKey}
-                        autoComplete="off"
-                        spellCheck={false}
-                        onChange={(event) => setAssistKey(event.target.value)}
-                        onBlur={(event) => void keepKey(event.target.value)}
-                        placeholder={
-                          settings.hasAssistKey
-                            ? "•••••••• (leave blank to keep)"
-                            : "Paste your key"
-                        }
-                        className={FIELD}
-                      />
-                    </label>
-
-                    {settings.hasAssistKey ? (
-                      <button
-                        type="button"
-                        onClick={() => void forget()}
-                        className="self-start rounded px-1 py-0.5 text-[11.5px] text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
-                      >
-                        Forget model key
-                      </button>
-                    ) : null}
-                  </Section>
-                </>
-              )}
+              {/* The checkbox stays here, next to the matching it changes. Which
+                  model does the thinking is an account question and lives on
+                  that pane -- so the wording is all that differs between a
+                  subscription and a church's own model. */}
+              <Section
+                title="Model assistance"
+                note={
+                  engine === "hosted"
+                    ? "Included in your subscription. Suggests passages the speaker paraphrases rather than quotes, and writes the summary afterwards. The model proposes references only — every verse shown is read from your local library, so it cannot invent scripture."
+                    : "Optional, and needs a model set up on the Account pane. Suggests passages the speaker paraphrases rather than quotes. The model proposes references only — every verse shown is read from your local library, so it cannot invent scripture."
+                }
+              >
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={assistEnabled}
+                    onChange={(event) => setAssistEnabled(event.target.checked)}
+                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                  />
+                  <span className="text-[13px] text-pulpitry-text">
+                    {engine === "hosted"
+                      ? "Suggest paraphrased scripture"
+                      : "Suggest paraphrased scripture using a model of your own"}
+                  </span>
+                </label>
+              </Section>
             </Pane>
 
             <Pane id="stage" active={pane}>

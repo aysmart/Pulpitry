@@ -51,11 +51,14 @@ pub struct Settings {
     #[serde(default = "manual")]
     pub verse_display: String,
 
-    /// Optional Azure AI Foundry model used to suggest paraphrased scripture.
-    /// Everything it proposes is verified against the local library before the
-    /// operator ever sees it, and exact detection works without any of this.
+    /// An optional model of the church's own, used to suggest paraphrased
+    /// scripture. Everything it proposes is verified against the local library
+    /// before the operator ever sees it, and exact detection works without any
+    /// of this.
     pub assist_enabled: bool,
-    /// e.g. https://my-resource.services.ai.azure.com/models
+    /// Wherever that model answers: a provider's API, or Ollama or LM Studio
+    /// on this machine. e.g. https://api.openai.com/v1 or
+    /// http://localhost:11434/v1
     pub assist_endpoint: String,
     /// Deployment or model name, e.g. gpt-4o-mini or Llama-3.3-70B-Instruct.
     pub assist_model: String,
@@ -115,15 +118,15 @@ pub struct Settings {
     /// Which recogniser turns audio into words: "local" or "hosted".
     ///
     /// A new install gets the local engine: it costs nothing, needs no account
-    /// and no network, and it is what most churches should be using. Azure was
-    /// the default when it was the only engine, and defaulting to it meant a
-    /// fresh install opened on a demand for a subscription key — a paywall in
+    /// and no network, and it is what most churches should be using. Anything
+    /// else would open a fresh install on a demand for a key — a paywall in
     /// front of the free thing.
     ///
-    /// An install that predates this field still gets Azure, which is what the
-    /// serde default below is for. Those machines have a key and a region set
-    /// and are transcribing through them; switching their engine on upgrade
-    /// would be a change of behaviour nobody asked for, discovered on a Sunday.
+    /// An install that predates this field gets the same, which is what the
+    /// serde default below is for. It read "azure" until that engine was
+    /// withdrawn; a machine still holding that value is moved to local on
+    /// load, because the alternative is billing somebody for a decision we
+    /// made.
     #[serde(default = "engine_before_the_local_one")]
     pub speech_engine: String,
     /// This machine, to a hosted subscription. Not a secret and not a
@@ -274,10 +277,10 @@ impl Default for ProjectorTheme {
 
 /// What a settings file written before the local engine existed was using.
 ///
-/// Not `Settings::default()`, which is a *new* install and gets the local
-/// engine. This is only for the field being absent from a file that is already
-/// on disk, and the answer there is always Azure: it was the only engine when
-/// that file was written.
+/// Not `Settings::default()`, which is a *new* install. This is only for the
+/// field being absent from a file already on disk -- written when Azure was
+/// the only engine -- and that option has since been withdrawn, so the answer
+/// is this machine.
 fn engine_before_the_local_one() -> String {
     "local".to_string()
 }
