@@ -559,6 +559,22 @@ fn advise(failure: &castavox_core::assistant::Failure, hosted: bool) -> anyhow::
                 "Something on this network is inspecting secure connections, and this computer does not trust the certificate it is using. The connection itself is fine. A church or office firewall usually causes this: its certificate has to be installed on this machine, or use a different network."
             )
         }
+        /*
+         * Nothing was listening, which is not a network fault.
+         *
+         * A church pointed the assistant at LM Studio running on their PC and
+         * left the address on `localhost` -- the preset's default, and the
+         * desk's own machine. The connection was refused in milliseconds and
+         * they were told to check an internet connection that was working
+         * perfectly, and that nothing in this had used.
+         */
+        Failure::Unreachable(detail) if castavox_core::assistant::is_nothing_listening(detail) => {
+            anyhow!(
+                "Nothing answered at the model's address. Check it under Settings — a model on \
+                 another machine needs that machine's address rather than localhost — and that \
+                 the model is running there."
+            )
+        }
         Failure::Unreachable(_) => anyhow!(
             "The assistant could not be reached. Check the internet connection and try again."
         ),

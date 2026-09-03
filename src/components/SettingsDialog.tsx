@@ -58,6 +58,19 @@ import {
  * Kept in step with castavox-core's `languages.rs`, which is the same table for
  * Castavox.
  */
+/**
+ * Whether an address points at this very machine.
+ *
+ * Only to word the hint under the field. The presets fill in `localhost`,
+ * which is right for a model running at the desk and wrong for the far more
+ * common arrangement -- the one PC with a graphics card, serving a laptop.
+ * Getting that wrong costs a refused connection and no idea why.
+ */
+const isLocalModelAddress = (endpoint: string) =>
+  /^https?:\/\/(localhost|127\.0\.0\.1|\[?::1\]?)(:|\/|$)/i.test(
+    endpoint.trim(),
+  );
+
 const LANGUAGES = [
   {
     code: "en-US",
@@ -1361,6 +1374,14 @@ export function SettingsDialog({
                       placeholder="https://…"
                       className={FIELD}
                     />
+                    {/* The presets fill in localhost, which is right only when
+                        the model runs on this machine. Said here because the
+                        alternative is a refused connection and no idea why. */}
+                    <span className="text-[11px] leading-snug text-pulpitry-muted">
+                      {isLocalModelAddress(assistEndpoint)
+                        ? "localhost means this machine. A model on another computer needs that computer's address instead — http://192.168.1.50:1234/v1, or its name. It crosses your network unencrypted, which is fine on a church's own wiring and not beyond it."
+                        : "Filled in by the choice above; edit it if your church runs its own gateway."}
+                    </span>
                   </label>
 
                   <div className="flex gap-3">
