@@ -305,6 +305,31 @@ export function OutputsPanel({
                 : ""}
             </p>
 
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={output.ndiEnabled}
+                onChange={(event) =>
+                  update(output.id, { ndiEnabled: event.target.checked })
+                }
+                className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+              />
+              <span className="text-[12.5px] text-pulpitry-text">
+                Send this on the network
+              </span>
+            </label>
+
+            {output.ndiEnabled ? (
+              <input
+                value={output.ndiName}
+                onChange={(event) =>
+                  update(output.id, { ndiName: event.target.value })
+                }
+                placeholder={`Pulpitry — ${output.name || "Output"}`}
+                className={FIELD}
+              />
+            ) : null}
+
             {/* Said where it is chosen. A church learning during a service that
                 three feeds do not fit down their wifi is the failure this
                 sentence exists to prevent. */}

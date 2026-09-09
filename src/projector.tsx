@@ -4,8 +4,12 @@ import ReactDOM from "react-dom/client";
 import { LiveBodyView } from "./components/LiveBodyView";
 import { fillsFrame, type LiveBody } from "./lib/projector";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 
 import {
+  EVENT_STAGE,
+  getStage,
+  type StageState,
   closeProjector,
   closeSecond,
   getAudio,
@@ -30,7 +34,9 @@ import {
 } from "./lib/theme";
 import { Backdrop } from "./components/Backdrop";
 import { OverlayView } from "./components/OverlayView";
+import { StageView } from "./components/StageView";
 import { plainText, type OverlayForm } from "./lib/overlays";
+import { scriptureIn } from "./lib/bible";
 import { TickerBand } from "./components/TickerBand";
 import "./styles.css";
 
@@ -71,6 +77,13 @@ function Projector() {
    * third flashes as a full-screen card on the way to being itself.
    */
   const [form, setForm] = useState<OverlayForm>("none");
+  /** Empty follows the Scripture panel, which is what every window did. */
+  const [translation, setTranslation] = useState("");
+  const [stage, setStageState] = useState<StageState>({
+    startedAt: 0,
+    limitMinutes: 0,
+    note: "",
+  });
   const [audio, setAudio] = useState<AudioState>({ muted: false, volume: 1 });
   const [ticker, setTicker] = useState<Ticker>({
     text: "",
@@ -106,6 +119,7 @@ function Projector() {
         if (!active) return;
         setTheme(look.theme);
         setForm(look.overlay as OverlayForm);
+        setTranslation(look.translation);
       })
       .catch(() => undefined);
     void getAudio()
@@ -117,9 +131,17 @@ function Projector() {
     void getTicker()
       .then((current) => active && setTicker(current))
       .catch(() => undefined);
+    void getStage()
+      .then((current) => active && setStageState(current))
+      .catch(() => undefined);
 
     void Promise.all([
       onLive((next) => active && setContent(next)),
+      // Broadcast like content rather than fetched like appearance: two stage
+      // screens showing different timers would be worse than one.
+      listen<StageState>(EVENT_STAGE, (event) =>
+        active ? setStageState(event.payload) : undefined,
+      ).then((stop) => stop),
       // The payload is the shared theme, which is right only for a window
       // following it. Re-asking costs one call on a settings save and is the
       // only version that stays correct for a window with its own template.
@@ -129,6 +151,7 @@ function Projector() {
             if (!active) return;
             setTheme(look.theme);
             setForm(look.overlay as OverlayForm);
+            setTranslation(look.translation);
           })
           .catch(() => undefined);
       }),
@@ -166,6 +189,66 @@ function Projector() {
   }, []);
 
   /*
+   * The same passage, in this output's own Bible.
+   *
+   * Content arrives already drawn in the operator's translation, because every
+   * output must agree about what is live. An output told to read another one
+   * re-draws the words from the reference it was given -- the mirror's own
+   * trick, turned inward on one machine.
+   *
+   * On its own effect rather than inside the subscription: the translation can
+   * change while something is live, and a church that switches an overflow room
+   * to another Bible should see it happen rather than at the next verse.
+   */
+  const [drawn, setDrawn] = useState<LiveContent | null>(null);
+  useEffect(() => {
+    let active = true;
+    if (!translation || !content || content.body.kind !== "scripture") {
+      setDrawn(content);
+      return () => {
+        active = false;
+      };
+    }
+    void scriptureIn(translation, content.caption)
+      .then((lines) => {
+        if (!active) return;
+        // Nothing back means the passage is not in that translation -- a
+        // Catholic edition's extra books, a partial text. Keep what we were
+        // given rather than emptying a screen mid-service.
+        setDrawn(
+          lines.length
+            ? { ...content, body: { kind: "scripture", lines } }
+            : content,
+        );
+      })
+      .catch(() => active && setDrawn(content));
+    return () => {
+      active = false;
+    };
+  }, [content, translation]);
+
+  /*
+   * The platform's own screen, which is nobody else's.
+   *
+   * Before the overlay branch because it is not one: an overlay is the
+   * congregation's content in another shape, and this is different content
+   * altogether -- a timer, and a line from the desk that must never reach a
+   * wall.
+   */
+  if (form === "stage") {
+    return (
+      <div className="relative h-full w-full overflow-hidden [container-type:size]">
+        <StageView
+          stage={stage}
+          theme={theme}
+          reference={drawn?.caption ?? null}
+          text={plainText(drawn)}
+        />
+      </div>
+    );
+  }
+
+  /*
    * An overlay draws its furniture and nothing else.
    *
    * No backdrop, no ticker band, no 16:9 letterboxing -- every one of those
@@ -182,8 +265,8 @@ function Projector() {
         <OverlayView
           form={form}
           theme={theme}
-          reference={content?.caption ?? null}
-          text={plainText(content)}
+          reference={drawn?.caption ?? null}
+          text={plainText(drawn)}
         />
       </div>
     );
@@ -231,21 +314,21 @@ function Projector() {
         <div className="[aspect-ratio:16/9] [width:min(100cqw,177.78cqh)]">
           <div
             className={`relative flex h-full w-full flex-col items-center justify-center overflow-hidden [container-type:size] ${
-              content && fillsFrame(content.body) ? "" : "px-[6cqw] py-[5cqh]"
+              drawn && fillsFrame(drawn.body) ? "" : "px-[6cqw] py-[5cqh]"
             }`}
           >
-            {content ? (
+            {drawn ? (
               <>
                 <LiveBodyView
-                  body={content.body}
+                  body={drawn.body}
                   theme={theme}
                   audio={audio}
                   command={command}
-                  progress={content.progress}
+                  progress={drawn.progress}
                 />
                 {theme.showReference &&
-                content.caption &&
-                !titledItself(content.body) ? (
+                drawn.caption &&
+                !titledItself(drawn.body) ? (
                   /* Its own typeface, size and colour, set by the theme. The
                      margin is in cqh like everything else in this frame, so it
                      holds its proportion whatever the screen is. */
@@ -253,7 +336,7 @@ function Projector() {
                     className="mt-[4cqh] text-center tracking-wide opacity-60"
                     style={referenceStyle(theme)}
                   >
-                    {content.caption}
+                    {drawn.caption}
                   </p>
                 ) : null}
               </>

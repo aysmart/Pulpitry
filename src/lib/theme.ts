@@ -412,6 +412,8 @@ export interface WindowLook {
   theme: ProjectorTheme;
   /** An overlay form id, or "none" for the whole screen. */
   overlay: string;
+  /** The translation to draw scripture in. Empty follows the panel. */
+  translation: string;
 }
 
 /** Grants the webview read access to a newly chosen background. */

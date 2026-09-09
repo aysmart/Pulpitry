@@ -20,6 +20,7 @@ pub const EVENT_TICKER: &str = "ticker:changed";
 pub const EVENT_MEDIA: &str = "media:command";
 pub const EVENT_MEDIA_PROGRESS: &str = "media:progress";
 pub const EVENT_THEME: &str = "theme:changed";
+pub const EVENT_STAGE: &str = "stage:changed";
 pub const WINDOW_LABEL: &str = "projector";
 /**
  * A second congregation-facing display.
@@ -85,6 +86,37 @@ pub fn title_for(id: &str, name: &str) -> String {
 /// cases returning identical frames -- so an NDI-only output is an ordinary
 /// window that nobody looks at rather than a second rendering path.
 const OFF_SCREEN: f64 = -32_000.0;
+
+/// What the platform sees, and only the platform.
+///
+/// # Why this is not the congregation's screen with extras on it
+///
+/// A stage display answers questions the congregation must never be asked:
+/// how long have I been speaking, what is next, and is the person at the desk
+/// trying to tell me something. Putting any of that on the wall would be a
+/// mistake nobody could take back, so a stage output carries its own state and
+/// draws its own view rather than being the projector with a clock added.
+///
+/// The timer is a start instant rather than a count, deliberately. A count
+/// broadcast every second is a message a second from a machine that has a
+/// service to run, and it drifts the moment one is dropped; an instant is sent
+/// once and each screen counts for itself.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StageState {
+    /// Unix milliseconds the timer was started, or zero for a timer that is
+    /// not running. Not an elapsed count: see above.
+    pub started_at: i64,
+    /// Where the timer is counting to, in minutes. Zero counts up instead.
+    ///
+    /// Both are wanted and by different people: a preacher wants to know how
+    /// long they have been going, and a service leader wants to know how long
+    /// is left. Counting down is the one that changes behaviour, so it is
+    /// offered rather than assumed.
+    pub limit_minutes: i64,
+    /// A line from the desk to the platform. Never reaches a congregation.
+    pub note: String,
+}
 
 /// One verse within a passage.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -313,6 +345,7 @@ pub struct Projector {
     audio: Mutex<AudioState>,
     media: Mutex<MediaCommand>,
     progress: Mutex<MediaProgress>,
+    stage: Mutex<StageState>,
 }
 
 impl Projector {
@@ -327,7 +360,23 @@ impl Projector {
             audio: Mutex::new(AudioState::default()),
             media: Mutex::new(MediaCommand::default()),
             progress: Mutex::new(MediaProgress::default()),
+            stage: Mutex::new(StageState::default()),
         })
+    }
+
+    pub fn stage(&self) -> StageState {
+        self.stage.lock().clone()
+    }
+
+    /// Sets what the platform sees, and tells every window at once.
+    ///
+    /// Broadcast like content rather than fetched like appearance: two stage
+    /// screens showing different timers would be worse than one, and a
+    /// preacher checking two clocks is a preacher not preaching.
+    pub fn set_stage(&self, state: StageState) -> StageState {
+        *self.stage.lock() = state.clone();
+        let _ = self.app.emit(EVENT_STAGE, &state);
+        state
     }
 
     pub fn ticker(&self) -> Ticker {

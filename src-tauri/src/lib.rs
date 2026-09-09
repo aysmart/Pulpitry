@@ -224,6 +224,19 @@ fn set_background(
 }
 
 #[tauri::command]
+fn get_stage(projector: State<'_, Arc<Projector>>) -> projector::StageState {
+    projector.stage()
+}
+
+#[tauri::command]
+fn set_stage(
+    projector: State<'_, Arc<Projector>>,
+    state: projector::StageState,
+) -> projector::StageState {
+    projector.set_stage(state)
+}
+
+#[tauri::command]
 fn get_theme(app: tauri::AppHandle) -> CommandResult<ProjectorTheme> {
     Ok(settings::load(&app).map_err(to_message)?.projector)
 }
@@ -258,9 +271,13 @@ fn theme_for_window(
         .filter(|form| !form.is_empty())
         .unwrap_or_else(|| "none".to_string());
     let template = found.map(|output| output.template.trim().to_string()).unwrap_or_default();
+    // Empty follows the Scripture panel, which is what every window did and
+    // what most churches want: one Bible in the building.
+    let translation =
+        found.map(|output| output.translation.trim().to_string()).unwrap_or_default();
 
     if template.is_empty() {
-        return Ok(WindowLook { theme: settings.projector, overlay });
+        return Ok(WindowLook { theme: settings.projector, overlay, translation });
     }
 
     // A template the operator has since deleted falls back to the shared theme
@@ -275,7 +292,7 @@ fn theme_for_window(
             _ => None,
         });
 
-    Ok(WindowLook { theme: found.unwrap_or(settings.projector), overlay })
+    Ok(WindowLook { theme: found.unwrap_or(settings.projector), overlay, translation })
 }
 
 /// How one window should draw: its look, and the shape it draws in.
@@ -288,6 +305,8 @@ pub struct WindowLook {
     pub theme: ProjectorTheme,
     /// The overlay form, or "none" for the whole screen.
     pub overlay: String,
+    /// The translation this window draws scripture in. Empty follows the panel.
+    pub translation: String,
 }
 
 #[tauri::command]
@@ -866,6 +885,46 @@ fn announce(app: &AppHandle, library: &Library) {
  */
 struct NdiOutput(std::sync::Mutex<Option<ndi_output::Output>>);
 
+/// The senders for the configured outputs, one per output that asked for one.
+///
+/// Separate from `NdiOutput`, which is the projector's own and predates these.
+/// Keyed by output id so closing one output cannot take another off the air --
+/// which, on a Sunday, is somebody's stream.
+#[derive(Default)]
+struct NdiOutputs(std::sync::Mutex<std::collections::HashMap<String, ndi_output::Output>>);
+
+impl NdiOutputs {
+    /// Publishes one output's window, replacing any sender it already had.
+    ///
+    /// Failure is logged and swallowed. A church that has not installed the
+    /// NDI runtime should still get their screen: the window is the thing they
+    /// asked for and the feed is the extra.
+    fn start(&self, output: &settings::Output) {
+        let title = projector::title_for(&output.id, &output.name);
+        let name = if output.ndi_name.trim().is_empty() {
+            format!("Pulpitry — {}", output.name.trim())
+        } else {
+            output.ndi_name.trim().to_string()
+        };
+
+        match ndi_output::Output::start_window(&title, &name, output.fps, output.is_overlay()) {
+            Ok(sender) => {
+                if let Ok(mut held) = self.0.lock() {
+                    held.insert(output.id.clone(), sender);
+                }
+            }
+            Err(why) => log_line!("[ndi] {} could not be published: {why}", output.name),
+        }
+    }
+
+    /// Takes one output off the network. Dropping the sender is what stops it.
+    fn stop(&self, id: &str) {
+        if let Ok(mut held) = self.0.lock() {
+            held.remove(id);
+        }
+    }
+}
+
 /// What the settings panel needs to draw the row.
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1054,6 +1113,50 @@ fn search_verses(
     limit: Option<i64>,
 ) -> CommandResult<Vec<Verse>> {
     library.search(&translation, &query, limit.unwrap_or(50)).map_err(to_message)
+}
+
+/// The same passage, drawn from another translation.
+///
+/// # Why an output resolves its own scripture
+///
+/// Content is broadcast to every output, because they must agree about what is
+/// live. But "the same passage" and "the same words" are different things: a
+/// church with a deaf ministry in the overflow room, or a congregation reading
+/// two languages, wants one reference on every screen and the wording each room
+/// can follow.
+///
+/// This is the mirror's own trick turned inward. The mirror sends Castavox a
+/// reference and lets it draw from its own library; an output does the same on
+/// one machine. Passing text between them would make the operator's Bible the
+/// only one that could ever be shown.
+///
+/// Empty where the passage does not exist in that translation -- a Catholic
+/// edition's extra books, or a partial text -- and the window keeps what it was
+/// given rather than emptying a screen mid-service.
+#[tauri::command]
+fn scripture_in(
+    library: State<'_, Arc<Library>>,
+    translation: String,
+    reference: String,
+) -> CommandResult<Vec<projector::ScriptureLine>> {
+    let Some(found) = library.resolve_reference(&translation, &reference).map_err(to_message)?
+    else {
+        return Ok(Vec::new());
+    };
+
+    let chapter = library
+        .chapter(&translation, found.book_number, found.chapter)
+        .map_err(to_message)?;
+
+    // A whole chapter when no verse was named, which is what "Psalm 23" means.
+    let first = found.verse.unwrap_or(0);
+    let last = found.end_verse.or(found.verse).unwrap_or(i64::MAX);
+
+    Ok(chapter
+        .into_iter()
+        .filter(|verse| first == 0 || (verse.verse >= first && verse.verse <= last))
+        .map(|verse| projector::ScriptureLine { number: verse.verse, text: verse.text })
+        .collect())
 }
 
 #[tauri::command]
@@ -1450,6 +1553,7 @@ fn outputs_state(
 async fn open_output(
     app: AppHandle,
     projector: State<'_, Arc<Projector>>,
+    senders: State<'_, NdiOutputs>,
     id: String,
 ) -> CommandResult<OutputState> {
     let settings = settings::load(&app).map_err(to_message)?;
@@ -1471,14 +1575,32 @@ async fn open_output(
         )
         .map_err(to_message)?;
 
+    /*
+     * The feed follows the window, and only after it exists.
+     *
+     * There is nothing to capture until the window is up, so starting the
+     * sender first would fail on an absent window and report it as a missing
+     * projector. The window appearing is the moment this becomes possible,
+     * which makes here the right place rather than a convenient one.
+     */
+    if output.ndi_enabled {
+        senders.start(output);
+    } else {
+        senders.stop(&output.id);
+    }
+
     Ok(OutputState { open: projector.output_open(&id), id })
 }
 
 #[tauri::command]
 async fn close_output(
     projector: State<'_, Arc<Projector>>,
+    senders: State<'_, NdiOutputs>,
     id: String,
 ) -> CommandResult<OutputState> {
+    // The feed first: a sender left publishing a window that has gone captures
+    // nothing and announces a dead source on the network.
+    senders.stop(&id);
     projector.close_output(&id);
     Ok(OutputState { open: false, id })
 }
@@ -1709,6 +1831,7 @@ pub fn run() {
             // no window yet, so there would be nothing to capture. The window
             // is what starts it.
             app.manage(NdiOutput(std::sync::Mutex::new(None)));
+            app.manage(NdiOutputs::default());
 
             let library = Arc::new(Library::open(app.handle())?);
             app.manage(Arc::clone(&library));
@@ -1936,6 +2059,7 @@ pub fn run() {
             get_chapter,
             search_verses,
             resolve_reference,
+            scripture_in,
             adjacent_verse,
             export_transcript,
             history_list,
@@ -1971,6 +2095,8 @@ pub fn run() {
             close_second,
             second_state,
             set_background,
+            get_stage,
+            set_stage,
             get_theme,
             theme_for_window,
             catalog_save,

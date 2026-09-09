@@ -78,8 +78,30 @@ impl Output {
         ndi::Runtime::open().map(|runtime| runtime.sources(2000)).unwrap_or_default()
     }
 
-    /// Starts publishing, or says why it could not in words an operator can use.
+    /// Starts publishing the projector, or says why it could not.
     pub fn start(name: &str) -> Result<Self, String> {
+        Self::start_window(PROJECTOR_TITLE, name, FPS, false)
+    }
+
+    /// Starts publishing one window, whichever it is.
+    ///
+    /// # Why a sender per output rather than one per application
+    ///
+    /// There was one, and it published the projector. That is right while
+    /// there is one congregation-facing window and wrong the moment a church
+    /// has three: a switcher needs to take the foyer feed and the stream feed
+    /// as separate sources, by name, and one sender can only ever announce one
+    /// of them.
+    ///
+    /// `keep_alpha` is what makes a feed keyable rather than a picture. It has
+    /// to reach the capture, because that is the stage that would flatten the
+    /// window onto a colour and hand back something a switcher cannot key.
+    pub fn start_window(
+        window_title: &str,
+        name: &str,
+        fps: u32,
+        keep_alpha: bool,
+    ) -> Result<Self, String> {
         let name = if name.trim().is_empty() { DEFAULT_NAME } else { name.trim() };
 
         // The runtime first: it is the failure a church is most likely to hit
@@ -89,7 +111,7 @@ impl Output {
         }
 
         let latest = Latest::default();
-        let capture = ndi_capture::start(PROJECTOR_TITLE, FPS, false, latest.clone())
+        let capture = ndi_capture::start(window_title, fps.max(1), keep_alpha, latest.clone())
             .map_err(|problem| problem.to_string())?;
 
         let running = Arc::new(AtomicBool::new(true));
@@ -107,6 +129,7 @@ impl Output {
          * process-wide singleton.
          */
         let stop = running.clone();
+        let rate = fps.max(1);
         let sender = std::thread::Builder::new()
             .name("ndi-output".into())
             .spawn(move || {
@@ -119,8 +142,8 @@ impl Output {
                     return;
                 };
 
-                crate::log_line!("[ndi] publishing as {name:?} at {FPS} fps");
-                let interval = Duration::from_micros(1_000_000 / FPS as u64);
+                crate::log_line!("[ndi] publishing as {name:?} at {rate} fps");
+                let interval = Duration::from_micros(1_000_000 / rate as u64);
 
                 while stop.load(Ordering::Relaxed) {
                     let started = Instant::now();

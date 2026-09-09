@@ -33,7 +33,8 @@ export type OverlayForm =
   | "card"
   | "top-strip"
   | "side-panel"
-  | "caption";
+  | "caption"
+  | "stage";
 
 export const OVERLAY_FORMS: Array<{
   id: OverlayForm;
@@ -69,6 +70,11 @@ export const OVERLAY_FORMS: Array<{
     id: "side-panel",
     name: "Side panel",
     hint: "A column down the right, for a wide shot with room beside the platform.",
+  },
+  {
+    id: "stage",
+    name: "Stage display",
+    hint: "For the platform only: the timer, what is live, and a line from the desk. Never put this where a congregation can see it.",
   },
   {
     id: "caption",

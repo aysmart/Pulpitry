@@ -57,6 +57,18 @@ export const getChapter = (
 export const searchVerses = (translation: string, query: string, limit = 50) =>
   invoke<Verse[]>("search_verses", { translation, query, limit });
 
+/**
+ * The same passage, drawn from another translation.
+ *
+ * For an output told to read a Bible other than the panel's. Empty where the
+ * passage is not in that translation, and the caller keeps what it had.
+ */
+export const scriptureIn = (translation: string, reference: string) =>
+  invoke<Array<{ number: number; text: string }>>("scripture_in", {
+    translation,
+    reference,
+  });
+
 export const resolveReference = (translation: string, reference: string) =>
   invoke<Reference | null>("resolve_reference", { translation, reference });
 

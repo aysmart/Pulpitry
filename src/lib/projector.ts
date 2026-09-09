@@ -152,7 +152,13 @@ export type SlideLayout = "single" | "stacked" | "cards" | "split" | "section";
 
 /** Every arrangement the engine can paint. A spec naming anything else is not
  *  a slide this build knows how to draw. */
-export const LAYOUTS: SlideLayout[] = ["single", "stacked", "cards", "split", "section"];
+export const LAYOUTS: SlideLayout[] = [
+  "single",
+  "stacked",
+  "cards",
+  "split",
+  "section",
+];
 
 /**
  * The arrangement a slide's own contents call for.
@@ -176,9 +182,14 @@ export const LAYOUTS: SlideLayout[] = ["single", "stacked", "cards", "split", "s
  * what the slide is actually made of, which is where every layout comes from
  * in the first place.
  */
-export function layoutOf(stored: string | undefined, components: SlideComponent[]): SlideLayout {
+export function layoutOf(
+  stored: string | undefined,
+  components: SlideComponent[],
+): SlideLayout {
   if (!LAYOUTS.includes(stored as SlideLayout)) return layoutFor(components);
-  return supports(stored as SlideLayout, components) ? (stored as SlideLayout) : layoutFor(components);
+  return supports(stored as SlideLayout, components)
+    ? (stored as SlideLayout)
+    : layoutFor(components);
 }
 
 /**
@@ -218,7 +229,8 @@ function supports(layout: SlideLayout, components: SlideComponent[]): boolean {
     // Two things, or it is a stack with a gap down the middle.
     case "split":
       return body.some(
-        (component) => component.kind === "figure" || component.kind === "table",
+        (component) =>
+          component.kind === "figure" || component.kind === "table",
       );
     case "single":
       return body.length === 1;
@@ -255,7 +267,8 @@ export function layoutFor(components: SlideComponent[]): SlideLayout {
    * three panels across a wall are too narrow to read from the back.
    */
   const table = body.find((component) => component.kind === "table");
-  if (table && table.kind === "table" && table.header.length === 2) return "split";
+  if (table && table.kind === "table" && table.header.length === 2)
+    return "split";
 
   const list = body.find((component) => component.kind === "list");
   if (
@@ -411,7 +424,10 @@ export function componentText(component: SlideComponent): string {
     /* The figures with their labels, which is what a screen that cannot draw
        bars should say -- "2023: 4,200" reads; a bare 4200 does not. */
     case "chart":
-      return [component.label, ...component.bars.map((bar) => `${bar.label}: ${bar.value}`)]
+      return [
+        component.label,
+        ...component.bars.map((bar) => `${bar.label}: ${bar.value}`),
+      ]
         .filter(Boolean)
         .join("\n");
   }
@@ -425,6 +441,23 @@ export interface Display {
   isPrimary: boolean;
   inUse: boolean;
 }
+
+/** What the platform sees: the timer, and a line from the desk. */
+export interface StageState {
+  /** Unix milliseconds the timer started, or 0 when it is not running. */
+  startedAt: number;
+  /** Counting down to this many minutes; 0 counts up instead. */
+  limitMinutes: number;
+  /** A line from the desk to the platform. Never reaches a congregation. */
+  note: string;
+}
+
+export const EVENT_STAGE = "stage:changed";
+
+export const getStage = () => invoke<StageState>("get_stage");
+
+export const setStage = (state: StageState) =>
+  invoke<StageState>("set_stage", { state });
 
 export interface ProjectorState {
   open: boolean;

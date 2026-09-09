@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { MirrorPanel } from "./MirrorPanel";
 import { NdiPanel } from "./NdiPanel";
 import { OutputsPanel } from "./OutputsPanel";
+import { StageControls } from "./StageControls";
 import { HostedSubscription } from "./HostedSubscription";
 import { NodeRuntimeNotice } from "./NodeRuntimeNotice";
 import { Feedback } from "./Feedback";
@@ -1742,6 +1743,13 @@ export function SettingsDialog({
                 />
               </Section>
               <div className="border-t border-pulpitry-line" />
+              <div className="border-t border-pulpitry-line" />
+              <Section
+                title="The platform's own screen"
+                note="The timer, and a line the desk can send the platform. Shown only on an output whose shape is Stage display, and never anywhere a congregation can see."
+              >
+                <StageControls />
+              </Section>
               <div className="border-t border-pulpitry-line" />
               <Section
                 title="Outputs"
