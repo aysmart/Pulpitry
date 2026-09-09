@@ -247,7 +247,12 @@ function liveSlide(body: LiveBody | undefined, theme: ProjectorTheme) {
 /** The picture or clip behind an item, if that is what it is. */
 function assetOf(item: Presentable | null) {
   if (item?.kind === "image")
-    return { kind: "image" as const, path: item.path, looping: false, fill: item.fill };
+    return {
+      kind: "image" as const,
+      path: item.path,
+      looping: false,
+      fill: item.fill,
+    };
   if (item?.kind === "media")
     return {
       kind: "media" as const,
@@ -261,7 +266,12 @@ function assetOf(item: Presentable | null) {
 /** The same, for whatever the projector is currently showing. */
 function liveAsset(body: LiveBody | undefined) {
   if (body?.kind === "image")
-    return { kind: "image" as const, path: body.path, looping: false, fill: body.fill };
+    return {
+      kind: "image" as const,
+      path: body.path,
+      looping: false,
+      fill: body.fill,
+    };
   if (body?.kind === "media")
     return {
       kind: "media" as const,
@@ -287,6 +297,13 @@ export function StagePanel({
   onDisplay,
   onClear,
   onStep,
+  canFollow,
+  following,
+  onFollowChange,
+  advance,
+  onAdvanceChange,
+  suggestion,
+  onTakeSuggestion,
   onWind,
   onAdd,
   theme,
@@ -303,6 +320,16 @@ export function StagePanel({
   onDisplay: () => void;
   onClear: () => void;
   onStep: (forward: boolean) => void;
+  /** Only a deck has slides to follow. */
+  canFollow: boolean;
+  following: boolean;
+  onFollowChange: (on: boolean) => void;
+  /** Whether a match moves the screen rather than being offered. */
+  advance: boolean;
+  onAdvanceChange: (on: boolean) => void;
+  /** The slide the sermon seems to have reached, and how sure. */
+  suggestion: { index: number; score: number } | null;
+  onTakeSuggestion: (index: number) => void;
   /** Winds what is live to a point in it, 0 at the top and 1 at the end. */
   onWind: (progress: number) => void;
   onAdd: () => void;
@@ -390,7 +417,9 @@ export function StagePanel({
         case "ArrowDown":
           if (liveExtent.screenfuls <= 1 || liveScreen >= lastScreen) return;
           event.preventDefault();
-          onWind(liveScreen + 1 >= lastScreen ? 1 : (liveScreen + 1) / lastScreen);
+          onWind(
+            liveScreen + 1 >= lastScreen ? 1 : (liveScreen + 1) / lastScreen,
+          );
           return;
         default:
       }
@@ -399,7 +428,6 @@ export function StagePanel({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onStep, onWind, liveExtent, liveScreen, lastScreen]);
-
 
   return (
     <div className="flex min-h-0 flex-col gap-2">
@@ -428,6 +456,66 @@ export function StagePanel({
         >
           Next
         </button>
+        {/* Only where there is a deck to follow. A control that is present
+            and does nothing on everything else teaches an operator to stop
+            reading this row. */}
+        {canFollow ? (
+          <button
+            type="button"
+            onClick={() => onFollowChange(!following)}
+            title={
+              following
+                ? "Stop watching for the slide being spoken about"
+                : "Watch the sermon and say which slide it has reached"
+            }
+            className={
+              following
+                ? "rounded border border-pulpitry-gold-dim bg-pulpitry-gold/10 px-3 py-1.5 text-[12px] text-pulpitry-gold transition-colors focus-visible:focus-ring"
+                : CONTROL
+            }
+          >
+            {following ? "Following" : "Follow"}
+          </button>
+        ) : null}
+
+        {/*
+          Offered, not taken.
+          
+          Beside the transport rather than over the preview, because it is one
+          more thing an operator may press -- not an announcement that
+          interrupts what they were doing. It disappears the moment it is acted
+          on or the deck moves, so it can never sit there recommending a slide
+          that is already up.
+        */}
+        {/* Only once following is on, and worded as what it does rather than
+            as a feature. A church that wants it is entitled to it; a church
+            that switches it on by accident finds out in front of everybody. */}
+        {canFollow && following ? (
+          <label
+            className="flex items-center gap-1.5 px-1 text-[11.5px] text-pulpitry-muted"
+            title="Move the screen on a match instead of offering it. A wrong match then shows in front of the congregation."
+          >
+            <input
+              type="checkbox"
+              checked={advance}
+              onChange={(event) => onAdvanceChange(event.target.checked)}
+              className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+            />
+            Move by itself
+          </label>
+        ) : null}
+
+        {following && suggestion ? (
+          <button
+            type="button"
+            onClick={() => onTakeSuggestion(suggestion.index)}
+            title={`${Math.round(suggestion.score * 100)}% alike`}
+            className="rounded border border-pulpitry-teal bg-pulpitry-teal/15 px-3 py-1.5 text-[12px] text-pulpitry-text transition-colors hover:border-pulpitry-gold focus-visible:focus-ring"
+          >
+            Go to slide {suggestion.index + 1}
+          </button>
+        ) : null}
+
         <button
           type="button"
           onClick={onAdd}

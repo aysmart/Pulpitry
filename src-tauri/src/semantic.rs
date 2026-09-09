@@ -379,6 +379,28 @@ impl Semantic {
         Ok(embedder)
     }
 
+    /// Embeds a handful of texts, for anything that needs the model but not
+    /// the Bible's index.
+    ///
+    /// The follower needs a deck embedded and has no business loading a second
+    /// copy of the model to do it: one owner of the model is one queue for it,
+    /// and two would be two copies of a few hundred megabytes in a laptop that
+    /// is also transcribing.
+    ///
+    /// Batched, because the model is far quicker asked once for twenty strings
+    /// than twenty times for one.
+    pub fn embed_texts(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.embedder()?.embed(texts)
+    }
+
+    /// The same, for one stretch of speech.
+    pub fn embed_spoken(&self, text: &str) -> Result<Vec<f32>> {
+        self.embedder()?.embed_one(text)
+    }
+
     /// Matches a stretch of speech against the index and emits what clears the
     /// operator's threshold.
     ///

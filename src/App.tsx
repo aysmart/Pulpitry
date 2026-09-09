@@ -10,6 +10,7 @@ import { QueueRail } from "./components/QueueRail";
 import { ScripturePanel } from "./components/ScripturePanel";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { OutputsDialog } from "./components/OutputsDialog";
+import { useFollow } from "./lib/useFollow";
 import { SlidesFromSermon } from "./components/SlidesFromSermon";
 import { PreviewPanel, StagePanel } from "./components/StagePanel";
 import { TopBar } from "./components/TopBar";
@@ -576,6 +577,17 @@ export default function App() {
    * whatever arrives in between. An instruction lost that way looks exactly
    * like the operator having to say it twice.
    */
+  /*
+   * Following the service, which is offered rather than done.
+   *
+   * The handler takes the suggestion only when the operator has asked it to;
+   * otherwise the slide is shown as something they may press. Auto-advance is
+   * a deliberate choice with a visible cost, and it should feel like one.
+   */
+  const follow = useFollow(preview, (found) => {
+    if (found.advance) goToSlide(found.index + 1);
+  });
+
   const onVoiceCommand = useRef<(payload: VoiceCommand) => void>(() => {});
   onVoiceCommand.current = (payload: VoiceCommand) => {
     switch (payload.action) {
@@ -834,6 +846,18 @@ export default function App() {
             onDisplay={display}
             onClear={clearLive}
             onStep={(forward) => void step(forward)}
+            canFollow={follow.canFollow}
+            following={follow.following}
+            onFollowChange={(on) =>
+              on ? follow.setFollowing(true) : follow.stop()
+            }
+            advance={follow.advance}
+            onAdvanceChange={follow.setAdvance}
+            suggestion={follow.suggestion}
+            onTakeSuggestion={(index) => {
+              goToSlide(index + 1);
+              follow.clearSuggestion();
+            }}
             onWind={wind}
             onAdd={() => preview && schedule.add(preview)}
             theme={settings?.projector ?? DEFAULT_THEME}

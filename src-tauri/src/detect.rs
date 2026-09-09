@@ -143,6 +143,7 @@ pub struct Detector {
     library: Arc<Library>,
     assistant: Arc<Assistant>,
     semantic: Arc<Semantic>,
+    follower: Arc<crate::follow::Follower>,
     translation: Mutex<String>,
     transcript: Mutex<Transcript>,
     last_interim: Mutex<Option<Instant>>,
@@ -170,6 +171,7 @@ impl Detector {
         library: Arc<Library>,
         assistant: Arc<Assistant>,
         semantic: Arc<Semantic>,
+        follower: Arc<crate::follow::Follower>,
         translation: String,
     ) -> Arc<Self> {
         let (queue, incoming) = sync_channel::<(Segment, String)>(32);
@@ -178,6 +180,7 @@ impl Detector {
             library,
             assistant,
             semantic,
+            follower,
             translation: Mutex::new(translation),
             transcript: Mutex::new(Transcript::default()),
             last_interim: Mutex::new(None),
@@ -341,6 +344,31 @@ impl Detector {
         if segment == Segment::Final {
             self.semantic.consider(&context, had_exact_match);
             self.assistant.consider(&context, had_exact_match);
+
+            /*
+             * Which slide of the staged deck this sounds like.
+             *
+             * Unlike the two above, this runs whether or not the passage was
+             * matched exactly: a preacher quoting the verse that is on the
+             * slide is the clearest signal there is that they have reached it,
+             * and suppressing it there would lose the easiest case.
+             *
+             * On a thread because embedding a sentence takes tens of
+             * milliseconds, and this is called from the path that has to keep
+             * up with somebody speaking.
+             */
+            if self.follower.following() {
+                let follower = Arc::clone(&self.follower);
+                let semantic = Arc::clone(&self.semantic);
+                let spoken = context.clone();
+                std::thread::spawn(move || match semantic.embed_spoken(&spoken) {
+                    Ok(vector) => follower.consider(&vector),
+                    // Silent: a deck that cannot be followed for one sentence
+                    // is not worth a line in front of an operator, and the
+                    // embedder has already logged whatever went wrong.
+                    Err(_) => {}
+                });
+            }
         }
 
         Ok(())

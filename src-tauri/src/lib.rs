@@ -27,6 +27,7 @@ mod mirror;
 mod ndi;
 mod ndi_capture;
 mod ndi_output;
+mod follow;
 mod projector;
 mod semantic;
 mod settings;
@@ -232,6 +233,35 @@ fn set_background(
 #[tauri::command]
 fn note(line: String) {
     log_line!("[window] {}", line.chars().take(300).collect::<String>());
+}
+
+/// Starts following a deck, or stops when given none.
+///
+/// The slides arrive as text because only the window knows what a deck is: it
+/// holds the sections, their headings and their order. Embedding happens here,
+/// where the model already lives.
+///
+/// Off by default and switched on per service rather than remembered. A church
+/// that followed one sermon has not asked to follow every service afterwards,
+/// and a deck being watched from a previous week is a suggestion nobody can
+/// account for.
+#[tauri::command]
+async fn follow_deck(
+    semantic: State<'_, Arc<Semantic>>,
+    follower: State<'_, Arc<follow::Follower>>,
+    slides: Vec<String>,
+    advance: bool,
+) -> CommandResult<bool> {
+    follower.set_advance(advance);
+
+    if slides.is_empty() {
+        follower.forget();
+        return Ok(false);
+    }
+
+    let vectors = semantic.embed_texts(&slides).map_err(to_message)?;
+    follower.watch(vectors);
+    Ok(true)
 }
 
 #[tauri::command]
@@ -1999,11 +2029,15 @@ pub fn run() {
             // The model's restatement is searched against this index.
             assistant.attach_semantic(Arc::clone(&semantic));
 
+            let follower = follow::Follower::new(app.handle().clone());
+            app.manage(Arc::clone(&follower));
+
             let detector = Detector::new(
                 app.handle().clone(),
                 Arc::clone(&library),
                 assistant,
                 Arc::clone(&semantic),
+                Arc::clone(&follower),
                 saved.translation.clone(),
             );
             app.manage(Arc::clone(&detector));
@@ -2164,6 +2198,7 @@ pub fn run() {
             second_state,
             set_background,
             note,
+            follow_deck,
             get_stage,
             set_stage,
             get_theme,
