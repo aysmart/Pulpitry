@@ -38,6 +38,13 @@ const STRIDE: usize = 3;
 /// Rolling context, so a quotation split across two transcript segments is
 /// still seen as one run.
 const BUFFER_WORDS: usize = 48;
+/// How much recent speech the deck follower is asked about.
+///
+/// Deliberately less than the buffer above. That one exists so a quotation can
+/// start anywhere in it; this one answers "what is being said now", and a
+/// window wide enough to hold two points embeds to something between them.
+/// About a sentence and a half of ordinary preaching.
+const FOLLOW_WORDS: usize = 22;
 /// A phrase matching more verses than this is stock biblical language ("and it
 /// came to pass"), not a quotation of any particular verse.
 const MAX_VERSES_PER_PHRASE: i64 = 6;
@@ -358,11 +365,35 @@ impl Detector {
              * up with somebody speaking.
              */
             if self.follower.following() {
+                /*
+                 * A shorter window than the rest of this uses.
+                 *
+                 * The buffer holds 48 words, which is right for finding a
+                 * quotation: a verse can begin anywhere in it and the extra
+                 * words cost nothing. It is wrong for asking where a speaker
+                 * is. Twenty seconds of preaching crosses more than one point,
+                 * and embedding all of it produces a blur that sits about
+                 * equally near every slide of a coherent deck -- which is
+                 * exactly the symptom: twenty slides scoring within five
+                 * hundredths of each other.
+                 *
+                 * The last sentence or so is the question actually being
+                 * asked. What is being talked about *now*.
+                 */
+                let recent: String = words
+                    .iter()
+                    .rev()
+                    .take(FOLLOW_WORDS)
+                    .rev()
+                    .map(|word| word.display.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
                 let follower = Arc::clone(&self.follower);
                 let semantic = Arc::clone(&self.semantic);
-                let spoken = context.clone();
+                let spoken = recent;
                 std::thread::spawn(move || match semantic.embed_spoken(&spoken) {
-                    Ok(vector) => follower.consider(&vector),
+                    Ok(vector) => follower.consider(&vector, &spoken),
                     // Silent: a deck that cannot be followed for one sentence
                     // is not worth a line in front of an operator, and the
                     // embedder has already logged whatever went wrong.

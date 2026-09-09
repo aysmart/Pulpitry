@@ -251,6 +251,7 @@ async fn follow_deck(
     follower: State<'_, Arc<follow::Follower>>,
     slides: Vec<String>,
     advance: bool,
+    at: Option<usize>,
 ) -> CommandResult<bool> {
     follower.set_advance(advance);
 
@@ -269,7 +270,7 @@ async fn follow_deck(
             return Err(to_message(why));
         }
     };
-    follower.watch(vectors);
+    follower.watch(vectors, at);
     Ok(true)
 }
 

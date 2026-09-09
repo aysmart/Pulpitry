@@ -87,6 +87,8 @@ export function useFollow(
    * something the operator has moved on from — which is worse than not
    * following, because it looks like it is working.
    */
+  const at = preview?.kind === "lyric" ? preview.index : null;
+
   const deckKey =
     preview?.kind === "lyric"
       ? `${preview.title}:${preview.sections.length}`
@@ -99,7 +101,7 @@ export function useFollow(
     void invoke("note", {
       line: `follow: on=${following} advance=${advance} kind=${preview?.kind ?? "none"} slides=${slides.length} first=${JSON.stringify(slides[0]?.slice(0, 80) ?? "")}`,
     }).catch(() => undefined);
-    void invoke<boolean>("follow_deck", { slides, advance }).catch(
+    void invoke<boolean>("follow_deck", { slides, advance, at }).catch(
       () => undefined,
     );
     setSuggestion(null);
@@ -116,7 +118,6 @@ export function useFollow(
    * the moment speech arrives and asking then would put a round trip in the
    * path that has to keep up with somebody talking.
    */
-  const at = preview?.kind === "lyric" ? preview.index : null;
   useEffect(() => {
     if (!following || at == null) return;
     void invoke("follow_at", { index: at }).catch(() => undefined);

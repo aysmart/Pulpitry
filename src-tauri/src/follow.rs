@@ -138,9 +138,13 @@ impl Follower {
     ///
     /// The embedding is done outside because it needs the model, which belongs
     /// to `Semantic` -- and one owner of that model is one queue for it.
-    pub fn watch(&self, slides: Vec<Vec<f32>>) {
-        crate::log_line!("[follow] watching {} slides", slides.len());
-        *self.deck.lock() = Deck { slides, last: None, streak: None, at: None };
+    pub fn watch(&self, slides: Vec<Vec<f32>>, at: Option<usize>) {
+        crate::log_line!("[follow] watching {} slides from {at:?}", slides.len());
+        // The position arrives with the deck rather than after it. It was a
+        // second command, and the two raced: registering the deck cleared the
+        // position that had just been set, so every log line read "from -" and
+        // the ordering weight -- the whole of the last fix -- never applied.
+        *self.deck.lock() = Deck { slides, last: None, streak: None, at };
     }
 
     /// Stops following. Called when the deck is cleared or replaced.
@@ -167,7 +171,7 @@ impl Follower {
     /// Returns nothing far more often than something, which is the intended
     /// behaviour: most sentences in a sermon are not on any slide, and a
     /// follower that answers every one of them is a follower nobody can trust.
-    pub fn consider(&self, spoken: &[f32]) {
+    pub fn consider(&self, spoken: &[f32], heard: &str) {
         let (index, score) = {
             let deck = self.deck.lock();
             if deck.slides.is_empty() {
@@ -205,7 +209,7 @@ impl Follower {
             // are the only way to tell a threshold that is too strict from a
             // deck that genuinely does not match.
             crate::log_line!(
-                "[follow] slide {} at {score:.3} (raw {raw:.3}), next {runner_up:.3}, run {run}, from {}",
+                "[follow] slide {} at {score:.3} (raw {raw:.3}), next {runner_up:.3}, run {run}, from {} — heard {heard:?}",
                 index + 1,
                 here.map(|at| (at + 1).to_string()).unwrap_or_else(|| "-".into())
             );
