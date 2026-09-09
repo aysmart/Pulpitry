@@ -22,8 +22,12 @@ export interface Output {
   display: number | null;
   ndiEnabled: boolean;
   ndiName: string;
+  /** What an output with no screen is drawn at, and how often it is sent. */
   width: number;
   height: number;
+  fps: number;
+  /** An overlay form id, or "none"/"" for the whole screen. */
+  overlay: string;
 }
 
 export interface Settings {

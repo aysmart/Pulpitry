@@ -2,8 +2,30 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { catalogList, type Item } from "../lib/catalog";
+import type { Output } from "../lib/api";
 import { libraryStatus, type Translation } from "../lib/bible";
 import { listDisplays, type Display } from "../lib/projector";
+import { OVERLAY_FORMS } from "../lib/overlays";
+
+/**
+ * The formats a switcher actually expects.
+ *
+ * Offered rather than typed, because a resolution nobody at the far end can
+ * take is a black feed with nothing to say about itself. 1080p30 leads: it is
+ * what most church switchers are set to and it halves the bandwidth of 60.
+ */
+const FORMATS: Array<{
+  label: string;
+  width: number;
+  height: number;
+  fps: number;
+}> = [
+  { label: "1920 × 1080 / 30", width: 1920, height: 1080, fps: 30 },
+  { label: "1920 × 1080 / 60", width: 1920, height: 1080, fps: 60 },
+  { label: "1280 × 720 / 30", width: 1280, height: 720, fps: 30 },
+  { label: "1280 × 720 / 60", width: 1280, height: 720, fps: 60 },
+  { label: "3840 × 2160 / 30", width: 3840, height: 2160, fps: 30 },
+];
 
 /**
  * The congregation-facing outputs, and what each of them shows.
@@ -27,18 +49,6 @@ import { listDisplays, type Display } from "../lib/projector";
  * captured, simply never looked at. The row says so rather than leaving "no
  * screen" to read as a mistake.
  */
-
-interface Output {
-  id: string;
-  name: string;
-  template: string;
-  translation: string;
-  display: number | null;
-  ndiEnabled: boolean;
-  ndiName: string;
-  width: number;
-  height: number;
-}
 
 interface OutputState {
   id: string;
@@ -106,6 +116,11 @@ export function OutputsPanel({
         ndiName: "",
         width: 1920,
         height: 1080,
+        fps: 30,
+        // A lower third by default, because an output somebody adds by hand is
+        // nearly always the one going to the switcher -- and a full-screen
+        // second copy of the projector is what they already had.
+        overlay: "lower-third",
       },
     ]);
 
@@ -226,6 +241,69 @@ export function OutputsPanel({
                 </select>
               </label>
             </div>
+
+            <div className="flex flex-wrap gap-2">
+              <label className="flex min-w-[11rem] flex-1 flex-col gap-1">
+                <span className="text-[11px] text-pulpitry-muted">Shape</span>
+                <select
+                  value={output.overlay || "none"}
+                  onChange={(event) =>
+                    update(output.id, { overlay: event.target.value })
+                  }
+                  className={FIELD}
+                >
+                  {OVERLAY_FORMS.map((form) => (
+                    <option key={form.id} value={form.id}>
+                      {form.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex min-w-[9rem] flex-1 flex-col gap-1">
+                <span className="text-[11px] text-pulpitry-muted">Format</span>
+                <select
+                  value={`${output.width}x${output.height}@${output.fps}`}
+                  onChange={(event) => {
+                    const chosen = FORMATS.find(
+                      (format) =>
+                        `${format.width}x${format.height}@${format.fps}` ===
+                        event.target.value,
+                    );
+                    if (chosen) {
+                      update(output.id, {
+                        width: chosen.width,
+                        height: chosen.height,
+                        fps: chosen.fps,
+                      });
+                    }
+                  }}
+                  className={FIELD}
+                >
+                  {FORMATS.map((format) => (
+                    <option
+                      key={format.label}
+                      value={`${format.width}x${format.height}@${format.fps}`}
+                    >
+                      {format.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {/* What the chosen shape actually does, said where it is chosen.
+                "Lower third" is not self-explanatory to a volunteer, and the
+                difference between a picture and something keyable is the whole
+                reason this pane exists. */}
+            <p className="text-[11px] leading-snug text-pulpitry-muted">
+              {OVERLAY_FORMS.find(
+                (form) => form.id === (output.overlay || "none"),
+              )?.hint ?? ""}
+              {output.overlay && output.overlay !== "none"
+                ? " Sent with a transparent background, so a switcher can lay it over a camera."
+                : ""}
+            </p>
 
             {/* Said where it is chosen. A church learning during a service that
                 three feeds do not fit down their wifi is the failure this

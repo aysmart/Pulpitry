@@ -231,14 +231,43 @@ pub struct Output {
     /// never opens this still gets "Pulpitry — Foyer" rather than a second
     /// source called "Pulpitry" that a switcher operator cannot tell apart.
     pub ndi_name: String,
-    /// What an output with no screen is drawn at.
+    /// What an output with no screen is drawn at, and how often it is sent.
     ///
     /// A monitor-backed output takes its size from the monitor, which is the
     /// only size that can be right for it. One that exists only on the network
-    /// has no monitor to ask, so it is told -- and 1080p is what a church's
-    /// switcher expects unless somebody says otherwise.
+    /// has no monitor to ask, so it is told -- and 1080p at 30 is what a
+    /// church's switcher expects unless somebody says otherwise.
     pub width: u32,
     pub height: u32,
+    pub fps: u32,
+
+    /// Which overlay form it draws, or `none` for the whole screen.
+    ///
+    /// # Why this is the difference that matters
+    ///
+    /// A full-screen output is a *picture*: a background, and words on it. It
+    /// is what a projector wants and it is useless to a video switcher, which
+    /// already has a camera to show and needs the words *over* it.
+    ///
+    /// An overlay output draws only its own furniture -- a bar, a chip, a
+    /// caption -- on nothing at all. The window is transparent, the capture
+    /// keeps the alpha, and NDI carries it, so the far end keys it over
+    /// whatever it is already showing. That is the whole point: what we send
+    /// is the template, not a photograph of a screen with the template on it.
+    ///
+    /// Empty and "none" both mean the full screen, so an output written before
+    /// this existed keeps behaving as it did.
+    pub overlay: String,
+}
+
+impl Output {
+    /// Whether this output is drawn on nothing, to be keyed at the far end.
+    ///
+    /// The one question the window builder, the capture and the projector page
+    /// all need answered the same way, so it is answered once.
+    pub fn is_overlay(&self) -> bool {
+        !matches!(self.overlay.trim(), "" | "none")
+    }
 }
 
 impl Default for Output {
@@ -253,6 +282,8 @@ impl Default for Output {
             ndi_name: String::new(),
             width: 1920,
             height: 1080,
+            fps: 30,
+            overlay: String::new(),
         }
     }
 }

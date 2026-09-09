@@ -150,7 +150,12 @@ impl std::fmt::Display for Problem {
 }
 
 #[cfg(target_os = "macos")]
-pub fn start(window_title: &str, fps: u32, latest: Latest) -> Result<Capture, Problem> {
+pub fn start(
+    window_title: &str,
+    fps: u32,
+    keep_alpha: bool,
+    latest: Latest,
+) -> Result<Capture, Problem> {
     use screencapturekit::shareable_content::SCShareableContent;
     use screencapturekit::stream::configuration::SCStreamConfiguration;
     use screencapturekit::stream::content_filter::SCContentFilter;
@@ -236,6 +241,29 @@ pub fn start(window_title: &str, fps: u32, latest: Latest) -> Result<Capture, Pr
         .set_height(height)
         .set_pixel_format(screencapturekit::stream::configuration::pixel_format::PixelFormat::BGRA)
         .set_fps(fps.max(1));
+
+    /*
+     * Whether what comes back is a picture or a piece of furniture.
+     *
+     * A full-screen output is composited onto an opaque background, which is
+     * what a projector is. An overlay is drawn on nothing so that the far end
+     * can key it over a camera -- and that only survives the trip if every
+     * stage keeps the alpha. This is the stage that would quietly throw it
+     * away: given any background colour at all, ScreenCaptureKit flattens the
+     * window onto it and hands back a rectangle with the overlay sitting on a
+     * solid block. NDI would carry it faithfully, and the switcher operator
+     * would key a colour they never asked for.
+     *
+     * The window's drop shadow is dealt with at the other end, by building an
+     * overlay window without one. ScreenCaptureKit can be told to omit
+     * shadows, but only on macOS 14 and up and only through a call that is not
+     * availability-checked -- on 13 it is an unrecognised selector and the
+     * application stops. A window that never had a shadow needs no such call
+     * and works on every version.
+     */
+    if keep_alpha {
+        configuration.set_background_color_rgba(0.0, 0.0, 0.0, 0.0);
+    }
 
     struct Sink {
         latest: Latest,

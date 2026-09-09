@@ -405,7 +405,14 @@ export const getTheme = () => invoke<ProjectorTheme>("get_theme");
  * before there was more than one kind.
  */
 export const themeForWindow = (label: string) =>
-  invoke<ProjectorTheme>("theme_for_window", { label });
+  invoke<WindowLook>("theme_for_window", { label });
+
+/** How one window should draw: its look, and the shape it draws in. */
+export interface WindowLook {
+  theme: ProjectorTheme;
+  /** An overlay form id, or "none" for the whole screen. */
+  overlay: string;
+}
 
 /** Grants the webview read access to a newly chosen background. */
 export const allowBackground = (path: string | null) =>

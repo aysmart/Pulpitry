@@ -29,6 +29,8 @@ import {
   type ProjectorTheme,
 } from "./lib/theme";
 import { Backdrop } from "./components/Backdrop";
+import { OverlayView } from "./components/OverlayView";
+import { plainText, type OverlayForm } from "./lib/overlays";
 import { TickerBand } from "./components/TickerBand";
 import "./styles.css";
 
@@ -60,6 +62,15 @@ function titledItself(body: LiveBody): boolean {
 function Projector() {
   const [content, setContent] = useState<LiveContent | null>(null);
   const [theme, setTheme] = useState<ProjectorTheme>(DEFAULT_THEME);
+  /*
+   * Which shape this window draws in.
+   *
+   * "none" is the whole screen, which every window was and most still are.
+   * Anything else is furniture on transparency, to be keyed at the far end --
+   * and the difference has to be known before the first paint, or a lower
+   * third flashes as a full-screen card on the way to being itself.
+   */
+  const [form, setForm] = useState<OverlayForm>("none");
   const [audio, setAudio] = useState<AudioState>({ muted: false, volume: 1 });
   const [ticker, setTicker] = useState<Ticker>({
     text: "",
@@ -91,7 +102,11 @@ function Projector() {
     // in somebody else's look.
     const mine = getCurrentWindow().label;
     void themeForWindow(mine)
-      .then((current) => active && setTheme(current))
+      .then((look) => {
+        if (!active) return;
+        setTheme(look.theme);
+        setForm(look.overlay as OverlayForm);
+      })
       .catch(() => undefined);
     void getAudio()
       .then((current) => active && setAudio(current))
@@ -110,7 +125,11 @@ function Projector() {
       // only version that stays correct for a window with its own template.
       onTheme(() => {
         void themeForWindow(mine)
-          .then((current) => active && setTheme(current))
+          .then((look) => {
+            if (!active) return;
+            setTheme(look.theme);
+            setForm(look.overlay as OverlayForm);
+          })
           .catch(() => undefined);
       }),
       onAudio((next) => active && setAudio(next)),
@@ -145,6 +164,30 @@ function Projector() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  /*
+   * An overlay draws its furniture and nothing else.
+   *
+   * No backdrop, no ticker band, no 16:9 letterboxing -- every one of those
+   * paints across the frame, and a frame painted across is a picture rather
+   * than something a switcher can key. The container query unit still works,
+   * so a form drawn at 1280 and at 3840 is the same design.
+   */
+  if (form !== "none") {
+    return (
+      <div
+        className="relative h-full w-full overflow-hidden [container-type:size]"
+        style={{ background: "transparent" }}
+      >
+        <OverlayView
+          form={form}
+          theme={theme}
+          reference={content?.caption ?? null}
+          text={plainText(content)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div

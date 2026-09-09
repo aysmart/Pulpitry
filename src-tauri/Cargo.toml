@@ -30,7 +30,11 @@ castavox-core = { git = "https://github.com/aysmart/castavox-core", branch = "ma
 
 # protocol-asset lets the projector read a chosen background image or video
 # through asset:, scoped at runtime to that one file.
-tauri = { version = "2", features = ["protocol-asset"] }
+# `macos-private-api` is what makes a transparent window possible, and a
+# transparent window is what lets an output be sent as a keyable overlay
+# rather than a picture of a screen. Not an App Store concern: this is
+# distributed as a disk image and always has been.
+tauri = { version = "2", features = ["protocol-asset", "macos-private-api"] }
 tauri-plugin-shell = "2"
 
 # Loading the NDI runtime, which is the church's own installation rather than

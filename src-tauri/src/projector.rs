@@ -513,6 +513,7 @@ impl Projector {
         name: &str,
         display: Option<usize>,
         size: (u32, u32),
+        overlay: bool,
     ) -> Result<Option<usize>> {
         let label = label_for(id);
         let title = title_for(id, name);
@@ -568,10 +569,30 @@ impl Projector {
             .always_on_top(landed.is_some())
             .position(position.0, position.1)
             .inner_size(extent.0, extent.1)
-            // The projector's own paper: every output is the same output, and
-            // one that flashed black between items would be the one thing
-            // distinguishing it.
-            .background_color(tauri::window::Color(244, 241, 234, 255))
+            /*
+             * Transparent, for an output that is furniture rather than a
+             * picture.
+             *
+             * An overlay is drawn on nothing so the far end can key it over
+             * a camera. That needs three things to agree, and this is the
+             * first: the window itself must have no paper. The page draws no
+             * backdrop, and the capture is told to keep the alpha rather than
+             * flattening it onto a colour.
+             *
+             * The paper stays for a full-screen output, because a projector
+             * that flashed black between items would be the one thing
+             * distinguishing it from a screen showing nothing.
+             */
+            .transparent(overlay)
+            // A window's drop shadow is captured with it, and a grey halo
+            // down two edges of an overlay is not something a switcher can
+            // key away.
+            .shadow(!overlay)
+            .background_color(if overlay {
+                tauri::window::Color(0, 0, 0, 0)
+            } else {
+                tauri::window::Color(244, 241, 234, 255)
+            })
             .build()
             .map_err(|err| anyhow!("could not open the {name} window: {err}"))?;
 
@@ -602,7 +623,7 @@ impl Projector {
     /// service the projector is essentially never the laptop screen.
     pub fn open(&self, requested: Option<usize>) -> Result<ProjectorState> {
         let index = self
-            .open_output(MAIN_ID, "Projector", Some(Self::chosen(&self.app, requested)?), (0, 0))?
+            .open_output(MAIN_ID, "Projector", Some(Self::chosen(&self.app, requested)?), (0, 0), false)?
             .ok_or_else(|| anyhow!("the projector must land on a display"))?;
         *self.display.lock() = Some(index);
         Ok(self.state())
@@ -654,6 +675,7 @@ impl Projector {
                 "Second display",
                 Some(Self::chosen(&self.app, requested)?),
                 (0, 0),
+                false,
             )?
             .ok_or_else(|| anyhow!("the second display must land on a display"))?;
         *self.second.lock() = Some(index);

@@ -243,18 +243,24 @@ fn theme_for_window(
     app: tauri::AppHandle,
     catalog: State<'_, Arc<catalog::Catalog>>,
     label: String,
-) -> CommandResult<ProjectorTheme> {
+) -> CommandResult<WindowLook> {
     let settings = settings::load(&app).map_err(to_message)?;
 
-    let template = settings
+    let found = settings
         .outputs
         .iter()
-        .find(|output| projector::label_for(&output.id) == label)
-        .map(|output| output.template.trim().to_string())
-        .unwrap_or_default();
+        .find(|output| projector::label_for(&output.id) == label);
+
+    // Empty for the two original windows, which are whole-screen outputs and
+    // have no row in this list to carry an overlay.
+    let overlay = found
+        .map(|output| output.overlay.trim().to_string())
+        .filter(|form| !form.is_empty())
+        .unwrap_or_else(|| "none".to_string());
+    let template = found.map(|output| output.template.trim().to_string()).unwrap_or_default();
 
     if template.is_empty() {
-        return Ok(settings.projector);
+        return Ok(WindowLook { theme: settings.projector, overlay });
     }
 
     // A template the operator has since deleted falls back to the shared theme
@@ -269,7 +275,19 @@ fn theme_for_window(
             _ => None,
         });
 
-    Ok(found.unwrap_or(settings.projector))
+    Ok(WindowLook { theme: found.unwrap_or(settings.projector), overlay })
+}
+
+/// How one window should draw: its look, and the shape it draws in.
+///
+/// Both at once because the window needs both before it can paint anything,
+/// and two round trips would let it paint once wrongly first.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowLook {
+    pub theme: ProjectorTheme,
+    /// The overlay form, or "none" for the whole screen.
+    pub overlay: String,
 }
 
 #[tauri::command]
@@ -1444,7 +1462,13 @@ async fn open_output(
         .ok_or_else(|| "That output no longer exists.".to_string())?;
 
     projector
-        .open_output(&output.id, &output.name, output.display, (output.width, output.height))
+        .open_output(
+            &output.id,
+            &output.name,
+            output.display,
+            (output.width, output.height),
+            output.is_overlay(),
+        )
         .map_err(to_message)?;
 
     Ok(OutputState { open: projector.output_open(&id), id })

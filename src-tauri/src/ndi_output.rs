@@ -89,7 +89,7 @@ impl Output {
         }
 
         let latest = Latest::default();
-        let capture = ndi_capture::start(PROJECTOR_TITLE, FPS, latest.clone())
+        let capture = ndi_capture::start(PROJECTOR_TITLE, FPS, false, latest.clone())
             .map_err(|problem| problem.to_string())?;
 
         let running = Arc::new(AtomicBool::new(true));
