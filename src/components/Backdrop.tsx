@@ -1,4 +1,10 @@
-import { backgroundStyle, backgroundUrl, textureStyle, type ProjectorTheme } from "../lib/theme";
+import {
+  backgroundStyle,
+  backgroundUrl,
+  pictureStyle,
+  textureStyle,
+  type ProjectorTheme,
+} from "../lib/theme";
 
 /**
  * Everything behind the words.
@@ -25,10 +31,18 @@ export function Backdrop({
 
   return (
     <>
+      {/* Under everything, and visible where a "contain" picture does not
+          reach the edges: the bars are the theme's own colour rather than
+          black, which is what makes contain usable at all. */}
       <div className="absolute inset-0" style={backgroundStyle(theme)} />
 
       {file && theme.backgroundKind === "image" ? (
-        <img src={file} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={file}
+          alt=""
+          className="absolute inset-0 h-full w-full"
+          style={pictureStyle(theme)}
+        />
       ) : null}
 
       {file && theme.backgroundKind === "video" ? (
@@ -41,7 +55,8 @@ export function Backdrop({
           muted
           playsInline
           preload="metadata"
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full"
+          style={pictureStyle(theme)}
         />
       ) : null}
 
@@ -54,7 +69,9 @@ export function Backdrop({
         />
       ) : null}
 
-      {texture ? <div className="pointer-events-none absolute inset-0" style={texture} /> : null}
+      {texture ? (
+        <div className="pointer-events-none absolute inset-0" style={texture} />
+      ) : null}
     </>
   );
 }

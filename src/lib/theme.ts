@@ -18,6 +18,12 @@ export interface ProjectorTheme {
   gradientAngle: number;
   backgroundPath: string | null;
   backgroundDim: number;
+  /** "cover" | "contain" | "fill". Empty means cover. */
+  backgroundFit: string;
+  /** Scales the picture about its centre. 1.0 is untouched. */
+  backgroundScale: number;
+  /** Blurs the picture, in pixels at 1080p. 0 is off. */
+  backgroundBlur: number;
   texture: Texture;
   /** How strongly the texture reads, 0 to 1. */
   textureStrength: number;
@@ -80,6 +86,9 @@ export const DEFAULT_THEME: ProjectorTheme = {
   gradientAngle: 160,
   backgroundPath: null,
   backgroundDim: 0,
+  backgroundFit: "",
+  backgroundScale: 1,
+  backgroundBlur: 0,
   texture: "none",
   textureStrength: 0.35,
   showReference: true,
@@ -385,6 +394,47 @@ export function withAlpha(hex: string, alpha: number): string {
     1,
     Math.max(0, alpha),
   )})`;
+}
+
+/**
+ * How the picture sits in the frame.
+ *
+ * One place, so the projector, the stage panes, the slide editor and the
+ * thumbnails cannot disagree -- an operator who blurs a photograph and sees it
+ * sharp on the wall has been lied to, which is the whole reason `Backdrop`
+ * exists as one component.
+ *
+ * The blur is scaled by the container rather than fixed in pixels: the same
+ * theme is drawn at 1920 on a wall and at 320 in a thumbnail, and a 40px blur
+ * would erase the thumbnail entirely. Expressed against a 1080p frame's width,
+ * as every other size in this file is.
+ *
+ * `cqw` rather than `cqh`, and that is not a preference. The thumbnails are
+ * `container-type: inline-size`, which has no block size to measure -- `cqh`
+ * there silently falls back to the viewport, so a gentle blur on a wall would
+ * have been an opaque smear in every thumbnail. Width works in both kinds of
+ * container, and the frames are 16:9 either way.
+ *
+ * A blurred picture is also scaled up a little, always. Blur samples beyond
+ * the edge of the image and leaves a soft transparent border where there is
+ * nothing to sample -- a pale halo round all four sides of the screen, which
+ * looks like a fault. Growing it past the frame puts that edge outside.
+ */
+export function pictureStyle(theme: ProjectorTheme): React.CSSProperties {
+  const fit = theme.backgroundFit || "cover";
+  const blur = Math.max(0, theme.backgroundBlur || 0);
+  // 1.06 covers the softest edge a large blur leaves; more would crop a
+  // "contain" picture that was chosen to be seen whole.
+  const bleed = blur > 0 ? 1.06 : 1;
+  const scale = Math.max(0.2, theme.backgroundScale || 1) * bleed;
+
+  return {
+    objectFit:
+      fit === "fill" ? "fill" : fit === "contain" ? "contain" : "cover",
+    transform: scale === 1 ? undefined : `scale(${scale})`,
+    filter:
+      blur > 0 ? `blur(${((blur / 1920) * 100).toFixed(3)}cqw)` : undefined,
+  };
 }
 
 /** Resolves a local file path to something the webview may load. */

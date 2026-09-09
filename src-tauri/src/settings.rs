@@ -355,6 +355,31 @@ pub struct ProjectorTheme {
     /// Darkens the background behind the text, 0 to 1. The single most
     /// effective way to keep words readable over a bright photograph.
     pub background_dim: f32,
+
+    /// How the picture meets the frame: "cover" | "contain" | "fill".
+    ///
+    /// Cover fills the screen and crops whatever does not fit, which is right
+    /// almost always -- a projector has one shape and a photograph has
+    /// another. Contain is for a picture that must be seen whole: a diagram, a
+    /// map, an image with words in it, where cropping loses the point. Fill
+    /// stretches, which distorts, and exists because somebody occasionally
+    /// wants it and refusing would be us deciding.
+    ///
+    /// Empty means cover, so a theme written before this keeps what it had.
+    pub background_fit: String,
+    /// Scales the picture about its centre. 1.0 is untouched.
+    ///
+    /// For the photograph whose subject sits just outside the crop, which is
+    /// otherwise unfixable without opening an image editor at ten to eleven on
+    /// a Sunday.
+    pub background_scale: f32,
+    /// Blurs the picture, in pixels at 1080p. 0 is off.
+    ///
+    /// A different instrument from the scrim, and the better one for a busy
+    /// photograph: dimming makes a picture darker, blurring makes it stop
+    /// competing. Together they turn nearly any photograph into a background
+    /// that words can sit on.
+    pub background_blur: f32,
     /// "none" | "grain" | "linen" | "dots" | "vignette". Laid over whatever
     /// the background is, so a flat colour stops looking like a flat colour.
     pub texture: String,
@@ -404,6 +429,11 @@ impl Default for ProjectorTheme {
             gradient_angle: 160.0,
             background_path: None,
             background_dim: 0.0,
+            // Cover, untouched and unblurred: what every theme drew before
+            // these existed, so nothing already saved changes appearance.
+            background_fit: String::new(),
+            background_scale: 1.0,
+            background_blur: 0.0,
             texture: "none".into(),
             texture_strength: 0.35,
             show_reference: true,

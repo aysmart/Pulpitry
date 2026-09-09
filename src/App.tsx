@@ -76,6 +76,8 @@ interface VoiceCommand {
   /** A relative chapter move: 1 for "next chapter", -1 for "previous". */
   by?: number;
   verse?: number | null;
+  /** An absolute slide, counted from one as a person counts. */
+  to?: number | null;
 }
 
 function ready(settings: SettingsView | null): boolean {
@@ -255,10 +257,27 @@ export default function App() {
   const media = useMedia();
   const { ticker, change: changeTicker } = useTicker();
 
+  /*
+   * Where the service has got to in its plan.
+   *
+   * A ref rather than state: nothing renders from it, and making it state
+   * would re-register the voice handler on every stage -- which drops whatever
+   * arrives during the swap, and an instruction lost that way looks exactly
+   * like the operator having to say it twice.
+   *
+   * Null until something has been staged from the plan. "Next slide" with
+   * nothing staged starts at the top, which is what somebody who has just
+   * opened a plan means by it.
+   */
+  const planAt = useRef<number | null>(null);
+
   const stageEntry = useCallback(
     async (index: number) => {
       const staged = await schedule.stage(index);
-      if (staged) previewItem(staged);
+      if (staged) {
+        previewItem(staged);
+        planAt.current = index;
+      }
       return staged;
     },
     [schedule, previewItem],
@@ -600,6 +619,37 @@ export default function App() {
           verse: payload.verse ?? null,
         });
         break;
+      case "slide": {
+        /*
+         * The plan is the deck. Pulpitry's slides are its running order, and
+         * "next slide" from a platform means the next thing in the service --
+         * not the next verse, which has its own words.
+         */
+        const entries = schedule.entries;
+        if (entries.length === 0) break;
+
+        const to =
+          payload.to != null
+            ? // Counted from one, as a person counts.
+              payload.to - 1
+            : planAt.current == null
+              ? // Nothing staged yet: "next slide" means start at the top.
+                0
+              : planAt.current + (payload.by ?? 0);
+
+        // Stop at the ends rather than wrapping. Running off a plan into its
+        // own beginning during a service would be worse than doing nothing,
+        // and doing nothing is a thing an operator can see and correct.
+        if (to < 0 || to >= entries.length) break;
+
+        void stageEntry(to).then((staged) => {
+          // Live if something already was: the same rule the other
+          // instructions follow, so speaking never puts something in front of
+          // a congregation that was not already there.
+          if (staged && live) showItem(staged);
+        });
+        break;
+      }
       case "switch":
         // A translation nobody has installed is ignored rather than
         // reported. The listener only ever names one that is in the

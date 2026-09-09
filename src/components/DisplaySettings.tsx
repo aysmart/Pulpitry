@@ -286,17 +286,65 @@ export function DisplaySettings({
               />
             </>
           ) : (
-            <Slider
-              label="Dim behind text"
-              value={theme.backgroundDim}
-              min={0}
-              max={0.85}
-              step={0.05}
-              format={(value) =>
-                value === 0 ? "off" : `${Math.round(value * 100)}%`
-              }
-              onChange={(value) => set("backgroundDim", value)}
-            />
+            <>
+              <Slider
+                label="Dim behind text"
+                value={theme.backgroundDim}
+                min={0}
+                max={0.85}
+                step={0.05}
+                format={(value) =>
+                  value === 0 ? "off" : `${Math.round(value * 100)}%`
+                }
+                onChange={(value) => set("backgroundDim", value)}
+              />
+
+              {/* A different instrument from the dim, and often the better
+                  one: dimming makes a picture darker, blurring makes it stop
+                  competing. Together they turn nearly any photograph into a
+                  background that words can sit on. */}
+              <Slider
+                label="Blur"
+                value={theme.backgroundBlur}
+                min={0}
+                max={60}
+                step={2}
+                format={(value) => (value === 0 ? "off" : `${value}px`)}
+                onChange={(value) => set("backgroundBlur", value)}
+              />
+
+              <Slider
+                label="Scale"
+                value={theme.backgroundScale}
+                min={0.5}
+                max={2.5}
+                step={0.05}
+                format={(value) => `${value.toFixed(2)}×`}
+                onChange={(value) => set("backgroundScale", value)}
+              />
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[12px] text-pulpitry-muted">
+                  How it meets the frame
+                </span>
+                <select
+                  value={theme.backgroundFit || "cover"}
+                  onChange={(event) => set("backgroundFit", event.target.value)}
+                  className={FIELD}
+                >
+                  <option value="cover">Fill the screen, cropping</option>
+                  <option value="contain">Show all of it, with bars</option>
+                  <option value="fill">Stretch to fit</option>
+                </select>
+                <span className="text-[11px] leading-snug text-pulpitry-muted">
+                  {theme.backgroundFit === "contain"
+                    ? "For a picture that loses its point when cropped — a diagram, a map, an image with words in it. The bars take the colour above."
+                    : theme.backgroundFit === "fill"
+                      ? "Distorts. Here because it is occasionally wanted, and refusing would be us deciding."
+                      : "Right almost always: a screen has one shape and a photograph has another."}
+                </span>
+              </label>
+            </>
           )}
         </div>
       </div>
