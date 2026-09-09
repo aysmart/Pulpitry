@@ -273,6 +273,17 @@ async fn follow_deck(
     Ok(true)
 }
 
+/// Where the staged deck is now.
+///
+/// Sent whenever the operator moves, by hand or by voice. The follower weighs
+/// it: a deck is presented in order, and a slide behind the speaker is the
+/// less likely answer -- which is information the similarity does not contain
+/// and cannot be recovered by any amount of tuning it.
+#[tauri::command]
+fn follow_at(follower: State<'_, Arc<follow::Follower>>, index: usize) {
+    follower.at(index);
+}
+
 #[tauri::command]
 fn get_stage(projector: State<'_, Arc<Projector>>) -> projector::StageState {
     projector.stage()
@@ -2208,6 +2219,7 @@ pub fn run() {
             set_background,
             note,
             follow_deck,
+            follow_at,
             get_stage,
             set_stage,
             get_theme,

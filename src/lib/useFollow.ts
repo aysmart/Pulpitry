@@ -109,6 +109,19 @@ export function useFollow(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [following, advance, deckKey]);
 
+  /*
+   * Where the deck is, told as it changes.
+   *
+   * Sent on every move rather than asked for, because the follower needs it at
+   * the moment speech arrives and asking then would put a round trip in the
+   * path that has to keep up with somebody talking.
+   */
+  const at = preview?.kind === "lyric" ? preview.index : null;
+  useEffect(() => {
+    if (!following || at == null) return;
+    void invoke("follow_at", { index: at }).catch(() => undefined);
+  }, [following, at]);
+
   const stop = useCallback(() => {
     setFollowing(false);
     setSuggestion(null);

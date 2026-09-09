@@ -57,6 +57,46 @@ const FLOOR: f32 = 0.42;
 /// arrived somewhere.
 const STREAK: u32 = 2;
 
+/// How much a slide is marked down for being out of the speaker's way.
+///
+/// # Why order is worth more than any threshold
+///
+/// A twenty-slide deck about one sermon embeds almost identically: measured,
+/// the top scores sit between 0.53 and 0.76 with the runner-up 0.02 to 0.05
+/// behind. The model can barely tell one slide from another, and no threshold
+/// over those numbers can either -- which is how a stretch of preaching
+/// offered slide 7 and then slide 1.
+///
+/// But a deck is *presented in order*, and that is a fact about services
+/// rather than about text. Somebody on slide 7 is very likely heading for 8;
+/// they are not going back to 1. Weighing that costs nothing and is worth more
+/// than any amount of tuning the similarity, because it is information the
+/// similarity does not contain.
+///
+/// Marked down rather than ruled out. A preacher genuinely does turn back to
+/// an earlier point, and a follower that could not follow them there would be
+/// wrong in a way nobody could correct.
+const AHEAD_PENALTY: f32 = 0.012;
+const BACK_PENALTY: f32 = 0.030;
+/// Never enough to silence a slide that is plainly right.
+const MOST_PENALTY: f32 = 0.15;
+/// Slides just ahead are where a speaker is going, and cost nothing.
+const NATURAL_REACH: i64 = 3;
+
+/// What a slide's distance from the staged one costs it.
+fn out_of_the_way(at: Option<usize>, index: usize) -> f32 {
+    let Some(at) = at else { return 0.0 };
+    let delta = index as i64 - at as i64;
+    let penalty = if delta >= 0 && delta <= NATURAL_REACH {
+        0.0
+    } else if delta > NATURAL_REACH {
+        (delta - NATURAL_REACH) as f32 * AHEAD_PENALTY
+    } else {
+        (-delta) as f32 * BACK_PENALTY
+    };
+    penalty.min(MOST_PENALTY)
+}
+
 pub const EVENT: &str = "slide:suggested";
 
 #[derive(Debug, Clone, Serialize)]
@@ -78,6 +118,8 @@ struct Deck {
     last: Option<usize>,
     /// Which slide has been winning, and for how many sentences.
     streak: Option<(usize, u32)>,
+    /// Which slide is staged now, so the deck's own order can be weighed.
+    at: Option<usize>,
 }
 
 pub struct Follower {
@@ -98,12 +140,18 @@ impl Follower {
     /// to `Semantic` -- and one owner of that model is one queue for it.
     pub fn watch(&self, slides: Vec<Vec<f32>>) {
         crate::log_line!("[follow] watching {} slides", slides.len());
-        *self.deck.lock() = Deck { slides, last: None, streak: None };
+        *self.deck.lock() = Deck { slides, last: None, streak: None, at: None };
     }
 
     /// Stops following. Called when the deck is cleared or replaced.
     pub fn forget(&self) {
         *self.deck.lock() = Deck::default();
+    }
+
+    /// Where the deck is now, so a slide behind the speaker is weighed as the
+    /// less likely thing it is.
+    pub fn at(&self, index: usize) {
+        self.deck.lock().at = Some(index);
     }
 
     pub fn set_advance(&self, on: bool) {
@@ -126,16 +174,20 @@ impl Follower {
                 return;
             }
 
-            let mut scored: Vec<(usize, f32)> = deck
+            let here = deck.at;
+            let mut scored: Vec<(usize, f32, f32)> = deck
                 .slides
                 .iter()
                 .enumerate()
-                .map(|(at, slide)| (at, castavox_core::embed::cosine(spoken, slide)))
+                .map(|(index, slide)| {
+                    let raw = castavox_core::embed::cosine(spoken, slide);
+                    (index, raw - out_of_the_way(here, index), raw)
+                })
                 .collect();
             scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-            let (index, score) = scored[0];
-            let runner_up = scored.get(1).map(|(_, s)| *s).unwrap_or(0.0);
+            let (index, score, raw) = scored[0];
+            let runner_up = scored.get(1).map(|(_, s, _)| *s).unwrap_or(0.0);
 
             drop(deck);
             let mut deck = self.deck.lock();
@@ -153,8 +205,9 @@ impl Follower {
             // are the only way to tell a threshold that is too strict from a
             // deck that genuinely does not match.
             crate::log_line!(
-                "[follow] slide {} at {score:.3}, next {runner_up:.3}, run {run} (floor {FLOOR}, streak {STREAK})",
-                index + 1
+                "[follow] slide {} at {score:.3} (raw {raw:.3}), next {runner_up:.3}, run {run}, from {}",
+                index + 1,
+                here.map(|at| (at + 1).to_string()).unwrap_or_else(|| "-".into())
             );
 
             if score < FLOOR || run < STREAK {
@@ -168,7 +221,7 @@ impl Follower {
         // look like it were finding something new each sentence.
         {
             let mut deck = self.deck.lock();
-            if deck.last == Some(index) {
+            if deck.last == Some(index) || deck.at == Some(index) {
                 return;
             }
             deck.last = Some(index);
@@ -204,6 +257,48 @@ mod tests {
         (3, 0.643, 0.608),
         (3, 0.687, 0.656),
     ];
+
+    /// The jump this was built to stop.
+    ///
+    /// From the log: on slide 7, the deck offered slide 1 -- six slides
+    /// backwards in a sermon that had been moving forwards -- on a score of
+    /// 0.681 against a runner-up of 0.639. Both numbers are ordinary for this
+    /// deck, which is exactly why similarity alone could not tell them apart.
+    #[test]
+    fn a_slide_behind_the_speaker_loses_to_one_in_front() {
+        let here = Some(6); // slide 7, counted from zero.
+
+        // Slide 1, scoring well, six behind.
+        let back = 0.681 - out_of_the_way(here, 0);
+        // Slide 8, scoring *worse*, one ahead: where a speaker actually goes.
+        let on = 0.639 - out_of_the_way(here, 7);
+
+        assert!(on > back, "the next slide should beat one six back: {on} vs {back}");
+    }
+
+    /// Marked down, never ruled out.
+    #[test]
+    fn a_preacher_can_still_turn_back() {
+        let here = Some(6);
+        // Plainly the right slide, well clear of everything else, behind us.
+        let back = 0.90 - out_of_the_way(here, 1);
+        let ahead = 0.62 - out_of_the_way(here, 7);
+        assert!(back > ahead, "a strong match behind must still win");
+
+        // And the penalty cannot grow without limit: a deck of two hundred
+        // would otherwise make its first slide unreachable for ever.
+        assert!(out_of_the_way(Some(199), 0) <= MOST_PENALTY);
+    }
+
+    /// The slides just ahead are free, because that is where a speaker goes.
+    #[test]
+    fn the_next_few_slides_cost_nothing() {
+        let here = Some(3);
+        for ahead in 0..=NATURAL_REACH {
+            assert_eq!(out_of_the_way(here, 3 + ahead as usize), 0.0, "+{ahead}");
+        }
+        assert!(out_of_the_way(here, 3 + NATURAL_REACH as usize + 1) > 0.0);
+    }
 
     /// What the old rule did to that stretch: almost nothing.
     #[test]
