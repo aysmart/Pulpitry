@@ -393,7 +393,7 @@ impl Detector {
                 let semantic = Arc::clone(&self.semantic);
                 let spoken = recent;
                 std::thread::spawn(move || match semantic.embed_spoken(&spoken) {
-                    Ok(vector) => follower.consider(&vector, &spoken),
+                    Ok(vector) => follower.consider(&vector, spoken.split_whitespace().count()),
                     // Silent: a deck that cannot be followed for one sentence
                     // is not worth a line in front of an operator, and the
                     // embedder has already logged whatever went wrong.

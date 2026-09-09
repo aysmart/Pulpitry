@@ -171,7 +171,7 @@ impl Follower {
     /// Returns nothing far more often than something, which is the intended
     /// behaviour: most sentences in a sermon are not on any slide, and a
     /// follower that answers every one of them is a follower nobody can trust.
-    pub fn consider(&self, spoken: &[f32], heard: &str) {
+    pub fn consider(&self, spoken: &[f32], words: usize) {
         let (index, score) = {
             let deck = self.deck.lock();
             if deck.slides.is_empty() {
@@ -209,7 +209,13 @@ impl Follower {
             // are the only way to tell a threshold that is too strict from a
             // deck that genuinely does not match.
             crate::log_line!(
-                "[follow] slide {} at {score:.3} (raw {raw:.3}), next {runner_up:.3}, run {run}, from {} — heard {heard:?}",
+                // The *number* of words, never the words.
+                //
+                // This logged the transcript itself while the matching was
+                // being tuned, which put a sermon into the file a church sends
+                // us when asking for help. The count is the whole of what was
+                // diagnostically useful about it.
+                "[follow] slide {} at {score:.3} (raw {raw:.3}), next {runner_up:.3}, run {run}, from {}, {words} words",
                 index + 1,
                 here.map(|at| (at + 1).to_string()).unwrap_or_else(|| "-".into())
             );
