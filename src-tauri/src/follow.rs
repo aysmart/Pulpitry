@@ -40,13 +40,22 @@ use tauri::{AppHandle, Emitter};
 /// the screen. The cost of a wrong answer is higher, so the bar is.
 const FLOOR: f32 = 0.42;
 
-/// How much better the best slide must be than the runner-up.
+/// How many sentences in a row a slide must win before it is offered.
 ///
-/// A sermon's slides are about one subject and read alike; three of them
-/// scoring 0.44, 0.43 and 0.43 is not a match, it is the deck being coherent.
-/// Without this the suggestion flickers between them sentence by sentence,
-/// which is worse than silence because it invites the operator to follow it.
-const LEAD: f32 = 0.05;
+/// # Why consistency and not a lead
+///
+/// This asked the best slide to beat the runner-up by 0.05, and measured
+/// against a real sermon that was close to a mute button. A twenty-slide deck
+/// about one subject scores 0.53 to 0.69 across the board, with gaps of 0.02
+/// to 0.04 -- so almost every genuine match was thrown away for being in a
+/// coherent deck, which is the normal case rather than the exception.
+///
+/// The signal was never the size of the gap. It is that the same slide keeps
+/// winning: over one stretch of preaching slide four came first in nine
+/// consecutive sentences, never by much, and it was obviously the right
+/// answer. One sentence agreeing is noise; two in a row is a speaker who has
+/// arrived somewhere.
+const STREAK: u32 = 2;
 
 pub const EVENT: &str = "slide:suggested";
 
@@ -67,6 +76,8 @@ struct Deck {
     slides: Vec<Vec<f32>>,
     /// The last slide suggested, so the same one is not offered twice running.
     last: Option<usize>,
+    /// Which slide has been winning, and for how many sentences.
+    streak: Option<(usize, u32)>,
 }
 
 pub struct Follower {
@@ -86,7 +97,8 @@ impl Follower {
     /// The embedding is done outside because it needs the model, which belongs
     /// to `Semantic` -- and one owner of that model is one queue for it.
     pub fn watch(&self, slides: Vec<Vec<f32>>) {
-        *self.deck.lock() = Deck { slides, last: None };
+        crate::log_line!("[follow] watching {} slides", slides.len());
+        *self.deck.lock() = Deck { slides, last: None, streak: None };
     }
 
     /// Stops following. Called when the deck is cleared or replaced.
@@ -123,15 +135,30 @@ impl Follower {
             scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
             let (index, score) = scored[0];
-            if score < FLOOR {
+            let runner_up = scored.get(1).map(|(_, s)| *s).unwrap_or(0.0);
+
+            drop(deck);
+            let mut deck = self.deck.lock();
+
+            // A slide that stops winning ends its own run, so a speaker moving
+            // on does not carry a half-built streak to the next slide.
+            let run = match deck.streak {
+                Some((at, count)) if at == index => count + 1,
+                _ => 1,
+            };
+            deck.streak = Some((index, run));
+
+            // Logged whether or not it clears: a follower that declines is
+            // indistinguishable from one that is not running, and the numbers
+            // are the only way to tell a threshold that is too strict from a
+            // deck that genuinely does not match.
+            crate::log_line!(
+                "[follow] slide {} at {score:.3}, next {runner_up:.3}, run {run} (floor {FLOOR}, streak {STREAK})",
+                index + 1
+            );
+
+            if score < FLOOR || run < STREAK {
                 return;
-            }
-            // Clearly ahead of the next, or the deck is simply consistent and
-            // this is not a reading of where the speaker is.
-            if let Some((_, runner_up)) = scored.get(1) {
-                if score - runner_up < LEAD {
-                    return;
-                }
             }
             (index, score)
         };
@@ -147,9 +174,77 @@ impl Follower {
             deck.last = Some(index);
         }
 
+        crate::log_line!("[follow] offering slide {}", index + 1);
+
         let _ = self.app.emit(
             EVENT,
             Suggestion { index, score, advance: *self.advance.lock() },
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The rule, measured against a real sermon.
+    ///
+    /// These are the scores a twenty-slide deck actually produced while
+    /// somebody preached through it, taken from the log. They are here because
+    /// the first rule -- beat the runner-up by 0.05 -- looked reasonable
+    /// written down and rejected almost every one of them.
+    const MEASURED: &[(usize, f32, f32)] = &[
+        // (winning slide, its score, the runner-up's)
+        (6, 0.541, 0.529),
+        (0, 0.637, 0.565),
+        (0, 0.624, 0.545),
+        (3, 0.568, 0.545),
+        (3, 0.627, 0.590),
+        (3, 0.640, 0.611),
+        (3, 0.643, 0.608),
+        (3, 0.687, 0.656),
+    ];
+
+    /// What the old rule did to that stretch: almost nothing.
+    #[test]
+    fn a_lead_over_the_runner_up_rejects_a_coherent_deck() {
+        let old_lead = 0.05;
+        let passed = MEASURED
+            .iter()
+            .filter(|(_, best, next)| *best >= FLOOR && best - next >= old_lead)
+            .count();
+
+        // Two out of eight, and both of them early -- the nine sentences where
+        // the speaker was plainly on one slide produced nothing at all.
+        assert_eq!(passed, 2, "a lead rule is near-silent on a real deck");
+    }
+
+    /// What the rule does now: finds the slide the speaker settled on.
+    #[test]
+    fn a_run_of_agreement_finds_where_the_speaker_is() {
+        let mut runs: Vec<(usize, u32)> = Vec::new();
+        let mut streak: Option<(usize, u32)> = None;
+
+        for (slide, best, _) in MEASURED {
+            if *best < FLOOR {
+                continue;
+            }
+            let run = match streak {
+                Some((at, count)) if at == *slide => count + 1,
+                _ => 1,
+            };
+            streak = Some((*slide, run));
+            if run >= STREAK {
+                runs.push((*slide, run));
+            }
+        }
+
+        // Slide 1 twice, then slide 4 for the rest of the stretch: both the
+        // answers a person watching would have given.
+        assert!(runs.iter().any(|(slide, _)| *slide == 0), "slide 1 was missed");
+        assert!(runs.iter().any(|(slide, _)| *slide == 3), "slide 4 was missed");
+
+        // And the noise is not offered: slide 7 won once and never again.
+        assert!(!runs.iter().any(|(slide, _)| *slide == 6), "one sentence is not an answer");
     }
 }

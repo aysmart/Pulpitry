@@ -259,7 +259,16 @@ async fn follow_deck(
         return Ok(false);
     }
 
-    let vectors = semantic.embed_texts(&slides).map_err(to_message)?;
+    let vectors = match semantic.embed_texts(&slides) {
+        Ok(vectors) => vectors,
+        Err(why) => {
+            // Said out loud: this is the step that needs the embedding model,
+            // and a church whose model is missing would otherwise see a button
+            // that turns on and never does anything.
+            log_line!("[follow] could not embed the deck: {why:#}");
+            return Err(to_message(why));
+        }
+    };
     follower.watch(vectors);
     Ok(true)
 }

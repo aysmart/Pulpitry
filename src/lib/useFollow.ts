@@ -96,6 +96,9 @@ export function useFollow(
     if (!following) return;
     const slides =
       preview?.kind === "lyric" ? preview.sections.map(wordsOf) : [];
+    void invoke("note", {
+      line: `follow: on=${following} advance=${advance} kind=${preview?.kind ?? "none"} slides=${slides.length} first=${JSON.stringify(slides[0]?.slice(0, 80) ?? "")}`,
+    }).catch(() => undefined);
     void invoke<boolean>("follow_deck", { slides, advance }).catch(
       () => undefined,
     );
