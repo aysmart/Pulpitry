@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { ProjectorTheme } from "../lib/theme";
+import { baseSize, type ProjectorTheme } from "../lib/theme";
 import type { StageState } from "../lib/projector";
 
 /**
@@ -106,13 +106,25 @@ export function StageView({
         </span>
       </div>
 
-      {/* What the congregation is looking at, so the speaker never has to turn
-          round to find out. Large, because it is read while talking. */}
-      <div className="flex flex-1 flex-col justify-center gap-[1.4cqw] py-[2cqw]">
+      {/*
+        What the congregation is looking at, so the speaker never has to turn
+        round to find out.
+
+        Top-aligned rather than centred. Centring put one short line in the
+        middle of a very tall region and left a void under it, which read as a
+        screen that had failed rather than one with little to say. Text now
+        starts under the timer and grows down, which is also where a reader's
+        eye already is.
+
+        Sized by length, the same steps the projector uses: a two-word line and
+        a long verse cannot share a size, and a stage display is read at six
+        metres by somebody who is also talking.
+      */}
+      <div className="flex flex-1 flex-col gap-[1.2cqw] overflow-hidden py-[2.5cqw]">
         {reference ? (
           <span
             style={{
-              fontSize: "2.6cqw",
+              fontSize: "2.4cqw",
               fontWeight: 700,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
@@ -122,9 +134,32 @@ export function StageView({
             {reference}
           </span>
         ) : null}
-        <span style={{ fontSize: "4.2cqw", lineHeight: 1.35, fontWeight: 600 }}>
-          {text ?? "Nothing on screen"}
-        </span>
+
+        {text ? (
+          <span
+            style={{
+              fontSize: `${Math.min(baseSize(text), 5.2)}cqw`,
+              lineHeight: 1.3,
+              fontWeight: 600,
+            }}
+          >
+            {text}
+          </span>
+        ) : (
+          /*
+           * Quiet, and small.
+           *
+           * This had the hero slot at hero size, so a stage screen with
+           * nothing live announced its own emptiness in letters larger than
+           * anything it would ever say. When nothing is on, the timer is the
+           * whole point of the screen and this is a footnote.
+           */
+          <span
+            style={{ fontSize: "1.9cqw", fontWeight: 500, color: "#6A6A6A" }}
+          >
+            Nothing on screen
+          </span>
+        )}
       </div>
 
       {/* Last, and only when there is one. A permanent empty box teaches a
