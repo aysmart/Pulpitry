@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { baseSize, type ProjectorTheme } from "../lib/theme";
 import type { StageState } from "../lib/projector";
@@ -36,6 +36,54 @@ function asClock(totalSeconds: number): string {
   return hours > 0
     ? `${sign}${hours}:${pad(minutes)}:${pad(rest)}`
     : `${sign}${minutes}:${pad(rest)}`;
+}
+
+/**
+ * The largest size at which the whole verse still fits the box it is in.
+ *
+ * # Why this is measured rather than guessed
+ *
+ * The projector picks a size from the text's length, which works because there
+ * the text has the whole frame. A stage display shares its frame with a timer
+ * and a reference, so the same length has less room and the same size runs off
+ * the bottom -- which is what clipped "that tree, you're dead." halfway through
+ * its own line.
+ *
+ * A guess cannot fix that, because the room depends on the screen's shape, the
+ * timer's size, whether the clock is shown and whether there is a note. Asking
+ * the browser is the only answer that stays right as those change.
+ *
+ * Steps down rather than binary-searching: a dozen reflows of one paragraph is
+ * nothing, and stepping is obviously correct where a search over a
+ * non-monotonic wrap is not quite.
+ */
+function useFittedSize(
+  box: React.RefObject<HTMLDivElement | null>,
+  text: string | null,
+  max: number,
+): number {
+  const [size, setSize] = useState(max);
+
+  useLayoutEffect(() => {
+    const element = box.current;
+    if (!element || !text) {
+      setSize(max);
+      return;
+    }
+
+    let chosen = max;
+    const fits = () => element.scrollHeight <= element.clientHeight + 1;
+
+    // Try the largest first: most verses fit it, and those pay one measure.
+    element.style.setProperty("--stage-size", `${chosen}cqw`);
+    while (!fits() && chosen > 1.4) {
+      chosen = Math.round((chosen - 0.15) * 100) / 100;
+      element.style.setProperty("--stage-size", `${chosen}cqw`);
+    }
+    setSize(chosen);
+  }, [box, text, max]);
+
+  return size;
 }
 
 export function StageView({
@@ -96,6 +144,18 @@ export function StageView({
    * from the seat it was aimed at -- which is the reason to want one.
    */
   const timerOnly = !showLive && !showClock;
+
+  /*
+   * The largest size the verse still fits at, capped where legibility stops
+   * improving. `baseSize` is the opening guess -- a short line has no reason
+   * to start large and be measured down.
+   */
+  const liveBox = useRef<HTMLDivElement | null>(null);
+  const fitted = useFittedSize(
+    liveBox,
+    text,
+    Math.min(baseSize(text ?? ""), 5.2),
+  );
 
   if (timerOnly) {
     return (
@@ -167,7 +227,18 @@ export function StageView({
         metres by somebody who is also talking.
       */}
       {showLive ? (
-        <div className="flex flex-1 flex-col gap-[1.2cqw] overflow-hidden py-[2.5cqw]">
+        <div
+          ref={liveBox}
+          /*
+           * `min-h-0` is what makes `flex-1` mean "no taller than what is
+           * left". A column flex child keeps `min-height: auto` by default, so
+           * it refuses to shrink below its content: the band grew past the
+           * frame and the last line was cut off by the overflow above it,
+           * which looks like a rendering fault and is a layout one.
+           */
+          className="flex min-h-0 flex-1 flex-col gap-[1.2cqw] overflow-hidden py-[2.5cqw]"
+          style={{ ["--stage-size" as string]: `${fitted}cqw` }}
+        >
           {reference ? (
             <span
               style={{
@@ -185,7 +256,7 @@ export function StageView({
           {text ? (
             <span
               style={{
-                fontSize: `${Math.min(baseSize(text), 5.2)}cqw`,
+                fontSize: "var(--stage-size)",
                 lineHeight: 1.3,
                 fontWeight: 600,
                 textTransform: uppercase ? "uppercase" : "none",
