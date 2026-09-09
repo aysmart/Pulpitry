@@ -392,6 +392,18 @@ export function backgroundUrl(theme: ProjectorTheme): string | null {
 
 export const getTheme = () => invoke<ProjectorTheme>("get_theme");
 
+/**
+ * The theme this particular window should draw with.
+ *
+ * Asked by the window, of itself. Content is broadcast to every output --
+ * they must agree about what is live -- and appearance is fetched, because
+ * they need not agree about anything else. An output with no template of its
+ * own is answered with the shared theme, which is what every window had
+ * before there was more than one kind.
+ */
+export const themeForWindow = (label: string) =>
+  invoke<ProjectorTheme>("theme_for_window", { label });
+
 /** Grants the webview read access to a newly chosen background. */
 export const allowBackground = (path: string | null) =>
   invoke<void>("set_background", { path });

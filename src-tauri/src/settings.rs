@@ -231,6 +231,14 @@ pub struct Output {
     /// never opens this still gets "Pulpitry — Foyer" rather than a second
     /// source called "Pulpitry" that a switcher operator cannot tell apart.
     pub ndi_name: String,
+    /// What an output with no screen is drawn at.
+    ///
+    /// A monitor-backed output takes its size from the monitor, which is the
+    /// only size that can be right for it. One that exists only on the network
+    /// has no monitor to ask, so it is told -- and 1080p is what a church's
+    /// switcher expects unless somebody says otherwise.
+    pub width: u32,
+    pub height: u32,
 }
 
 impl Default for Output {
@@ -243,6 +251,8 @@ impl Default for Output {
             display: None,
             ndi_enabled: false,
             ndi_name: String::new(),
+            width: 1920,
+            height: 1080,
         }
     }
 }

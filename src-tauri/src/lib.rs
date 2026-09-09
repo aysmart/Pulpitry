@@ -228,6 +228,50 @@ fn get_theme(app: tauri::AppHandle) -> CommandResult<ProjectorTheme> {
     Ok(settings::load(&app).map_err(to_message)?.projector)
 }
 
+/// The theme one congregation-facing window should draw with.
+///
+/// Asked by the window, of itself, rather than pushed to all of them. That is
+/// the whole difference between two outputs and several: content is broadcast
+/// because every screen must agree about what is live, and appearance is
+/// fetched because they need not agree about anything else.
+///
+/// An output with no template of its own gets the shared theme -- which is
+/// what both windows always had, and what a church that never opens the
+/// outputs pane keeps.
+#[tauri::command]
+fn theme_for_window(
+    app: tauri::AppHandle,
+    catalog: State<'_, Arc<catalog::Catalog>>,
+    label: String,
+) -> CommandResult<ProjectorTheme> {
+    let settings = settings::load(&app).map_err(to_message)?;
+
+    let template = settings
+        .outputs
+        .iter()
+        .find(|output| projector::label_for(&output.id) == label)
+        .map(|output| output.template.trim().to_string())
+        .unwrap_or_default();
+
+    if template.is_empty() {
+        return Ok(settings.projector);
+    }
+
+    // A template the operator has since deleted falls back to the shared theme
+    // rather than to nothing. A blank screen in front of a congregation is the
+    // worst reading of "that template is gone".
+    let found = template
+        .parse::<i64>()
+        .ok()
+        .and_then(|id| catalog.get(id).ok().flatten())
+        .and_then(|item| match item.body {
+            catalog::ItemBody::Template { theme } => Some(*theme),
+            _ => None,
+        });
+
+    Ok(found.unwrap_or(settings.projector))
+}
+
 #[tauri::command]
 fn semantic_status(semantic: State<'_, Arc<Semantic>>) -> IndexStatus {
     semantic.status()
@@ -1358,6 +1402,71 @@ async fn list_displays(projector: State<'_, Arc<Projector>>) -> CommandResult<Ve
     projector.displays().map_err(to_message)
 }
 
+/// What each configured output is doing right now.
+///
+/// Asked of the windows rather than of settings: a window can be closed by the
+/// operating system, a monitor can be unplugged, and a pane that reports what
+/// was *intended* is a pane an operator will trust and act on wrongly.
+#[tauri::command]
+fn outputs_state(
+    app: AppHandle,
+    projector: State<'_, Arc<Projector>>,
+) -> CommandResult<Vec<OutputState>> {
+    let settings = settings::load(&app).map_err(to_message)?;
+    Ok(settings
+        .outputs
+        .iter()
+        .map(|output| OutputState {
+            id: output.id.clone(),
+            open: projector.output_open(&output.id),
+        })
+        .collect())
+}
+
+/// Opens one output's window, or moves it if it is already open.
+///
+/// Async for the same reason `open_projector` is: building a webview from a
+/// synchronous command deadlocks Windows, and the whole application stops
+/// answering rather than just this window failing.
+#[tauri::command]
+async fn open_output(
+    app: AppHandle,
+    projector: State<'_, Arc<Projector>>,
+    id: String,
+) -> CommandResult<OutputState> {
+    let settings = settings::load(&app).map_err(to_message)?;
+    let output = settings
+        .outputs
+        .iter()
+        .find(|output| output.id == id)
+        // Not "failed": the output was deleted, which is a different thing and
+        // the only way an operator reaches this.
+        .ok_or_else(|| "That output no longer exists.".to_string())?;
+
+    projector
+        .open_output(&output.id, &output.name, output.display, (output.width, output.height))
+        .map_err(to_message)?;
+
+    Ok(OutputState { open: projector.output_open(&id), id })
+}
+
+#[tauri::command]
+async fn close_output(
+    projector: State<'_, Arc<Projector>>,
+    id: String,
+) -> CommandResult<OutputState> {
+    projector.close_output(&id);
+    Ok(OutputState { open: false, id })
+}
+
+/// Whether one output's window is up.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OutputState {
+    pub id: String,
+    pub open: bool,
+}
+
 #[tauri::command]
 async fn open_projector(
     projector: State<'_, Arc<Projector>>,
@@ -1831,11 +1940,15 @@ pub fn run() {
             open_projector,
             close_projector,
             projector_state,
+            outputs_state,
+            open_output,
+            close_output,
             open_second,
             close_second,
             second_state,
             set_background,
             get_theme,
+            theme_for_window,
             catalog_save,
             catalog_get,
             catalog_remove,

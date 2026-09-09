@@ -23,7 +23,7 @@ import {
 } from "./lib/projector";
 import {
   DEFAULT_THEME,
-  getTheme,
+  themeForWindow,
   onTheme,
   referenceStyle,
   type ProjectorTheme,
@@ -86,7 +86,11 @@ function Projector() {
     void getLive()
       .then((current) => active && setContent(current))
       .catch(() => undefined);
-    void getTheme()
+    // This window's own theme, not the shared one: an output can be given a
+    // template of its own, and one that took the broadcast would quietly draw
+    // in somebody else's look.
+    const mine = getCurrentWindow().label;
+    void themeForWindow(mine)
       .then((current) => active && setTheme(current))
       .catch(() => undefined);
     void getAudio()
@@ -101,7 +105,14 @@ function Projector() {
 
     void Promise.all([
       onLive((next) => active && setContent(next)),
-      onTheme((next) => active && setTheme(next)),
+      // The payload is the shared theme, which is right only for a window
+      // following it. Re-asking costs one call on a settings save and is the
+      // only version that stays correct for a window with its own template.
+      onTheme(() => {
+        void themeForWindow(mine)
+          .then((current) => active && setTheme(current))
+          .catch(() => undefined);
+      }),
       onAudio((next) => active && setAudio(next)),
       onMedia((next) => active && setCommand(next)),
       onTicker((next) => active && setTicker(next)),

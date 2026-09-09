@@ -35,30 +35,56 @@ pub const WINDOW_LABEL: &str = "projector";
  */
 pub const SECOND_LABEL: &str = "second";
 
-/// The window label for one of the outputs beyond those two.
+/// The reserved id of the first output.
 ///
-/// Prefixed rather than bare so nothing can collide with `projector`,
-/// `second`, `main`, or a label some future window wants. The id is the
-/// output's own, which is generated once and never reused -- so a label
-/// cannot be inherited by a different output later and start showing the
-/// wrong translation on a screen nobody re-checked.
-pub fn label_for(id: &str) -> String {
-    format!("output-{id}")
-}
+/// Its window keeps the label and the title it has always had, because other
+/// things already know them: `ndi_capture` finds "Pulpitry — Projector" by
+/// name, and a church's switcher has a source by that name in its list. A
+/// generalisation that renamed it would take a working feed off the air on
+/// upgrade, which is not a thing to do to somebody on a Sunday.
+pub const MAIN_ID: &str = "main";
 
-/// What that window is called in the title bar, and therefore to the capture.
+/// The reserved id of the second display, for the same reason.
+pub const SECOND_ID: &str = "second";
+
+/// The window label for an output.
 ///
-/// `ndi_capture` finds a window by title and process id, so this is not
-/// cosmetic: two outputs sharing a title would make which one reaches the
-/// network a coin toss. The output's name is the operator's, and two of those
-/// *can* collide, so the id is what actually distinguishes them.
-pub fn title_for(id: &str, name: &str) -> String {
-    if name.trim().is_empty() {
-        format!("Pulpitry — Output {id}")
-    } else {
-        format!("Pulpitry — {} [{id}]", name.trim())
+/// The two reserved ids keep their original labels; everything else is
+/// prefixed so nothing can collide with them, or with a label some future
+/// window wants. The id is the output's own, generated once and never reused,
+/// so a label cannot be inherited by a different output later and start
+/// showing the wrong translation on a screen nobody re-checked.
+pub fn label_for(id: &str) -> String {
+    match id {
+        MAIN_ID => WINDOW_LABEL.to_string(),
+        SECOND_ID => SECOND_LABEL.to_string(),
+        other => format!("output-{other}"),
     }
 }
+
+/// What the window is called in the title bar, and therefore to the capture.
+///
+/// `ndi_capture` finds a window by title and process id, so this is not
+/// cosmetic: two outputs sharing a title makes which one reaches the network
+/// a coin toss. The operator's name for an output is not unique -- two can
+/// both be called "Foyer" -- so the id is what actually tells them apart, and
+/// it is in the title for that reason rather than for anybody to read.
+pub fn title_for(id: &str, name: &str) -> String {
+    match id {
+        MAIN_ID => "Pulpitry — Projector".to_string(),
+        SECOND_ID => "Pulpitry — Second display".to_string(),
+        other if name.trim().is_empty() => format!("Pulpitry — Output [{other}]"),
+        other => format!("Pulpitry — {} [{other}]", name.trim()),
+    }
+}
+
+/// Far enough off the desktop that no arrangement of real monitors reaches it.
+///
+/// Where an output with no screen of its own lives. The window server still
+/// composites it and ScreenCaptureKit still captures it -- measured, both
+/// cases returning identical frames -- so an NDI-only output is an ordinary
+/// window that nobody looks at rather than a second rendering path.
+const OFF_SCREEN: f64 = -32_000.0;
 
 /// One verse within a passage.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -281,6 +307,9 @@ pub struct Projector {
     ticker: Mutex<Ticker>,
     display: Mutex<Option<usize>>,
     second: Mutex<Option<usize>>,
+    /// Where each output's window landed, by output id. `None` for one that
+    /// has no screen and exists only on the network.
+    windows: Mutex<std::collections::HashMap<String, Option<usize>>>,
     audio: Mutex<AudioState>,
     media: Mutex<MediaCommand>,
     progress: Mutex<MediaProgress>,
@@ -294,6 +323,7 @@ impl Projector {
             ticker: Mutex::new(Ticker::default()),
             display: Mutex::new(None),
             second: Mutex::new(None),
+            windows: Mutex::new(std::collections::HashMap::new()),
             audio: Mutex::new(AudioState::default()),
             media: Mutex::new(MediaCommand::default()),
             progress: Mutex::new(MediaProgress::default()),
@@ -455,12 +485,125 @@ impl Projector {
             .collect())
     }
 
+    /// Opens an output's window, or moves it if it is already open.
+    ///
+    /// The one place a congregation-facing window is built. It was two copies
+    /// of this -- `place` and `place_second`, identical but for a label and a
+    /// title -- and a third output would have made it three, which is how a
+    /// setting comes to be honoured on two screens out of three.
+    ///
+    /// `display` of `None` puts the window off the desktop. It is still drawn,
+    /// still captured, and still an ordinary window; it simply has no screen,
+    /// which is what an output that exists only on the network is.
+    ///
+    /// # Must not be called from a synchronous command
+    ///
+    /// Tauri runs a synchronous command on the main thread, and building a
+    /// WebView2 window needs that thread free to pump its message loop while
+    /// the webview starts. Called from one, it waits for a loop that is waiting
+    /// for it -- and because every IPC message crosses that loop, the whole app
+    /// stops answering: no scripture, no songs, no settings, and nothing to
+    /// connect the symptom to the projector.
+    ///
+    /// So every command that reaches this is async. macOS does not care either
+    /// way, which is why this only ever showed up on Windows.
+    pub fn open_output(
+        &self,
+        id: &str,
+        name: &str,
+        display: Option<usize>,
+        size: (u32, u32),
+    ) -> Result<Option<usize>> {
+        let label = label_for(id);
+        let title = title_for(id, name);
+
+        // A monitor decides its own position and size; an output without one
+        // is told, because there is nothing to ask.
+        let (position, extent, landed) = match display {
+            Some(requested) => {
+                let index = Self::chosen(&self.app, Some(requested))?;
+                let monitors = self
+                    .app
+                    .available_monitors()
+                    .map_err(|err| anyhow!("could not enumerate displays: {err}"))?;
+                let monitor = &monitors[index];
+                let at = monitor.position();
+                let of = monitor.size();
+                (
+                    (at.x as f64, at.y as f64),
+                    (of.width as f64, of.height as f64),
+                    Some(index),
+                )
+            }
+            None => (
+                (OFF_SCREEN, OFF_SCREEN),
+                (size.0.max(16) as f64, size.1.max(16) as f64),
+                None,
+            ),
+        };
+
+        if let Some(window) = self.app.get_webview_window(&label) {
+            // Already open: move it rather than tearing down a live display.
+            let _ = window.set_position(tauri::PhysicalPosition::new(position.0, position.1));
+            let _ = window.set_size(tauri::PhysicalSize::new(extent.0, extent.1));
+            // Not focused when it has no screen: taking the operator's focus to
+            // a window they cannot see is the worst kind of nothing happening.
+            if landed.is_some() {
+                let _ = window.set_focus();
+            }
+            self.windows.lock().insert(id.to_string(), landed);
+            return Ok(landed);
+        }
+
+        WebviewWindowBuilder::new(&self.app, &label, WebviewUrl::App("projector.html".into()))
+            .title(&title)
+            // Borderless and sized to the monitor rather than true fullscreen:
+            // fullscreen on macOS moves the window to its own Space, which
+            // takes it away from the operator and animates on every change.
+            .decorations(false)
+            .resizable(false)
+            // Only over a screen somebody is watching. An off-desktop window
+            // kept above everything can surprise an operator if a monitor is
+            // unplugged and the desktop re-arranges under it.
+            .always_on_top(landed.is_some())
+            .position(position.0, position.1)
+            .inner_size(extent.0, extent.1)
+            // The projector's own paper: every output is the same output, and
+            // one that flashed black between items would be the one thing
+            // distinguishing it.
+            .background_color(tauri::window::Color(244, 241, 234, 255))
+            .build()
+            .map_err(|err| anyhow!("could not open the {name} window: {err}"))?;
+
+        self.windows.lock().insert(id.to_string(), landed);
+        Ok(landed)
+    }
+
+    /// Closes an output's window. Closing one that is not open is not an error.
+    pub fn close_output(&self, id: &str) {
+        if let Some(window) = self.app.get_webview_window(&label_for(id)) {
+            let _ = window.close();
+        }
+        self.windows.lock().remove(id);
+    }
+
+    /// Whether an output's window is open.
+    ///
+    /// Asked of the windows rather than of what we remember: a window can be
+    /// closed by the operating system, and a list that says otherwise is a
+    /// list an operator will act on.
+    pub fn output_open(&self, id: &str) -> bool {
+        self.app.get_webview_window(&label_for(id)).is_some()
+    }
+
     /// Opens the projector on a display, or moves it if already open.
     ///
     /// Defaults to the first display that is not the primary one — during a
     /// service the projector is essentially never the laptop screen.
     pub fn open(&self, requested: Option<usize>) -> Result<ProjectorState> {
-        let index = Self::place(&self.app, requested)?;
+        let index = self
+            .open_output(MAIN_ID, "Projector", Some(Self::chosen(&self.app, requested)?), (0, 0))?
+            .ok_or_else(|| anyhow!("the projector must land on a display"))?;
         *self.display.lock() = Some(index);
         Ok(self.state())
     }
@@ -491,59 +634,9 @@ impl Projector {
             .unwrap_or(0))
     }
 
-    /// Opens the projector, or moves it if already open.
-    ///
-    /// Returns the display it landed on.
-    ///
-    /// # Must not be called from a synchronous command
-    ///
-    /// Tauri runs a synchronous command on the main thread, and building a
-    /// WebView2 window needs that thread free to pump its message loop while
-    /// the webview starts. Called from one, it waits for a loop that is waiting
-    /// for it -- and because every IPC message crosses that loop, the whole app
-    /// stops answering: no scripture, no songs, no settings, and nothing to
-    /// connect the symptom to the projector.
-    ///
-    /// So `open_projector` is an async command. macOS does not care either way,
-    /// which is why this only ever showed up on Windows.
-    fn place(app: &AppHandle, requested: Option<usize>) -> Result<usize> {
-        let index = Self::chosen(app, requested)?;
-        let monitors = app
-            .available_monitors()
-            .map_err(|err| anyhow!("could not enumerate displays: {err}"))?;
-        let monitor = &monitors[index];
-        let position = monitor.position();
-        let size = monitor.size();
-
-        if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
-            // Already open: move it rather than tearing down a live display.
-            let _ = window.set_position(tauri::PhysicalPosition::new(position.x, position.y));
-            let _ = window.set_size(tauri::PhysicalSize::new(size.width, size.height));
-            let _ = window.set_focus();
-            return Ok(index);
-        }
-
-        WebviewWindowBuilder::new(app, WINDOW_LABEL, WebviewUrl::App("projector.html".into()))
-            .title("Pulpitry — Projector")
-            // Borderless and sized to the monitor rather than true fullscreen:
-            // fullscreen on macOS moves the window to its own Space, which takes
-            // it away from the operator and animates on every change.
-            .decorations(false)
-            .resizable(false)
-            .always_on_top(true)
-            .position(position.x as f64, position.y as f64)
-            .inner_size(size.width as f64, size.height as f64)
-            .background_color(tauri::window::Color(244, 241, 234, 255))
-            .build()
-            .map_err(|err| anyhow!("could not open the projector window: {err}"))?;
-
-        Ok(index)
-    }
 
     pub fn close(&self) -> ProjectorState {
-        if let Some(window) = self.app.get_webview_window(WINDOW_LABEL) {
-            let _ = window.close();
-        }
+        self.close_output(MAIN_ID);
         *self.display.lock() = None;
         ProjectorState { open: false, display: None }
     }
@@ -555,15 +648,20 @@ impl Projector {
     /// still wants to see what it looks like, and refusing would be us deciding
     /// which of a church's screens is for what.
     pub fn open_second(&self, requested: Option<usize>) -> Result<SecondState> {
-        let index = Self::place_second(&self.app, requested)?;
+        let index = self
+            .open_output(
+                SECOND_ID,
+                "Second display",
+                Some(Self::chosen(&self.app, requested)?),
+                (0, 0),
+            )?
+            .ok_or_else(|| anyhow!("the second display must land on a display"))?;
         *self.second.lock() = Some(index);
         Ok(self.second_state())
     }
 
     pub fn close_second(&self) -> SecondState {
-        if let Some(window) = self.app.get_webview_window(SECOND_LABEL) {
-            let _ = window.close();
-        }
+        self.close_output(SECOND_ID);
         *self.second.lock() = None;
         SecondState { open: false, display: None }
     }
@@ -575,40 +673,6 @@ impl Projector {
         }
     }
 
-    /// The same window dance as the projector, and the same warning applies:
-    /// building a webview from a synchronous command deadlocks Windows.
-    fn place_second(app: &AppHandle, requested: Option<usize>) -> Result<usize> {
-        let index = Self::chosen(app, requested)?;
-        let monitors = app
-            .available_monitors()
-            .map_err(|err| anyhow!("could not enumerate displays: {err}"))?;
-        let monitor = &monitors[index];
-        let position = monitor.position();
-        let size = monitor.size();
-
-        if let Some(window) = app.get_webview_window(SECOND_LABEL) {
-            let _ = window.set_position(tauri::PhysicalPosition::new(position.x, position.y));
-            let _ = window.set_size(tauri::PhysicalSize::new(size.width, size.height));
-            let _ = window.set_focus();
-            return Ok(index);
-        }
-
-        WebviewWindowBuilder::new(app, SECOND_LABEL, WebviewUrl::App("projector.html".into()))
-            .title("Pulpitry — Second display")
-            .decorations(false)
-            .resizable(false)
-            .always_on_top(true)
-            .position(position.x as f64, position.y as f64)
-            .inner_size(size.width as f64, size.height as f64)
-            // The projector's own paper: this is the same output, and a
-            // second screen that flashed black between items would be the one
-            // thing distinguishing it.
-            .background_color(tauri::window::Color(244, 241, 234, 255))
-            .build()
-            .map_err(|err| anyhow!("could not open the second display: {err}"))?;
-
-        Ok(index)
-    }
 }
 
 /// Where the second display is, if it is anywhere.
