@@ -80,6 +80,8 @@ function Projector() {
   /** Empty follows the Scripture panel, which is what every window did. */
   const [translation, setTranslation] = useState("");
   const [uppercase, setUppercase] = useState(false);
+  const [stageClock, setStageClock] = useState(true);
+  const [stageLive, setStageLive] = useState(true);
   const [stage, setStageState] = useState<StageState>({
     startedAt: 0,
     limitMinutes: 0,
@@ -122,6 +124,8 @@ function Projector() {
         setForm(look.overlay as OverlayForm);
         setTranslation(look.translation);
         setUppercase(look.uppercase);
+        setStageClock(look.stageClock);
+        setStageLive(look.stageLive);
       })
       .catch(() => undefined);
     void getAudio()
@@ -155,6 +159,8 @@ function Projector() {
             setForm(look.overlay as OverlayForm);
             setTranslation(look.translation);
             setUppercase(look.uppercase);
+            setStageClock(look.stageClock);
+            setStageLive(look.stageLive);
           })
           .catch(() => undefined);
       }),
@@ -213,14 +219,20 @@ function Projector() {
       };
     }
     void scriptureIn(translation, content.caption)
-      .then((lines) => {
+      .then((passage) => {
         if (!active) return;
         // Nothing back means the passage is not in that translation -- a
         // Catholic edition's extra books, a partial text. Keep what we were
         // given rather than emptying a screen mid-service.
         setDrawn(
-          lines.length
-            ? { ...content, body: { kind: "scripture", lines } }
+          passage.lines.length
+            ? {
+                ...content,
+                body: { kind: "scripture", lines: passage.lines },
+                // The label comes with the words. It read "Genesis 1:12 (AMP)"
+                // over Yoruba, because only the verses had been redrawn.
+                caption: passage.caption || content.caption,
+              }
             : content,
         );
       })
@@ -247,6 +259,8 @@ function Projector() {
           reference={drawn?.caption ?? null}
           text={plainText(drawn)}
           uppercase={uppercase}
+          showClock={stageClock}
+          showLive={stageLive}
         />
       </div>
     );

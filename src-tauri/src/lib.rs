@@ -276,9 +276,20 @@ fn theme_for_window(
     let translation =
         found.map(|output| output.translation.trim().to_string()).unwrap_or_default();
     let uppercase = found.is_some_and(|output| output.uppercase);
+    // True for a window with no row of its own, which is the shipped stage
+    // display: both halves on unless somebody turns one off.
+    let stage_clock = found.map_or(true, |output| output.stage_clock);
+    let stage_live = found.map_or(true, |output| output.stage_live);
 
     if template.is_empty() {
-        return Ok(WindowLook { theme: settings.projector, overlay, translation, uppercase });
+        return Ok(WindowLook {
+            theme: settings.projector,
+            overlay,
+            translation,
+            uppercase,
+            stage_clock,
+            stage_live,
+        });
     }
 
     // A template the operator has since deleted falls back to the shared theme
@@ -293,7 +304,14 @@ fn theme_for_window(
             _ => None,
         });
 
-    Ok(WindowLook { theme: found.unwrap_or(settings.projector), overlay, translation, uppercase })
+    Ok(WindowLook {
+        theme: found.unwrap_or(settings.projector),
+        overlay,
+        translation,
+        uppercase,
+        stage_clock,
+        stage_live,
+    })
 }
 
 /// How one window should draw: its look, and the shape it draws in.
@@ -310,6 +328,9 @@ pub struct WindowLook {
     pub translation: String,
     /// Whether this window sets its words in capitals.
     pub uppercase: bool,
+    /// A stage display's two halves, each of which can be turned off.
+    pub stage_clock: bool,
+    pub stage_live: bool,
 }
 
 #[tauri::command]
@@ -1141,10 +1162,10 @@ fn scripture_in(
     library: State<'_, Arc<Library>>,
     translation: String,
     reference: String,
-) -> CommandResult<Vec<projector::ScriptureLine>> {
+) -> CommandResult<Passage> {
     let Some(found) = library.resolve_reference(&translation, &reference).map_err(to_message)?
     else {
-        return Ok(Vec::new());
+        return Ok(Passage::default());
     };
 
     let chapter = library
@@ -1155,11 +1176,44 @@ fn scripture_in(
     let first = found.verse.unwrap_or(0);
     let last = found.end_verse.or(found.verse).unwrap_or(i64::MAX);
 
-    Ok(chapter
+    let lines: Vec<projector::ScriptureLine> = chapter
         .into_iter()
         .filter(|verse| first == 0 || (verse.verse >= first && verse.verse <= last))
         .map(|verse| projector::ScriptureLine { number: verse.verse, text: verse.text })
-        .collect())
+        .collect();
+
+    /*
+     * The label is composed here, not adjusted at the far end.
+     *
+     * It read "Genesis 1:12 (AMP)" over Yoruba words, because the caption was
+     * the operator's and only the verses had been redrawn. The book name is
+     * the other half of that: this translation calls it whatever it calls it,
+     * and a label in one language over a verse in another is worse than no
+     * label at all.
+     */
+    let caption = match (lines.first(), lines.last()) {
+        (Some(one), Some(other)) => {
+            let range = if one.number == other.number {
+                one.number.to_string()
+            } else {
+                format!("{}-{}", one.number, other.number)
+            };
+            format!("{} {}:{} ({})", found.book, found.chapter, range, translation.to_uppercase())
+        }
+        _ => String::new(),
+    };
+
+    Ok(Passage { lines, caption })
+}
+
+/// A passage as one output draws it: the words, and the label for them.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Passage {
+    pub lines: Vec<projector::ScriptureLine>,
+    /// Empty when the passage is not in that translation, and the window keeps
+    /// the label it was given along with the words.
+    pub caption: String,
 }
 
 #[tauri::command]

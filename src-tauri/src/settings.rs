@@ -272,6 +272,21 @@ pub struct Output {
     /// is exactly what one setting for the whole application could not give
     /// them.
     pub uppercase: bool,
+
+    /// Whether a stage output shows the wall clock beside its timer.
+    ///
+    /// On by default, because a platform rarely has a clock the speaker can
+    /// see without turning round. Off for a stage that has one on the wall, or
+    /// for a church that would rather a preacher watched the minutes they have
+    /// left rather than the time of day.
+    pub stage_clock: bool,
+    /// Whether a stage output shows what the congregation is looking at.
+    ///
+    /// On by default, and worth being able to switch off: a screen showing
+    /// only a timer is a different instrument. It can be small, it can be at
+    /// the back of the hall, and it can be read at a glance from anywhere on
+    /// the platform -- which a screen carrying a paragraph cannot.
+    pub stage_live: bool,
 }
 
 impl Output {
@@ -301,6 +316,8 @@ impl Default for Output {
             // Sentence case: it is what the projector has always drawn, and
             // the form that stays readable at any length.
             uppercase: false,
+            stage_clock: true,
+            stage_live: true,
         }
     }
 }

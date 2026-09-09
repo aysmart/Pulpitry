@@ -124,6 +124,8 @@ export function OutputsPanel({
         // A lower third is the default shape, and a lower third is nearly
         // always capitals.
         uppercase: true,
+        stageClock: true,
+        stageLive: true,
       },
     ]);
 
@@ -307,6 +309,51 @@ export function OutputsPanel({
                 ? " Sent with a transparent background, so a switcher can lay it over a camera."
                 : ""}
             </p>
+
+            {/* A stage display is the one shape whose content is its own, so
+                it is the one shape with its own switches. Shown only there:
+                two dead checkboxes on every other output would teach an
+                operator to stop reading this pane. */}
+            {output.overlay === "stage" ? (
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={output.stageLive}
+                    onChange={(event) =>
+                      update(output.id, { stageLive: event.target.checked })
+                    }
+                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                  />
+                  <span className="text-[12.5px] text-pulpitry-text">
+                    Show what is live
+                  </span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={output.stageClock}
+                    onChange={(event) =>
+                      update(output.id, { stageClock: event.target.checked })
+                    }
+                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                  />
+                  <span className="text-[12.5px] text-pulpitry-text">
+                    Show the time of day
+                  </span>
+                </label>
+              </div>
+            ) : null}
+
+            {output.overlay === "stage" &&
+            !output.stageLive &&
+            !output.stageClock ? (
+              <p className="text-[11px] leading-snug text-pulpitry-muted">
+                The timer alone, set as large as the screen allows — readable
+                from anywhere on the platform rather than only from the seat it
+                was aimed at.
+              </p>
+            ) : null}
 
             <label className="flex items-center gap-2">
               <input

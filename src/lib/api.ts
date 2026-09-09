@@ -30,6 +30,9 @@ export interface Output {
   overlay: string;
   /** Whether this output sets its words in capitals. */
   uppercase: boolean;
+  /** A stage display's two halves, each of which can be turned off. */
+  stageClock: boolean;
+  stageLive: boolean;
 }
 
 export interface Settings {

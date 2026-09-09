@@ -64,10 +64,11 @@ export const searchVerses = (translation: string, query: string, limit = 50) =>
  * passage is not in that translation, and the caller keeps what it had.
  */
 export const scriptureIn = (translation: string, reference: string) =>
-  invoke<Array<{ number: number; text: string }>>("scripture_in", {
-    translation,
-    reference,
-  });
+  invoke<{
+    lines: Array<{ number: number; text: string }>;
+    /** Empty when the passage is not in that translation. */
+    caption: string;
+  }>("scripture_in", { translation, reference });
 
 export const resolveReference = (translation: string, reference: string) =>
   invoke<Reference | null>("resolve_reference", { translation, reference });

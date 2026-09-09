@@ -44,6 +44,8 @@ export function StageView({
   reference,
   text,
   uppercase,
+  showClock,
+  showLive,
 }: {
   stage: StageState;
   theme: ProjectorTheme;
@@ -51,6 +53,10 @@ export function StageView({
   text: string | null;
   /** Whether this output sets its words in capitals. */
   uppercase: boolean;
+  /** The wall clock beside the timer. */
+  showClock: boolean;
+  /** What the congregation is looking at. */
+  showLive: boolean;
 }) {
   /*
    * Counted here rather than sent.
@@ -80,6 +86,39 @@ export function StageView({
     minute: "2-digit",
   });
 
+  /*
+   * A timer on its own is a different instrument, not a stage display with
+   * pieces missing.
+   *
+   * With nothing else on it, the clock stops being a line at the top and
+   * becomes the whole screen: centred, and as large as the frame allows. That
+   * is what makes it readable from anywhere on a platform rather than only
+   * from the seat it was aimed at -- which is the reason to want one.
+   */
+  const timerOnly = !showLive && !showClock;
+
+  if (timerOnly) {
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center p-[3cqw]"
+        style={{ background: "#000000" }}
+      >
+        <span
+          style={{
+            fontSize: "26cqw",
+            fontWeight: 800,
+            fontVariantNumeric: "tabular-nums",
+            letterSpacing: "-0.03em",
+            lineHeight: 1,
+            color: over ? "#FF4D4D" : running ? accent : "#3A3A3A",
+          }}
+        >
+          {running ? asClock(counting) : "—"}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       className="flex h-full w-full flex-col justify-between p-[3cqw]"
@@ -88,7 +127,9 @@ export function StageView({
       <div className="flex items-baseline justify-between">
         <span
           style={{
-            fontSize: "9cqw",
+            // Larger when it is the only thing in the top band, because there
+            // is the room and it is what the screen is for.
+            fontSize: showLive ? "9cqw" : "16cqw",
             fontWeight: 800,
             fontVariantNumeric: "tabular-nums",
             letterSpacing: "-0.02em",
@@ -97,16 +138,18 @@ export function StageView({
         >
           {running ? asClock(counting) : "—"}
         </span>
-        <span
-          style={{
-            fontSize: "3.4cqw",
-            fontWeight: 600,
-            fontVariantNumeric: "tabular-nums",
-            color: "#8A8A8A",
-          }}
-        >
-          {wall}
-        </span>
+        {showClock ? (
+          <span
+            style={{
+              fontSize: showLive ? "3.4cqw" : "5cqw",
+              fontWeight: 600,
+              fontVariantNumeric: "tabular-nums",
+              color: "#8A8A8A",
+            }}
+          >
+            {wall}
+          </span>
+        ) : null}
       </div>
 
       {/*
@@ -123,48 +166,54 @@ export function StageView({
         a long verse cannot share a size, and a stage display is read at six
         metres by somebody who is also talking.
       */}
-      <div className="flex flex-1 flex-col gap-[1.2cqw] overflow-hidden py-[2.5cqw]">
-        {reference ? (
-          <span
-            style={{
-              fontSize: "2.4cqw",
-              fontWeight: 700,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              color: accent,
-            }}
-          >
-            {reference}
-          </span>
-        ) : null}
+      {showLive ? (
+        <div className="flex flex-1 flex-col gap-[1.2cqw] overflow-hidden py-[2.5cqw]">
+          {reference ? (
+            <span
+              style={{
+                fontSize: "2.4cqw",
+                fontWeight: 700,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: accent,
+              }}
+            >
+              {reference}
+            </span>
+          ) : null}
 
-        {text ? (
-          <span
-            style={{
-              fontSize: `${Math.min(baseSize(text), 5.2)}cqw`,
-              lineHeight: 1.3,
-              fontWeight: 600,
-              textTransform: uppercase ? "uppercase" : "none",
-            }}
-          >
-            {text}
-          </span>
-        ) : (
-          /*
-           * Quiet, and small.
-           *
-           * This had the hero slot at hero size, so a stage screen with
-           * nothing live announced its own emptiness in letters larger than
-           * anything it would ever say. When nothing is on, the timer is the
-           * whole point of the screen and this is a footnote.
-           */
-          <span
-            style={{ fontSize: "1.9cqw", fontWeight: 500, color: "#6A6A6A" }}
-          >
-            Nothing on screen
-          </span>
-        )}
-      </div>
+          {text ? (
+            <span
+              style={{
+                fontSize: `${Math.min(baseSize(text), 5.2)}cqw`,
+                lineHeight: 1.3,
+                fontWeight: 600,
+                textTransform: uppercase ? "uppercase" : "none",
+              }}
+            >
+              {text}
+            </span>
+          ) : (
+            /*
+             * Quiet, and small.
+             *
+             * This had the hero slot at hero size, so a stage screen with
+             * nothing live announced its own emptiness in letters larger than
+             * anything it would ever say. When nothing is on, the timer is the
+             * whole point of the screen and this is a footnote.
+             */
+            <span
+              style={{ fontSize: "1.9cqw", fontWeight: 500, color: "#6A6A6A" }}
+            >
+              Nothing on screen
+            </span>
+          )}
+        </div>
+      ) : (
+        // Keeps the note at the bottom and the timer at the top rather than
+        // letting the two collapse together in the middle.
+        <div className="flex-1" />
+      )}
 
       {/* Last, and only when there is one. A permanent empty box teaches a
           platform to stop looking at the place a message would appear. */}

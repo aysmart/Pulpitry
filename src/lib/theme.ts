@@ -416,6 +416,9 @@ export interface WindowLook {
   translation: string;
   /** Whether this window sets its words in capitals. */
   uppercase: boolean;
+  /** A stage display's two halves, each of which can be turned off. */
+  stageClock: boolean;
+  stageLive: boolean;
 }
 
 /** Grants the webview read access to a newly chosen background. */
