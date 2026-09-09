@@ -10,6 +10,22 @@ export interface AudioDevice {
   isDefault: boolean;
 }
 
+/** One congregation-facing output: a screen, a network feed, or both. */
+export interface Output {
+  id: string;
+  name: string;
+  /** Catalog id of the template it draws with. Empty follows the Display pane. */
+  template: string;
+  /** Empty follows the Scripture panel, which is what most churches want. */
+  translation: string;
+  /** `null` for an output that exists only on the network. */
+  display: number | null;
+  ndiEnabled: boolean;
+  ndiName: string;
+  width: number;
+  height: number;
+}
+
 export interface Settings {
   language: string;
   inputDeviceId: string | null;
@@ -53,6 +69,14 @@ export interface Settings {
    * wanted it.
    */
   mirrorEnabled: boolean;
+  /**
+   * The congregation-facing outputs beyond the first two.
+   *
+   * Absent from every installation that predates them, which reads as an
+   * empty list -- one projector and an optional second, both the same, which
+   * is what those churches have.
+   */
+  outputs: Output[];
   /** The whisper.cpp model, by file name. Empty until one is chosen. */
   speechModel: string;
 

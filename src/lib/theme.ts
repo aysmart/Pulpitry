@@ -359,7 +359,10 @@ export function textStyle(
  *
  * A church wanting a solid brand block sets `panelColor` and gets exactly that.
  */
-export function panelStyle(theme: ProjectorTheme): { fill: string; text: string } {
+export function panelStyle(theme: ProjectorTheme): {
+  fill: string;
+  text: string;
+} {
   const accent = theme.referenceColor || theme.textColor;
   return {
     fill: theme.panelColor || withAlpha(accent, 0.14),

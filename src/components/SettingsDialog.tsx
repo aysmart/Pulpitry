@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 
 import { MirrorPanel } from "./MirrorPanel";
 import { NdiPanel } from "./NdiPanel";
+import { OutputsPanel } from "./OutputsPanel";
 import { HostedSubscription } from "./HostedSubscription";
 import { NodeRuntimeNotice } from "./NodeRuntimeNotice";
 import { Feedback } from "./Feedback";
@@ -21,6 +22,7 @@ import {
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
 import {
+  type Output,
   clearAssistKey,
   testAssistModel,
   describeError,
@@ -752,6 +754,7 @@ export function SettingsDialog({
   const [testing, setTesting] = useState(false);
 
   const [mirrorEnabled, setMirrorEnabled] = useState(settings.mirrorEnabled);
+  const [outputs, setOutputs] = useState<Output[]>(settings.outputs ?? []);
   const [speed, setSpeed] = useState<string | null>(null);
   const [timing, setTiming] = useState(false);
 
@@ -958,6 +961,7 @@ export function SettingsDialog({
         semanticEnabled,
         semanticThreshold,
         mirrorEnabled,
+        outputs,
         speechEngine: engine,
         speechModel: model,
         // Made once by the backend and never edited here; sending back what we
@@ -1016,6 +1020,7 @@ export function SettingsDialog({
     semanticEnabled,
     semanticThreshold,
     mirrorEnabled,
+    outputs,
     engine,
     model,
   ]);
@@ -1735,6 +1740,14 @@ export function SettingsDialog({
                   enabled={mirrorEnabled}
                   onEnabledChange={setMirrorEnabled}
                 />
+              </Section>
+              <div className="border-t border-pulpitry-line" />
+              <div className="border-t border-pulpitry-line" />
+              <Section
+                title="Outputs"
+                note="What each congregation-facing screen shows. Every one of them shows the same verse at the same moment; what differs is the look, the translation, and where it goes."
+              >
+                <OutputsPanel outputs={outputs} onChange={setOutputs} />
               </Section>
               <div className="border-t border-pulpitry-line" />
               <Section

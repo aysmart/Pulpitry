@@ -200,7 +200,9 @@ function Projector() {
                   command={command}
                   progress={content.progress}
                 />
-                {theme.showReference && content.caption && !titledItself(content.body) ? (
+                {theme.showReference &&
+                content.caption &&
+                !titledItself(content.body) ? (
                   /* Its own typeface, size and colour, set by the theme. The
                      margin is in cqh like everything else in this frame, so it
                      holds its proportion whatever the screen is. */
