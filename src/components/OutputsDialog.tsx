@@ -87,7 +87,7 @@ export function OutputsDialog({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-full w-full max-w-[720px] flex-col rounded-lg border border-pulpitry-line bg-pulpitry-panel shadow-xl">
+      <div className="flex max-h-full w-full max-w-[720px] flex-col rounded-lg border border-pulpitry-line bg-pulpitry-surface shadow-2xl">
         <header className="flex shrink-0 items-baseline justify-between border-b border-pulpitry-line px-5 py-3.5">
           <h2 className="text-[15px] text-pulpitry-text">Display outputs</h2>
           <button

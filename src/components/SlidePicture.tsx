@@ -92,7 +92,7 @@ export function SlidePicture({
 
   return (
     <div className="flex flex-col gap-2 rounded border border-pulpitry-line bg-pulpitry-raised p-2">
-      {error ? <p className="text-[11.5px] text-pulpitry-warn">{error}</p> : null}
+      {error ? <p className="text-[11.5px] text-pulpitry-gold">{error}</p> : null}
 
       {pictures === null ? (
         <p className="text-[11.5px] text-pulpitry-muted">Reading the library&hellip;</p>
