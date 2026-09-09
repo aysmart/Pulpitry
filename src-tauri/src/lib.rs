@@ -223,6 +223,17 @@ fn set_background(
     Ok(())
 }
 
+/// A line from the window into the same log the rest of the application uses.
+///
+/// The two halves of a voice command fail in ways that look identical from
+/// outside -- not heard, and heard but not acted on -- and only the Rust half
+/// could say anything. A window that cannot write to the log leaves the more
+/// interesting half of every such question unanswerable.
+#[tauri::command]
+fn note(line: String) {
+    log_line!("[window] {}", line.chars().take(300).collect::<String>());
+}
+
 #[tauri::command]
 fn get_stage(projector: State<'_, Arc<Projector>>) -> projector::StageState {
     projector.stage()
@@ -2152,6 +2163,7 @@ pub fn run() {
             close_second,
             second_state,
             set_background,
+            note,
             get_stage,
             set_stage,
             get_theme,

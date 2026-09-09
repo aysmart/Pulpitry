@@ -387,6 +387,38 @@ export function usePresentation() {
   );
 
   /**
+   * Straight to a numbered slide in the staged deck.
+   *
+   * A deck is kept as a lyric with sections -- that is what a sermon's slides
+   * are here -- so "slide four" is its fourth section rather than anything to
+   * do with the running order. Counted from one, as a person counts and as the
+   * thumbnails are numbered.
+   *
+   * Nothing at all when the number is past the end: a deck of seven asked for
+   * slide twelve is a misheard number, and going to the last slide instead
+   * would look like it had worked.
+   */
+  const goToSlide = useCallback(
+    (number: number) => {
+      if (!preview || preview.kind !== "lyric") return false;
+      const index = number - 1;
+      if (index < 0 || index >= preview.sections.length) return false;
+
+      const next = { ...preview, index };
+      // The same rule every instruction here follows: if what it replaced was
+      // live, the new one is live; if this was only a preview, it stays one.
+      const wasLive = liveKey === keyOf(preview);
+      setPreview(next);
+      if (wasLive) {
+        setLiveKey(keyOf(next));
+        void setLive(toLiveContent(next));
+      }
+      return true;
+    },
+    [preview, liveKey],
+  );
+
+  /**
    * Whether stepping would go anywhere. Known exactly for a song; scripture
    * cannot be answered without a query, so it stays available.
    */
@@ -543,6 +575,7 @@ export function usePresentation() {
     showVerses,
     showItem,
     goToPassage,
+    goToSlide,
     retranslate,
     clearLive,
     wind,

@@ -242,6 +242,10 @@ impl Detector {
             listener.hear(text, ended)
         };
         if let Some(command) = heard {
+            // Logged because the two halves fail in ways that look identical
+            // from the outside: an instruction not heard and an instruction
+            // heard but not acted on both leave the screen unchanged.
+            crate::log_line!("[voice] heard {command:?}");
             // The window acts on it: only that end knows what is staged.
             let _ = self.app.emit("voice-command", command);
         }

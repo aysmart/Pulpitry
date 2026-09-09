@@ -112,6 +112,7 @@ export default function App() {
     display,
     clearLive,
     goToPassage,
+    goToSlide,
     retranslate,
     wind,
     step,
@@ -257,27 +258,10 @@ export default function App() {
   const media = useMedia();
   const { ticker, change: changeTicker } = useTicker();
 
-  /*
-   * Where the service has got to in its plan.
-   *
-   * A ref rather than state: nothing renders from it, and making it state
-   * would re-register the voice handler on every stage -- which drops whatever
-   * arrives during the swap, and an instruction lost that way looks exactly
-   * like the operator having to say it twice.
-   *
-   * Null until something has been staged from the plan. "Next slide" with
-   * nothing staged starts at the top, which is what somebody who has just
-   * opened a plan means by it.
-   */
-  const planAt = useRef<number | null>(null);
-
   const stageEntry = useCallback(
     async (index: number) => {
       const staged = await schedule.stage(index);
-      if (staged) {
-        previewItem(staged);
-        planAt.current = index;
-      }
+      if (staged) previewItem(staged);
       return staged;
     },
     [schedule, previewItem],
@@ -621,33 +605,34 @@ export default function App() {
         break;
       case "slide": {
         /*
-         * The plan is the deck. Pulpitry's slides are its running order, and
-         * "next slide" from a platform means the next thing in the service --
-         * not the next verse, which has its own words.
+         * A deck, not the running order.
+         *
+         * This moved through the *queue*, which was a misreading of what a
+         * slide is here: a sermon's slides are kept as one item with sections,
+         * so "next slide" said over a staged deck means its next section --
+         * exactly what the Next button does. Jumping to the next thing in the
+         * plan instead put an unrelated item on the screen.
+         *
+         * So it is `step`, which already knows how to walk a deck, and the
+         * queue is left out of it entirely: nothing an operator says about
+         * slides should reorder their service.
          */
-        const entries = schedule.entries;
-        if (entries.length === 0) break;
+        if (payload.to != null) {
+          if (!goToSlide(payload.to)) {
+            setNotice(
+              preview?.kind === "lyric"
+                ? `This deck has ${preview.sections.length} slides.`
+                : "No deck is staged, so there is no slide to go to.",
+            );
+          }
+          break;
+        }
 
-        const to =
-          payload.to != null
-            ? // Counted from one, as a person counts.
-              payload.to - 1
-            : planAt.current == null
-              ? // Nothing staged yet: "next slide" means start at the top.
-                0
-              : planAt.current + (payload.by ?? 0);
-
-        // Stop at the ends rather than wrapping. Running off a plan into its
-        // own beginning during a service would be worse than doing nothing,
-        // and doing nothing is a thing an operator can see and correct.
-        if (to < 0 || to >= entries.length) break;
-
-        void stageEntry(to).then((staged) => {
-          // Live if something already was: the same rule the other
-          // instructions follow, so speaking never puts something in front of
-          // a congregation that was not already there.
-          if (staged && live) showItem(staged);
-        });
+        if (preview?.kind !== "lyric") {
+          setNotice("No deck is staged, so there is nothing to move through.");
+          break;
+        }
+        void step((payload.by ?? 1) > 0);
         break;
       }
       case "switch":
