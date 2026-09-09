@@ -192,6 +192,17 @@ pub struct Settings {
     pub outputs: Vec<Output>,
 }
 
+/// The reserved id of the projector, whose window label and title predate the
+/// outputs list and are known to `ndi_capture` and to churches' switchers.
+pub const OUTPUT_MAIN: &str = "main";
+/// The reserved id of the second display, for the same reason.
+pub const OUTPUT_SECOND: &str = "second";
+
+/// Whether an output is one of the two that cannot be removed.
+pub fn is_reserved(id: &str) -> bool {
+    id == OUTPUT_MAIN || id == OUTPUT_SECOND
+}
+
 /// One congregation-facing output: a screen, a network feed, or both.
 ///
 /// # Why an output is not just a window
@@ -539,7 +550,50 @@ pub fn load(app: &AppHandle) -> Result<Settings> {
     let mut settings: Settings = serde_json::from_str(&raw).unwrap_or_default();
     correct_miscalibrated_threshold(&mut settings);
     retire_own_azure(app, &mut settings);
+    seat_the_original_two(&mut settings);
     Ok(settings)
+}
+
+/// The projector and the second display, as rows in the outputs list.
+///
+/// # Why they had to join it
+///
+/// They were two buttons in the title bar with a screen picker each, and
+/// everything else an output can be told -- its look, its Bible, whether it is
+/// capitals, whether it goes on the network -- was unreachable for exactly the
+/// two outputs every church already had. A church with one screen could
+/// configure nothing; a church that added a third could configure only that
+/// one.
+///
+/// So the pair become ordinary rows, and the whole pane applies to them. They
+/// keep their reserved ids, and through those their original window labels and
+/// titles -- `ndi_capture` finds a window by name and a church's switcher has
+/// "Pulpitry — Projector" in its source list, so renaming them on upgrade
+/// would take a working feed off the air.
+///
+/// They cannot be removed, which is why they are seated here rather than left
+/// to the operator to add: an outputs list with no way to reach the projector
+/// would be worse than the buttons it replaced.
+fn seat_the_original_two(settings: &mut Settings) {
+    for (id, name) in [(OUTPUT_MAIN, "Projector"), (OUTPUT_SECOND, "Second display")] {
+        if settings.outputs.iter().any(|output| output.id == id) {
+            continue;
+        }
+        settings.outputs.insert(
+            // In order, and before anything a church has added: the projector
+            // is the first output in every building that has one.
+            if id == OUTPUT_MAIN { 0 } else { settings.outputs.len().min(1) },
+            Output {
+                id: id.to_string(),
+                name: name.to_string(),
+                // No screen until the operator says which, exactly as the old
+                // picker asked. Guessing a monitor would put a congregation's
+                // screen somewhere nobody chose.
+                display: None,
+                ..Output::default()
+            },
+        );
+    }
 }
 
 /**
@@ -672,6 +726,40 @@ mod tests {
     }
 
     #[test]
+    /// The projector and second display are always reachable.
+    #[test]
+    fn the_original_two_are_seated_and_kept_in_order() {
+        // A file from before the outputs list existed.
+        let mut settings: Settings = serde_json::from_str(r#"{"translation":"kjv"}"#).unwrap();
+        seat_the_original_two(&mut settings);
+
+        let ids: Vec<&str> = settings.outputs.iter().map(|o| o.id.as_str()).collect();
+        assert_eq!(ids, vec![OUTPUT_MAIN, OUTPUT_SECOND]);
+        // No screen guessed: putting a congregation's display somewhere
+        // nobody chose is worse than asking.
+        assert!(settings.outputs.iter().all(|o| o.display.is_none()));
+
+        // Run again -- every launch does -- and nothing is duplicated, and
+        // nothing an operator set is overwritten.
+        settings.outputs[0].name = "Main wall".into();
+        settings.outputs[0].display = Some(1);
+        seat_the_original_two(&mut settings);
+        assert_eq!(settings.outputs.len(), 2);
+        assert_eq!(settings.outputs[0].name, "Main wall");
+        assert_eq!(settings.outputs[0].display, Some(1));
+    }
+
+    /// A church's own outputs keep their place behind the two.
+    #[test]
+    fn seating_does_not_disturb_outputs_a_church_added() {
+        let mut settings = Settings::default();
+        settings.outputs.push(Output { id: "foyer".into(), name: "Foyer".into(), ..Output::default() });
+        seat_the_original_two(&mut settings);
+
+        let ids: Vec<&str> = settings.outputs.iter().map(|o| o.id.as_str()).collect();
+        assert_eq!(ids, vec![OUTPUT_MAIN, OUTPUT_SECOND, "foyer"]);
+    }
+
     /// A church that never opens the new pane keeps exactly what it had.
     #[test]
     fn settings_written_before_outputs_existed_have_none() {

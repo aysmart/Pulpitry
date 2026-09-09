@@ -9,6 +9,7 @@ import { Panel, PanelCount } from "./components/Panel";
 import { QueueRail } from "./components/QueueRail";
 import { ScripturePanel } from "./components/ScripturePanel";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { OutputsDialog } from "./components/OutputsDialog";
 import { SlidesFromSermon } from "./components/SlidesFromSermon";
 import { PreviewPanel, StagePanel } from "./components/StagePanel";
 import { TopBar } from "./components/TopBar";
@@ -33,14 +34,12 @@ import {
 } from "./lib/bible";
 import {
   closeProjector,
-  listDisplays,
   openProjector,
   openSecond,
   closeSecond,
   secondState,
   projectorState,
   bodyText,
-  type Display,
   type ProjectorState,
   type SecondState,
 } from "./lib/projector";
@@ -220,6 +219,7 @@ export default function App() {
   });
   const [translation, setTranslation] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [outputsOpen, setOutputsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [slidesOpen, setSlidesOpen] = useState(false);
@@ -241,7 +241,6 @@ export default function App() {
   const update = useUpdate(settings?.updateCheck ?? false);
 
   const [error, setError] = useState<string | null>(null);
-  const [displays, setDisplays] = useState<Display[]>([]);
   const [projector, setProjector] = useState<ProjectorState>({
     open: false,
     display: null,
@@ -325,12 +324,10 @@ export default function App() {
   // list whenever the operator goes looking rather than only at launch.
   const refreshDisplays = useCallback(async () => {
     try {
-      const [found, state, onSecond] = await Promise.all([
-        listDisplays(),
+      const [state, onSecond] = await Promise.all([
         projectorState(),
         secondState(),
       ]);
-      setDisplays(found);
       setProjector(state);
       setSecond(onSecond);
     } catch (err) {
@@ -673,12 +670,7 @@ export default function App() {
         onToggleListening={() => void toggleListening()}
         onOpenSettings={() => setSettingsOpen(true)}
         busy={busy || !settings}
-        displays={displays}
-        projector={projector}
-        second={second}
-        onToggleSecond={(display) => void toggleSecond(display)}
-        onToggleProjector={(display) => void toggleProjector(display)}
-        onRefreshDisplays={() => void refreshDisplays()}
+        onOpenOutputs={() => setOutputsOpen(true)}
       />
 
       {/*
@@ -754,10 +746,14 @@ export default function App() {
           </span>
         ) : null}
 
+        {/* Opens the pane rather than the projector. After the outputs list
+            took over, the projector has no screen until somebody says which --
+            and guessing one would put a congregation's display somewhere
+            nobody chose. */}
         {!projector.open ? (
           <button
             type="button"
-            onClick={() => void toggleProjector()}
+            onClick={() => setOutputsOpen(true)}
             className="rounded border border-pulpitry-gold-dim px-2 py-1 text-[11.5px] text-pulpitry-gold focus-visible:focus-ring"
           >
             No projector open — open one
@@ -1127,6 +1123,14 @@ export default function App() {
         <SettingsDialog
           settings={settings}
           onClose={() => setSettingsOpen(false)}
+          onSaved={setSettings}
+        />
+      ) : null}
+
+      {outputsOpen && settings ? (
+        <OutputsDialog
+          settings={settings}
+          onClose={() => setOutputsOpen(false)}
           onSaved={setSettings}
         />
       ) : null}

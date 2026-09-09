@@ -58,6 +58,17 @@ interface OutputState {
 const FIELD =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-2 text-[13px] text-pulpitry-text focus-visible:focus-ring";
 
+/**
+ * The two outputs that cannot be removed.
+ *
+ * The projector and the second display are seated in this list on every
+ * launch, so that everything an output can be told reaches them too. A list
+ * with no way to reach the projector would be worse than the title-bar buttons
+ * it replaced, so neither can be deleted -- only switched off by giving it no
+ * screen and no feed.
+ */
+const RESERVED = ["main", "second"];
+
 /** Enough to be unique for the life of an installation, and short to read. */
 function freshId(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -138,15 +149,6 @@ export function OutputsPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {outputs.length === 0 ? (
-        <p className="text-[11.5px] leading-snug text-pulpitry-muted">
-          The projector and the second display show the same thing in the same
-          look, which is what most churches want. Add an output here when one
-          screen needs something different — a lower third for the stream, or a
-          room reading another translation.
-        </p>
-      ) : null}
-
       {outputs.map((output) => {
         const state = live.find((entry) => entry.id === output.id);
         return (
@@ -175,13 +177,15 @@ export function OutputsPanel({
               >
                 {state?.open ? "Close" : "Open"}
               </button>
-              <button
-                type="button"
-                onClick={() => remove(output.id)}
-                className="rounded px-2 py-1.5 text-[12px] text-pulpitry-muted transition-colors hover:text-pulpitry-gold focus-visible:focus-ring"
-              >
-                Remove
-              </button>
+              {RESERVED.includes(output.id) ? null : (
+                <button
+                  type="button"
+                  onClick={() => remove(output.id)}
+                  className="rounded px-2 py-1.5 text-[12px] text-pulpitry-muted transition-colors hover:text-pulpitry-gold focus-visible:focus-ring"
+                >
+                  Remove
+                </button>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2">

@@ -3,8 +3,6 @@ import { listen } from "@tauri-apps/api/event";
 
 import { MirrorPanel } from "./MirrorPanel";
 import { NdiPanel } from "./NdiPanel";
-import { OutputsPanel } from "./OutputsPanel";
-import { StageControls } from "./StageControls";
 import { HostedSubscription } from "./HostedSubscription";
 import { NodeRuntimeNotice } from "./NodeRuntimeNotice";
 import { Feedback } from "./Feedback";
@@ -23,7 +21,6 @@ import {
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
 import {
-  type Output,
   clearAssistKey,
   testAssistModel,
   describeError,
@@ -755,7 +752,15 @@ export function SettingsDialog({
   const [testing, setTesting] = useState(false);
 
   const [mirrorEnabled, setMirrorEnabled] = useState(settings.mirrorEnabled);
-  const [outputs, setOutputs] = useState<Output[]>(settings.outputs ?? []);
+  /*
+   * Held but not edited here.
+   *
+   * The outputs have their own dialog now. This still has to send them back
+   * with every save, because a save writes the whole settings object -- and
+   * omitting them would erase a church's outputs the next time somebody
+   * changed the wake word.
+   */
+  const outputs = settings.outputs ?? [];
   const [speed, setSpeed] = useState<string | null>(null);
   const [timing, setTiming] = useState(false);
 
@@ -1741,21 +1746,6 @@ export function SettingsDialog({
                   enabled={mirrorEnabled}
                   onEnabledChange={setMirrorEnabled}
                 />
-              </Section>
-              <div className="border-t border-pulpitry-line" />
-              <div className="border-t border-pulpitry-line" />
-              <Section
-                title="The platform's own screen"
-                note="The timer, and a line the desk can send the platform. Shown only on an output whose shape is Stage display, and never anywhere a congregation can see."
-              >
-                <StageControls />
-              </Section>
-              <div className="border-t border-pulpitry-line" />
-              <Section
-                title="Outputs"
-                note="What each congregation-facing screen shows. Every one of them shows the same verse at the same moment; what differs is the look, the translation, and where it goes."
-              >
-                <OutputsPanel outputs={outputs} onChange={setOutputs} />
               </Section>
               <div className="border-t border-pulpitry-line" />
               <Section
