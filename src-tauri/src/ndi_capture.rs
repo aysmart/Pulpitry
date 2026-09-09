@@ -172,6 +172,40 @@ pub fn start(window_title: &str, fps: u32, latest: Latest) -> Result<Capture, Pr
             Problem::NotPermitted
         })?;
 
+    let ours = std::process::id();
+    let mine: Vec<_> = content
+        .windows()
+        .into_iter()
+        .filter(|window| {
+            window
+                .owning_application()
+                .is_some_and(|app| app.process_id() as u32 == ours)
+        })
+        .collect();
+
+    /*
+     * Told apart from a missing window, because the remedy is not the same.
+     *
+     * Without Screen Recording, `SCShareableContent::get()` does not fail --
+     * it answers with a stub: our own windows, present but titleless and
+     * sized 0x0. Searching that for a title finds nothing, and the honest
+     * reading of "nothing" is not "the projector is closed". A church turning
+     * NDI on for the first time was told its projector window was missing
+     * while the window was in front of them; the answer was a checkbox in
+     * System Settings.
+     *
+     * Our own visible window cannot be zero-sized, so a list where every one
+     * of ours is says what happened.
+     */
+    if !mine.is_empty()
+        && mine
+            .iter()
+            .all(|window| window.frame().size.width < 1.0 || window.frame().size.height < 1.0)
+    {
+        crate::log_line!("[ndi] every window of ours reads 0x0 — screen recording is not granted");
+        return Err(Problem::NotPermitted);
+    }
+
     /*
      * Our own window, by title and by process.
      *
@@ -180,16 +214,9 @@ pub fn start(window_title: &str, fps: u32, latest: Latest) -> Result<Capture, Pr
      * and sending somebody else's window to the stream would be the worst
      * possible failure of this feature. The process id makes it exact.
      */
-    let ours = std::process::id();
-    let window = content
-        .windows()
+    let window = mine
         .into_iter()
-        .find(|window| {
-            let mine = window
-                .owning_application()
-                .is_some_and(|app| app.process_id() as u32 == ours);
-            mine && window.title().as_deref() == Some(window_title)
-        })
+        .find(|window| window.title().as_deref() == Some(window_title))
         .ok_or(Problem::NoProjector)?;
 
     let width = window.frame().size.width as u32;

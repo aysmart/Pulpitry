@@ -35,6 +35,31 @@ pub const WINDOW_LABEL: &str = "projector";
  */
 pub const SECOND_LABEL: &str = "second";
 
+/// The window label for one of the outputs beyond those two.
+///
+/// Prefixed rather than bare so nothing can collide with `projector`,
+/// `second`, `main`, or a label some future window wants. The id is the
+/// output's own, which is generated once and never reused -- so a label
+/// cannot be inherited by a different output later and start showing the
+/// wrong translation on a screen nobody re-checked.
+pub fn label_for(id: &str) -> String {
+    format!("output-{id}")
+}
+
+/// What that window is called in the title bar, and therefore to the capture.
+///
+/// `ndi_capture` finds a window by title and process id, so this is not
+/// cosmetic: two outputs sharing a title would make which one reaches the
+/// network a coin toss. The output's name is the operator's, and two of those
+/// *can* collide, so the id is what actually distinguishes them.
+pub fn title_for(id: &str, name: &str) -> String {
+    if name.trim().is_empty() {
+        format!("Pulpitry — Output {id}")
+    } else {
+        format!("Pulpitry — {} [{id}]", name.trim())
+    }
+}
+
 /// One verse within a passage.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]

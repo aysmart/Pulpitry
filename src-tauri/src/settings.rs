@@ -176,7 +176,75 @@ pub struct Settings {
     pub semantic_threshold: f32,
 
     /// How the congregation-facing window looks.
+    ///
+    /// The look every output falls back to. An output that names a template of
+    /// its own uses that instead; one that does not uses this, which is what
+    /// the two windows always shared.
     pub projector: ProjectorTheme,
+
+    /// The congregation-facing outputs, beyond the first.
+    ///
+    /// Empty on every installation that predates this, which is the behaviour
+    /// it replaces: one projector, one optional second display, both showing
+    /// the same thing in the same look. A church that never opens this pane
+    /// keeps exactly that.
+    #[serde(default)]
+    pub outputs: Vec<Output>,
+}
+
+/// One congregation-facing output: a screen, a network feed, or both.
+///
+/// # Why an output is not just a window
+///
+/// It was two windows, `projector` and `second`, deliberately identical -- the
+/// same look, the same translation, the same everything, so a change to one
+/// could not be forgotten in the other. That is right when a church has one
+/// screen and a spare, and wrong the moment they have a stream that wants a
+/// lower third, a main wall that wants full cards, and an overflow room reading
+/// a different translation.
+///
+/// So the sameness moves down a level: **content is shared, presentation is
+/// not**. Every output shows the same verse at the same moment -- two outputs
+/// disagreeing about what is live is the one failure this cannot have -- and
+/// each draws it however it was told to.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Output {
+    /// Stable for the life of the output: it is the window label, the settings
+    /// key and what the network name is derived from. Generated once and never
+    /// reused, so deleting an output and adding another cannot inherit its
+    /// place in a switcher's source list.
+    pub id: String,
+    /// What the operator calls it. "Foyer", "Stream", "Overflow".
+    pub name: String,
+    /// Catalog id of the template it draws with, as a string because that is
+    /// what the front end holds. Empty follows the theme on the Display pane.
+    pub template: String,
+    /// Which translation it resolves references in. Empty follows the Scripture
+    /// panel, which is what most churches want and all of them had.
+    pub translation: String,
+    /// Monitor index, or `None` for an output with no screen of its own.
+    pub display: Option<usize>,
+    /// Whether it is announced on the network.
+    pub ndi_enabled: bool,
+    /// Its name on the network. Empty derives one from `name`, so a church that
+    /// never opens this still gets "Pulpitry — Foyer" rather than a second
+    /// source called "Pulpitry" that a switcher operator cannot tell apart.
+    pub ndi_name: String,
+}
+
+impl Default for Output {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            template: String::new(),
+            translation: String::new(),
+            display: None,
+            ndi_enabled: false,
+            ndi_name: String::new(),
+        }
+    }
 }
 
 /// Appearance of the projector output.
@@ -319,6 +387,7 @@ impl Default for Settings {
             // paraphrases sit at 0.71-0.81, so this separates them cleanly.
             semantic_threshold: 0.70,
             projector: ProjectorTheme::default(),
+            outputs: Vec::new(),
         }
     }
 }
@@ -498,6 +567,46 @@ mod tests {
     }
 
     #[test]
+    /// A church that never opens the new pane keeps exactly what it had.
+    #[test]
+    fn settings_written_before_outputs_existed_have_none() {
+        // The field is absent from every settings file on disk today. Absent
+        // must mean "one projector and an optional second, both the same",
+        // which is what an empty list means -- not a default output that
+        // starts announcing itself on a church network unasked.
+        let before = r#"{"translation":"kjv"}"#;
+        let settings: Settings = serde_json::from_str(before).expect("older settings");
+        assert!(settings.outputs.is_empty(), "no output should be invented");
+    }
+
+    /// An output round-trips as the operator window writes it.
+    #[test]
+    fn an_output_keeps_what_was_set_on_it() {
+        let json = r#"{
+            "id": "out-2",
+            "name": "Foyer",
+            "template": "7",
+            "translation": "niv",
+            "display": 1,
+            "ndiEnabled": true,
+            "ndiName": "Pulpitry — Foyer"
+        }"#;
+        let output: Output = serde_json::from_str(json).expect("an output");
+        assert_eq!(output.name, "Foyer");
+        assert_eq!(output.template, "7");
+        assert_eq!(output.translation, "niv");
+        assert_eq!(output.display, Some(1));
+        assert!(output.ndi_enabled);
+
+        // A screenless output is a real arrangement, not a missing field: it
+        // exists only on the network. `None` has to survive the round trip
+        // rather than becoming monitor zero, which is the operator's screen.
+        let screenless = r#"{"id":"out-3","name":"Stream","ndiEnabled":true}"#;
+        let output: Output = serde_json::from_str(screenless).expect("a screenless output");
+        assert_eq!(output.display, None);
+        assert!(output.translation.is_empty(), "empty follows the panel");
+    }
+
     fn a_theme_saved_before_gradients_existed_still_loads() {
         // Settings written by an earlier build have none of these keys. The
         // struct-level serde default is what keeps that from wiping a theme an
