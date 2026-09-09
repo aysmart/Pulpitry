@@ -275,9 +275,10 @@ fn theme_for_window(
     // what most churches want: one Bible in the building.
     let translation =
         found.map(|output| output.translation.trim().to_string()).unwrap_or_default();
+    let uppercase = found.is_some_and(|output| output.uppercase);
 
     if template.is_empty() {
-        return Ok(WindowLook { theme: settings.projector, overlay, translation });
+        return Ok(WindowLook { theme: settings.projector, overlay, translation, uppercase });
     }
 
     // A template the operator has since deleted falls back to the shared theme
@@ -292,7 +293,7 @@ fn theme_for_window(
             _ => None,
         });
 
-    Ok(WindowLook { theme: found.unwrap_or(settings.projector), overlay, translation })
+    Ok(WindowLook { theme: found.unwrap_or(settings.projector), overlay, translation, uppercase })
 }
 
 /// How one window should draw: its look, and the shape it draws in.
@@ -307,6 +308,8 @@ pub struct WindowLook {
     pub overlay: String,
     /// The translation this window draws scripture in. Empty follows the panel.
     pub translation: String,
+    /// Whether this window sets its words in capitals.
+    pub uppercase: bool,
 }
 
 #[tauri::command]

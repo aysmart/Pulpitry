@@ -43,11 +43,14 @@ export function StageView({
   theme,
   reference,
   text,
+  uppercase,
 }: {
   stage: StageState;
   theme: ProjectorTheme;
   reference: string | null;
   text: string | null;
+  /** Whether this output sets its words in capitals. */
+  uppercase: boolean;
 }) {
   /*
    * Counted here rather than sent.
@@ -141,6 +144,7 @@ export function StageView({
               fontSize: `${Math.min(baseSize(text), 5.2)}cqw`,
               lineHeight: 1.3,
               fontWeight: 600,
+              textTransform: uppercase ? "uppercase" : "none",
             }}
           >
             {text}

@@ -79,6 +79,7 @@ function Projector() {
   const [form, setForm] = useState<OverlayForm>("none");
   /** Empty follows the Scripture panel, which is what every window did. */
   const [translation, setTranslation] = useState("");
+  const [uppercase, setUppercase] = useState(false);
   const [stage, setStageState] = useState<StageState>({
     startedAt: 0,
     limitMinutes: 0,
@@ -120,6 +121,7 @@ function Projector() {
         setTheme(look.theme);
         setForm(look.overlay as OverlayForm);
         setTranslation(look.translation);
+        setUppercase(look.uppercase);
       })
       .catch(() => undefined);
     void getAudio()
@@ -152,6 +154,7 @@ function Projector() {
             setTheme(look.theme);
             setForm(look.overlay as OverlayForm);
             setTranslation(look.translation);
+            setUppercase(look.uppercase);
           })
           .catch(() => undefined);
       }),
@@ -243,6 +246,7 @@ function Projector() {
           theme={theme}
           reference={drawn?.caption ?? null}
           text={plainText(drawn)}
+          uppercase={uppercase}
         />
       </div>
     );
@@ -267,6 +271,7 @@ function Projector() {
           theme={theme}
           reference={drawn?.caption ?? null}
           text={plainText(drawn)}
+          uppercase={uppercase}
         />
       </div>
     );
@@ -277,6 +282,9 @@ function Projector() {
       // container-type so the announcement band can size itself against the
       // screen rather than the viewport, exactly as it does in the preview.
       className="relative h-full w-full overflow-hidden [container-type:size]"
+      // Set here rather than on each piece of text, so everything this output
+      // draws agrees -- verse, lyric and slide alike.
+      style={uppercase ? { textTransform: "uppercase" } : undefined}
     >
       <Backdrop theme={theme} />
 

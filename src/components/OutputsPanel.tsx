@@ -121,6 +121,9 @@ export function OutputsPanel({
         // nearly always the one going to the switcher -- and a full-screen
         // second copy of the projector is what they already had.
         overlay: "lower-third",
+        // A lower third is the default shape, and a lower third is nearly
+        // always capitals.
+        uppercase: true,
       },
     ]);
 
@@ -303,6 +306,28 @@ export function OutputsPanel({
               {output.overlay && output.overlay !== "none"
                 ? " Sent with a transparent background, so a switcher can lay it over a camera."
                 : ""}
+            </p>
+
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={output.uppercase}
+                onChange={(event) =>
+                  update(output.id, { uppercase: event.target.checked })
+                }
+                className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+              />
+              <span className="text-[12.5px] text-pulpitry-text">
+                Set the words in capitals
+              </span>
+            </label>
+
+            {/* Said once, where the choice is: a volunteer should not have to
+                know why a band and a wall want different answers. */}
+            <p className="text-[11px] leading-snug text-pulpitry-muted">
+              {output.uppercase
+                ? "Right for a short band read in a glance — capitals hold their shape against a moving picture."
+                : "Right for a screen carrying more than a line: capitals are slower to read in a paragraph."}
             </p>
 
             <label className="flex items-center gap-2">

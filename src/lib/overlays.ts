@@ -133,6 +133,18 @@ function onAccent(hex: string): string {
 export function overlayPlan(
   form: OverlayForm,
   theme: ProjectorTheme,
+  /**
+   * Whether this output sets its words in capitals.
+   *
+   * Passed in rather than baked into each form. The forms were written
+   * uppercase because a broadcast lower third nearly always is -- short, read
+   * in a glance, and capitals hold their shape against a moving picture. That
+   * is wrong for the same form carrying four verses: capitals remove the
+   * ascenders and descenders a reader's eye uses to tell words apart, and a
+   * paragraph of them is markedly slower to read. Which it is depends on the
+   * screen, so the screen decides.
+   */
+  uppercase = false,
 ): OverlayPlan {
   const accent = accentOf(theme);
   const ink = theme.panelTextColor || onAccent(accent);
@@ -145,8 +157,10 @@ export function overlayPlan(
   const banded: React.CSSProperties = {
     fontFamily: `var(--font-${family}, inherit)`,
     color: ink,
-    textTransform: "uppercase",
-    letterSpacing: "0.02em",
+    textTransform: uppercase ? "uppercase" : "none",
+    // Capitals need the extra tracking; sentence case does not, and gets
+    // loose-looking with it.
+    letterSpacing: uppercase ? "0.02em" : "0",
     fontWeight: 700,
     lineHeight: 1.25,
   };
@@ -225,7 +239,6 @@ export function overlayPlan(
           ...banded,
           fontSize: `${2.0 * scale}cqw`,
           lineHeight: 1.45,
-          textTransform: "none",
         },
         reference: { ...banded, fontSize: `${1.3 * scale}cqw` },
         chip: false,
@@ -245,6 +258,7 @@ export function overlayPlan(
           fontWeight: 700,
           lineHeight: 1.3,
           textAlign: "center",
+          textTransform: uppercase ? "uppercase" : "none",
           textShadow: "0 0.25cqw 0.9cqw rgba(0,0,0,0.85)",
         },
         reference: {

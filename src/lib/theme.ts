@@ -414,6 +414,8 @@ export interface WindowLook {
   overlay: string;
   /** The translation to draw scripture in. Empty follows the panel. */
   translation: string;
+  /** Whether this window sets its words in capitals. */
+  uppercase: boolean;
 }
 
 /** Grants the webview read access to a newly chosen background. */

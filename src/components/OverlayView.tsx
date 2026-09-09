@@ -18,15 +18,18 @@ export function OverlayView({
   theme,
   reference,
   text,
+  uppercase,
 }: {
   form: OverlayForm;
   theme: ProjectorTheme;
   reference: string | null;
   text: string | null;
+  /** Whether this output sets its words in capitals. */
+  uppercase: boolean;
 }) {
   if (!text || !text.trim()) return null;
 
-  const plan = overlayPlan(form, theme);
+  const plan = overlayPlan(form, theme, uppercase);
   const showReference = theme.showReference && Boolean(reference);
 
   return (

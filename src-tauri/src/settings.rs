@@ -258,6 +258,20 @@ pub struct Output {
     /// Empty and "none" both mean the full screen, so an output written before
     /// this existed keeps behaving as it did.
     pub overlay: String,
+
+    /// Whether this output sets its words in capitals.
+    ///
+    /// Per output because the right answer differs by screen and not by
+    /// church. A broadcast lower third is nearly always capitals -- it is
+    /// short, it is read in a glance, and capitals hold their shape against a
+    /// moving picture. A wall carrying four verses is the opposite: capitals
+    /// remove the ascenders and descenders a reader's eye uses to tell words
+    /// apart, and a paragraph of them is markedly slower to read.
+    ///
+    /// So a church with a stream and a main screen wants both at once, which
+    /// is exactly what one setting for the whole application could not give
+    /// them.
+    pub uppercase: bool,
 }
 
 impl Output {
@@ -284,6 +298,9 @@ impl Default for Output {
             height: 1080,
             fps: 30,
             overlay: String::new(),
+            // Sentence case: it is what the projector has always drawn, and
+            // the form that stays readable at any length.
+            uppercase: false,
         }
     }
 }

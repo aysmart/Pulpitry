@@ -28,6 +28,8 @@ export interface Output {
   fps: number;
   /** An overlay form id, or "none"/"" for the whole screen. */
   overlay: string;
+  /** Whether this output sets its words in capitals. */
+  uppercase: boolean;
 }
 
 export interface Settings {
