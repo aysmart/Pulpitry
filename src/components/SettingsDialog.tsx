@@ -1800,7 +1800,7 @@ export function SettingsDialog({
 
               <Section
                 title="New versions"
-                note="Once a day, Pulpitry asks the public download page whether a newer version has been published, and says so quietly if one has. The request carries nothing at all — no identifier, no version, nothing about this machine — and it does not reach our servers: the releases are on GitHub, which already serves every download. Switch it off for a machine that should touch nothing."
+                note="Each time it starts, Pulpitry asks the public download page whether a newer version has been published, and says so quietly if one has. The request carries nothing at all — no identifier, no version, nothing about this machine — and it does not reach our servers: the releases are on GitHub, which already serves every download. Switch it off for a machine that should touch nothing."
               >
                 <label className="flex items-center gap-2">
                   <input

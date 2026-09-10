@@ -24,13 +24,27 @@ import { relaunch } from "@tauri-apps/plugin-process";
  * whatever a manifest points at is a way to put code on every machine in every
  * church running this, so it verifies rather than trusts.
  *
+ * # When it asks
+ *
+ * Every time Pulpitry starts, rather than at most once a day. Under a daily
+ * limit a launch within a day of the last one asks nothing, so a release
+ * published on Saturday evening goes unnoticed by the laptop that was set up
+ * on Saturday afternoon and opened again for the service.
+ *
+ * A launch that cannot reach the network asks again a little later, a few
+ * times. The laptop that runs a service is often opened in the building and
+ * starts Pulpitry before it has joined the wifi, and one failed question at
+ * that moment was otherwise the only one of the day.
+ *
  * # It never interrupts
  *
- * Checked once when the window opens, never on a timer, and it does nothing at
- * all until the operator presses install. A service must never be interrupted
- * by a download, and an application that restarts itself mid-sermon would be
- * worse than one that is out of date.
+ * It does nothing at all until the operator presses install. A service must
+ * never be interrupted by a download, and an application that restarts itself
+ * mid-sermon would be worse than one that is out of date.
  */
+
+/** How long after a failed check to ask again: a minute, then five, then fifteen. */
+const RETRIES_MS = [60_000, 300_000, 900_000];
 export interface UpdateState {
   /** The waiting version, or null when there is nothing to install. */
   version: string | null;
@@ -49,18 +63,28 @@ export function useUpdate(enabled: boolean): UpdateState {
   useEffect(() => {
     if (!enabled) return;
     let active = true;
+    let timer: number | undefined;
 
     // Failure is silent. No network, a blocked domain, a manifest that has not
     // been published yet — none of them is worth a message to somebody who did
-    // not ask a question.
-    void check()
-      .then((found) => {
-        if (active && found) setUpdate(found);
-      })
-      .catch(() => undefined);
+    // not ask a question. It only earns another try.
+    const ask = (attempt: number) => {
+      void check()
+        .then((found) => {
+          if (active && found) setUpdate(found);
+        })
+        .catch(() => {
+          const wait = RETRIES_MS[attempt];
+          if (active && wait !== undefined) {
+            timer = window.setTimeout(() => ask(attempt + 1), wait);
+          }
+        });
+    };
+    ask(0);
 
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
   }, [enabled]);
 

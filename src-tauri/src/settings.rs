@@ -136,7 +136,7 @@ pub struct Settings {
     /// signal `provision_local_model` acts on at startup. It is only ever empty
     /// once.
     pub speech_model: String,
-    /// Whether to look, once a day, for a newer version.
+    /// Whether to look for a newer version each time the application starts.
     ///
     /// **On**, unlike the check-in, and separate from it for a reason: the
     /// check-in is opt-in and most churches will never switch it on, which
