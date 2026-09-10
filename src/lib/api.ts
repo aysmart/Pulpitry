@@ -242,6 +242,17 @@ export interface HostedView {
 export const hostedStatus = () => invoke<HostedView>("hosted_status");
 export const hostedActivate = (licence: string) =>
   invoke<HostedView>("hosted_activate", { licence });
+
+/**
+ * A way into the subscription page from a machine that is already activated.
+ *
+ * For the case a church cannot get out of on their own: the subscription has
+ * ended, transcription refuses to start, and the page wants a licence key that
+ * is on a machine in the office. The code still goes to the email on the
+ * account — this saves the key, not the check.
+ */
+export const hostedPortal = () =>
+  invoke<{ url: string; sentTo: string }>("hosted_portal");
 export const hostedDeactivate = () => invoke<HostedView>("hosted_deactivate");
 
 export const getSettings = () => invoke<SettingsView>("get_settings");

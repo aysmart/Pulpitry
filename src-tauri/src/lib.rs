@@ -2161,6 +2161,7 @@ pub fn run() {
             speech_status,
             hosted::hosted_status,
             hosted::hosted_activate,
+            hosted::hosted_portal,
             hosted::hosted_deactivate,
             speech_models,
             measure_speech,

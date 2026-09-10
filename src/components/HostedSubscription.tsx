@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 
+import { openUrl } from "@tauri-apps/plugin-opener";
+
 import {
+  describeError,
   hostedActivate,
   hostedDeactivate,
+  hostedPortal,
   hostedStatus,
   type HostedView,
 } from "../lib/api";
@@ -56,6 +60,34 @@ export function HostedSubscription({
 }) {
   const [state, setState] = useState<HostedView | null>(null);
   const [licence, setLicence] = useState("");
+  const [opening, setOpening] = useState(false);
+  const [portalNote, setPortalNote] = useState<string | null>(null);
+
+  /*
+   * Opens the subscription page in the church's own browser.
+   *
+   * Their browser rather than a window here, deliberately: they will want to
+   * read a code out of their mail, and possibly pay. Neither belongs in a
+   * projection application, and a checkout inside one is a thing nobody should
+   * be asked to trust.
+   */
+  const openPortal = async () => {
+    setOpening(true);
+    setPortalNote(null);
+    try {
+      const found = await hostedPortal();
+      await openUrl(found.url);
+      setPortalNote(
+        found.sentTo
+          ? `A code is on its way to ${found.sentTo}. Type it into the page that just opened.`
+          : "A code is on its way to the address on the account.",
+      );
+    } catch (error) {
+      setPortalNote(describeError(error));
+    } finally {
+      setOpening(false);
+    }
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -225,13 +257,39 @@ export function HostedSubscription({
           ) : null}
 
           {plan.status !== "active" ? (
-            <p
-              role="alert"
-              className="text-[11.5px] leading-snug text-pulpitry-gold"
-            >
-              This subscription is {plan.status}. Transcription will not start
-              until it is renewed.
-            </p>
+            <>
+              <p
+                role="alert"
+                className="text-[11.5px] leading-snug text-pulpitry-gold"
+              >
+                This subscription is {plan.status}. Transcription will not start
+                until it is renewed.
+              </p>
+
+              {/*
+                The one case a church cannot get out of from the desk.
+                
+                The page that could fix this wants a licence key, and the key
+                is on a machine in the office or an invoice from eight months
+                ago. This opens the page for them and sends a code to the
+                address on the account — the check still happens, the typing
+                does not.
+              */}
+              <button
+                type="button"
+                onClick={() => void openPortal()}
+                disabled={opening}
+                className="self-start rounded border border-pulpitry-gold-dim bg-pulpitry-gold/10 px-2.5 py-1.5 text-[12px] text-pulpitry-gold transition-colors hover:border-pulpitry-gold disabled:opacity-40 focus-visible:focus-ring"
+              >
+                {opening ? "Opening…" : "Renew this subscription"}
+              </button>
+
+              {portalNote ? (
+                <p className="text-[11px] leading-snug text-pulpitry-muted">
+                  {portalNote}
+                </p>
+              ) : null}
+            </>
           ) : plan.warnAt ? (
             <p className="text-[11.5px] leading-snug text-pulpitry-muted">
               {Math.round(plan.warnAt * 100)}% of this month&rsquo;s hours are

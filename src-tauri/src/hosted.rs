@@ -154,6 +154,32 @@ pub async fn hosted_activate(app: AppHandle, licence: String) -> Result<HostedVi
 /// the hosted engine is selected, so a machine that deactivates lands on the
 /// one screen that can put it right; changing the engine underneath the open
 /// dialog would only disagree with what it is showing.
+/// Opens the subscription page for this machine's church.
+///
+/// # Why a button rather than "go to the website"
+///
+/// The case this exists for is a subscription that has ended: transcription
+/// refuses to start, and the page that could fix it wants a licence key which
+/// is on a machine in the office or an invoice from eight months ago. The one
+/// moment a church most needs the page is the moment they are least able to
+/// reach it.
+///
+/// The code still goes to the email on the account and still has to be typed.
+/// This saves the key, not the check.
+#[tauri::command]
+pub async fn hosted_portal() -> Result<castavox_core::hosted::Portal, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let Some(token) = settings::load_hosted_token().ok().flatten() else {
+            // Not activated at all, which is a different problem and has its
+            // own field on the same pane.
+            return Err("This machine is not activated.".to_string());
+        };
+        Broker::new().portal(&token).map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| format!("could not ask: {error}"))?
+}
+
 #[tauri::command]
 pub async fn hosted_deactivate() -> Result<HostedView, String> {
     settings::clear_hosted_token().map_err(crate::to_message)?;
