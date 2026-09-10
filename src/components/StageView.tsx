@@ -160,7 +160,7 @@ export function StageView({
   if (timerOnly) {
     return (
       <div
-        className="flex h-full w-full items-center justify-center p-[3cqw]"
+        className="relative flex h-full w-full items-center justify-center p-[3cqw]"
         style={{ background: "#000000" }}
       >
         <span
@@ -175,6 +175,23 @@ export function StageView({
         >
           {running ? asClock(counting) : "—"}
         </span>
+
+        {/* Even here. A timer-only screen is for somebody who wants one
+            number, and what comes next is the other thing they would
+            otherwise turn round to ask. */}
+        {stage.nextUp.trim() ? (
+          <span
+            style={{
+              position: "absolute",
+              bottom: "4cqw",
+              fontSize: "2.4cqw",
+              fontWeight: 600,
+              color: "#6A6A6A",
+            }}
+          >
+            Next: {stage.nextUp}
+          </span>
+        ) : null}
       </div>
     );
   }
@@ -285,6 +302,30 @@ export function StageView({
         // letting the two collapse together in the middle.
         <div className="flex-1" />
       )}
+
+      {/*
+        What comes after this.
+        
+        The difference between finishing a point and trailing off -- and the
+        question that otherwise gets asked by turning round and mouthing it at
+        the desk in front of everybody. Quiet, because it is a reassurance
+        rather than an instruction.
+      */}
+      {stage.nextUp.trim() ? (
+        <div
+          style={{
+            fontSize: "2.2cqw",
+            fontWeight: 600,
+            color: "#6A6A6A",
+            paddingBottom: "1cqw",
+          }}
+        >
+          <span style={{ letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Next&nbsp;
+          </span>
+          <span style={{ color: "#B4B4B4" }}>{stage.nextUp}</span>
+        </div>
+      ) : null}
 
       {/* Last, and only when there is one. A permanent empty box teaches a
           platform to stop looking at the place a message would appear. */}

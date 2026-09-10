@@ -116,6 +116,21 @@ pub struct StageState {
     pub limit_minutes: i64,
     /// A line from the desk to the platform. Never reaches a congregation.
     pub note: String,
+    /// What comes after this in the service plan, as the plan labels it.
+    ///
+    /// Empty when there is no plan, or when the plan has run out. Filled by
+    /// the operator window, which is the only place that knows both the
+    /// running order and where it has got to -- and sending the label rather
+    /// than the plan keeps the congregation-facing window ignorant of the
+    /// library, which is most of why it can be trusted.
+    ///
+    /// # Why a preacher wants this
+    ///
+    /// Knowing what is coming is the difference between finishing a point and
+    /// trailing off. It is also the question that otherwise gets asked by
+    /// turning round and mouthing it at the desk, in front of everybody.
+    #[serde(default)]
+    pub next_up: String,
 }
 
 /// One verse within a passage.

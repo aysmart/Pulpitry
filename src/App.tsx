@@ -34,6 +34,8 @@ import {
   type Verse,
 } from "./lib/bible";
 import {
+  getStage,
+  setStage,
   closeProjector,
   openProjector,
   openSecond,
@@ -584,6 +586,43 @@ export default function App() {
    * otherwise the slide is shown as something they may press. Auto-advance is
    * a deliberate choice with a visible cost, and it should feel like one.
    */
+  /*
+   * What the platform is told is coming next.
+   *
+   * Worked out here because this is the only place that knows both the plan
+   * and where it has got to. The stage window is sent a *label*, not the plan
+   * -- keeping the congregation-facing window ignorant of the library is most
+   * of why it can be trusted with a wall.
+   *
+   * Matched by label, the same rule the queue rail marks the live item with,
+   * so the two cannot disagree about which entry the service is on.
+   */
+  const nextUp = (() => {
+    const entries = schedule.entries;
+    const caption = live?.caption ?? null;
+    if (entries.length === 0 || !caption) return "";
+    const at = entries.findIndex((entry) => entry.label === caption);
+    // Not in the plan, or the last thing in it: either way there is nothing
+    // to promise, and an empty line is more honest than a guess.
+    if (at < 0 || at + 1 >= entries.length) return "";
+    return entries[at + 1]?.label ?? "";
+  })();
+
+  /*
+   * Pushed only when it changes.
+   *
+   * Every send reaches every window, and re-sending the same label on each
+   * verse would be a message a second to say nothing new.
+   */
+  const sentNext = useRef<string | null>(null);
+  useEffect(() => {
+    if (sentNext.current === nextUp) return;
+    sentNext.current = nextUp;
+    void getStage()
+      .then((held) => setStage({ ...held, nextUp }))
+      .catch(() => undefined);
+  }, [nextUp]);
+
   const follow = useFollow(preview, (found) => {
     if (found.advance) goToSlide(found.index + 1);
   });

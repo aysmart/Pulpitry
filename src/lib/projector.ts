@@ -450,6 +450,8 @@ export interface StageState {
   limitMinutes: number;
   /** A line from the desk to the platform. Never reaches a congregation. */
   note: string;
+  /** What comes after this in the plan. Empty when there is none. */
+  nextUp: string;
 }
 
 export const EVENT_STAGE = "stage:changed";

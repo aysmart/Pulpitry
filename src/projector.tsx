@@ -86,6 +86,7 @@ function Projector() {
     startedAt: 0,
     limitMinutes: 0,
     note: "",
+    nextUp: "",
   });
   const [audio, setAudio] = useState<AudioState>({ muted: false, volume: 1 });
   const [ticker, setTicker] = useState<Ticker>({

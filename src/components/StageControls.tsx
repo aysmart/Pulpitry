@@ -31,6 +31,7 @@ export function StageControls() {
     startedAt: 0,
     limitMinutes: 0,
     note: "",
+    nextUp: "",
   });
   const [note, setNote] = useState("");
 
