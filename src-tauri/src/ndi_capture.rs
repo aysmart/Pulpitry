@@ -413,8 +413,27 @@ impl GraphicsCaptureApiHandler for WindowsSink {
     }
 }
 
+/*
+ * `keep_alpha` is accepted and needs no action here, and that is worth being
+ * precise about rather than leaving as an unused argument.
+ *
+ * ScreenCaptureKit composites a window onto a background colour, so on macOS
+ * an overlay has to be told to use a transparent one or it comes back as a
+ * solid block. The Windows Graphics Capture API does not composite: it hands
+ * back the window's own surface, and a transparent window's surface carries its
+ * alpha as it is. There is no background here to set.
+ *
+ * Unverified on real hardware, as everything on Windows still is. If an
+ * overlay arrives at a switcher on a solid block from a Windows machine, this
+ * is the paragraph that was wrong.
+ */
 #[cfg(target_os = "windows")]
-pub fn start(window_title: &str, fps: u32, latest: Latest) -> Result<Capture, Problem> {
+pub fn start(
+    window_title: &str,
+    fps: u32,
+    _keep_alpha: bool,
+    latest: Latest,
+) -> Result<Capture, Problem> {
     use windows_capture::settings::{
         ColorFormat, CursorCaptureSettings, DirtyRegionSettings, DrawBorderSettings,
         MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
@@ -462,7 +481,12 @@ pub fn start(window_title: &str, fps: u32, latest: Latest) -> Result<Capture, Pr
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-pub fn start(_window_title: &str, _fps: u32, _latest: Latest) -> Result<Capture, Problem> {
+pub fn start(
+    _window_title: &str,
+    _fps: u32,
+    _keep_alpha: bool,
+    _latest: Latest,
+) -> Result<Capture, Problem> {
     // Linux would need PipeWire and a portal, which is a different shape again.
     // Until somebody asks, the panel offers nothing rather than something that
     // fails after being switched on.
