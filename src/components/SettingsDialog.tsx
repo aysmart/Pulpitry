@@ -1525,7 +1525,7 @@ export function SettingsDialog({
 
               <Section
                 title="Speaking to Pulpitry"
-                note="Needs transcription running. On this machine a sentence is transcribed once you stop speaking, so an instruction lands a beat late; on a subscription or Azure it lands as you say it."
+                note="Needs transcription running. On this machine a sentence is transcribed once you stop speaking, so an instruction lands a beat late; on a subscription it lands as you say it."
               >
                 <label className="flex items-center gap-2">
                   <input

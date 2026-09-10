@@ -188,8 +188,8 @@ export function HostedSubscription({
           </p>
         ) : (
           <p className="text-[11.5px] leading-snug text-pulpitry-muted">
-            Transcribe on our account instead of buying an Azure one. Type the
-            key the way it is written; spacing and capitals do not matter.
+            Transcribe on our account, as you speak. Type the key the way it
+            is written; spacing and capitals do not matter.
           </p>
         )}
       </div>
