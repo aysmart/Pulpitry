@@ -216,6 +216,10 @@ export const exportLog = (to: string) => invoke<string>("export_log", { to });
 
 /** What a hosted plan has left this period. */
 export interface EntitlementView {
+  /** The address on the account, so an operator can see which plan this is. */
+  email: string;
+  /** What the church is called on the account, where they set one. */
+  accountName: string;
   status: string;
   /** "12 hr 30 min", worded in castavox-core so both products agree. */
   speechRemaining: string;

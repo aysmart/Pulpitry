@@ -230,6 +230,22 @@ export function HostedSubscription({
             </span>
           </div>
 
+          {/*
+            Which subscription this machine is on.
+            
+            A church with two -- one they are leaving and one they have just
+            bought -- had no way to tell them apart from the desk, and a
+            machine left on the wrong one shows nothing but somebody else's
+            numbers. It is also where a sign-in code goes, so seeing it here
+            means never guessing which mailbox to open.
+          */}
+          {plan.email ? (
+            <p className="text-[11.5px] leading-snug text-pulpitry-muted">
+              {plan.accountName ? `${plan.accountName} — ` : ""}
+              <span className="text-pulpitry-text">{plan.email}</span>
+            </p>
+          ) : null}
+
           {unlimited ? null : (
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-pulpitry-raised">
               <div

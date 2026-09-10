@@ -38,6 +38,11 @@ pub struct HostedView {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EntitlementView {
+    /// The address on the account, so an operator can see which subscription
+    /// this machine is on without leaving the desk.
+    pub email: String,
+    /// What the church is called on the account, where they set one.
+    pub account_name: String,
     pub status: String,
     /// "12 hr 30 min", worded once in castavox-core so both products agree.
     pub speech_remaining: String,
@@ -67,6 +72,8 @@ impl From<hosted::Entitlement> for EntitlementView {
                 .map(|(app, usage)| (app, usage.speech_seconds))
                 .collect(),
             status: state.status,
+            email: state.email,
+            account_name: state.account_name,
         }
     }
 }
