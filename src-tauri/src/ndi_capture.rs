@@ -190,6 +190,7 @@ pub fn start(
     window_title: &str,
     fps: u32,
     keep_alpha: bool,
+    size: Option<(u32, u32)>,
     latest: Latest,
 ) -> Result<Capture, Problem> {
     use screencapturekit::shareable_content::SCShareableContent;
@@ -260,8 +261,25 @@ pub fn start(
         .find(|window| window.title().as_deref() == Some(window_title))
         .ok_or(Problem::NoProjector)?;
 
-    let width = window.frame().size.width as u32;
-    let height = window.frame().size.height as u32;
+    /*
+     * The frame is the size the output was set to, not whatever the window
+     * measures at this instant.
+     *
+     * Those differ more often than they should: a window being resized has
+     * not finished when the capture restarts, and macOS has been seen to hand
+     * back a 1920x1080 window as 1892x1064. A feed at an odd size is scaled by
+     * every receiver that takes it, and scaled text is soft text. Told the
+     * size, ScreenCaptureKit draws the window into exactly that many pixels --
+     * from the full Retina backing, where there is one, which is what makes it
+     * sharp.
+     *
+     * `None` for an output on a monitor: its window is the monitor's size, and
+     * that is the right size for its feed.
+     */
+    let (width, height) = match size {
+        Some((wide, high)) if wide > 0 && high > 0 => (wide, high),
+        _ => (window.frame().size.width as u32, window.frame().size.height as u32),
+    };
     if width == 0 || height == 0 {
         return Err(Problem::NoProjector);
     }
@@ -481,6 +499,9 @@ pub fn start(
     window_title: &str,
     fps: u32,
     _keep_alpha: bool,
+    // The window is resized to it instead: Graphics Capture hands back a
+    // window's own surface at its own size and has no output size to set.
+    _size: Option<(u32, u32)>,
     latest: Latest,
 ) -> Result<Capture, Problem> {
     use windows_capture::settings::{
@@ -534,6 +555,7 @@ pub fn start(
     _window_title: &str,
     _fps: u32,
     _keep_alpha: bool,
+    _size: Option<(u32, u32)>,
     _latest: Latest,
 ) -> Result<Capture, Problem> {
     // Linux would need PipeWire and a portal, which is a different shape again.

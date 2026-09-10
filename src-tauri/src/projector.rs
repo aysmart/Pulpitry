@@ -812,8 +812,23 @@ impl Projector {
         extent: (f64, f64),
         landed: Option<usize>,
     ) -> Option<usize> {
-        let _ = window.set_position(tauri::PhysicalPosition::new(position.0, position.1));
-        let _ = window.set_size(tauri::PhysicalSize::new(extent.0, extent.1));
+        /*
+         * In the units the window was built in.
+         *
+         * A monitor's position and size are physical pixels, and are moved as
+         * such. An output with no screen was built at its width and height in
+         * logical units -- and moving it in physical ones halved it on a
+         * Retina Mac, where a 1920x1080 feed became a 960x540 window that the
+         * capture then stretched back to 1920: soft text, from a setting
+         * nobody changed.
+         */
+        if landed.is_some() {
+            let _ = window.set_position(tauri::PhysicalPosition::new(position.0, position.1));
+            let _ = window.set_size(tauri::PhysicalSize::new(extent.0, extent.1));
+        } else {
+            let _ = window.set_position(tauri::LogicalPosition::new(position.0, position.1));
+            let _ = window.set_size(tauri::LogicalSize::new(extent.0, extent.1));
+        }
         let _ = window.set_skip_taskbar(landed.is_none());
         // Not focused when it has no screen: taking the operator's focus to
         // a window they cannot see is the worst kind of nothing happening.
@@ -824,19 +839,34 @@ impl Projector {
         landed
     }
 
-    /// Rebuilds any open output whose window has the wrong paper for its look.
+    /// Brings open windows into line with their outputs' settings.
     ///
-    /// Called after the Displays dialog saves. Only the windows that need it
-    /// are touched; everything else an output can be told reaches its window
-    /// without one.
+    /// Called after the Displays dialog saves. Two things need the window
+    /// itself changed: its paper, when the look moves between a full picture
+    /// and an overlay, which means rebuilding it; and the size of one with no
+    /// screen, which is its feed's resolution. Before this, a resolution
+    /// changed on an open output did nothing until it was closed and opened
+    /// again, and the feed went on at the old size. Everything else an output
+    /// can be told reaches its window without either.
     ///
     /// Not from the main thread: a rebuild waits for the old window to go, and
     /// the main thread is what makes it go.
     pub fn refit(&self, outputs: &[crate::settings::Output]) {
         for output in outputs {
+            let Some(window) = self.app.get_webview_window(&label_for(&output.id)) else {
+                continue;
+            };
             let built = self.keyable.lock().get(&output.id).copied();
-            let open = self.output_open(&output.id);
-            if !open || built == Some(output.is_overlay()) {
+            let paper_right = built == Some(output.is_overlay());
+            let size_right = output.display.is_some() || {
+                let scale = window.scale_factor().unwrap_or(1.0);
+                window.inner_size().is_ok_and(|now| {
+                    let now = now.to_logical::<f64>(scale);
+                    (now.width.round() as u32, now.height.round() as u32)
+                        == (output.width.max(16), output.height.max(16))
+                })
+            };
+            if paper_right && size_right {
                 continue;
             }
             if let Err(error) = self.open_output(

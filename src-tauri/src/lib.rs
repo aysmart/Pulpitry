@@ -1018,6 +1018,9 @@ struct FeedShape {
     name: String,
     fps: u32,
     keyable: bool,
+    /// The frame size, for an output with no screen. One on a monitor takes
+    /// the monitor's.
+    size: Option<(u32, u32)>,
 }
 
 impl FeedShape {
@@ -1027,7 +1030,12 @@ impl FeedShape {
         } else {
             output.ndi_name.trim().to_string()
         };
-        Self { name, fps: output.fps, keyable: output.is_overlay() }
+        Self {
+            name,
+            fps: output.fps,
+            keyable: output.is_overlay(),
+            size: output.display.is_none().then_some((output.width, output.height)),
+        }
     }
 }
 
@@ -1057,7 +1065,13 @@ impl NdiOutputs {
             .unwrap_or_else(|| projector::title_for(&output.id, &output.name));
         let shape = FeedShape::of(output);
 
-        match ndi_output::Output::start_window(&title, &shape.name, shape.fps, shape.keyable) {
+        match ndi_output::Output::start_window(
+            &title,
+            &shape.name,
+            shape.fps,
+            shape.keyable,
+            shape.size,
+        ) {
             Ok(sender) => {
                 if let Ok(mut running) = self.running.lock() {
                     running.insert(output.id.clone(), Running { _sender: sender, shape });

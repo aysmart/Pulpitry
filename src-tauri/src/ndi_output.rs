@@ -96,6 +96,7 @@ impl Output {
         name: &str,
         fps: u32,
         keep_alpha: bool,
+        size: Option<(u32, u32)>,
     ) -> Result<Self, String> {
         let name = if name.trim().is_empty() { DEFAULT_NAME } else { name.trim() };
 
@@ -108,7 +109,7 @@ impl Output {
         let latest = Latest::default();
         let settling = Instant::now();
         let capture = loop {
-            match ndi_capture::start(window_title, fps.max(1), keep_alpha, latest.clone()) {
+            match ndi_capture::start(window_title, fps.max(1), keep_alpha, size, latest.clone()) {
                 Err(ndi_capture::Problem::NoProjector) if settling.elapsed() < SETTLE => {
                     std::thread::sleep(SETTLE_STEP);
                 }
@@ -260,7 +261,8 @@ mod tests {
         // Matched rather than `expect_err`: `Output` holds live threads and a
         // capture, so making it Debug purely to unwrap an error in a test would
         // be the test dictating the shape of the thing it tests.
-        let Err(problem) = Output::start_window("Pulpitry — Projector", "Pulpitry test", FPS, false)
+        let Err(problem) =
+            Output::start_window("Pulpitry — Projector", "Pulpitry test", FPS, false, None)
         else {
             panic!("there is no projector window in a test, so this cannot succeed");
         };
