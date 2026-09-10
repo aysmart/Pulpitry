@@ -79,13 +79,103 @@ pub fn title_for(id: &str, name: &str) -> String {
     }
 }
 
-/// Far enough off the desktop that no arrangement of real monitors reaches it.
+/// How far past the desktop's left edge a screenless output is placed.
 ///
-/// Where an output with no screen of its own lives. The window server still
-/// composites it and ScreenCaptureKit still captures it -- measured, both
-/// cases returning identical frames -- so an NDI-only output is an ordinary
-/// window that nobody looks at rather than a second rendering path.
-const OFF_SCREEN: f64 = -32_000.0;
+/// # Why not simply a very large negative number
+///
+/// It was -32000, which on macOS is only a coordinate -- and on Windows is
+/// the position the system reports for a *minimised* window. Code that finds
+/// a window there takes it for minimised and restores it somewhere sensible,
+/// which is on a screen: an NDI-only output appeared on the source laptop in
+/// front of whoever was using it. The spike that approved off-screen windows
+/// ran on a Mac, which is exactly why it did not see this.
+///
+/// So the window goes just beyond wherever the leftmost monitor actually
+/// ends, measured each time. Off every screen, composited as an ordinary
+/// window, and nowhere near a value any platform treats specially.
+const PAST_THE_EDGE: f64 = 200.0;
+
+/// What every webview in the application is started with on Windows.
+///
+/// # Why an output needs it
+///
+/// WebView2 is Chromium, and Chromium stops drawing a window it calculates is
+/// covered or off every screen -- the same economy WebKit makes on a Mac (see
+/// [`keep_painting`]). An output with no screen is off every screen by design,
+/// so without this its network feed would be whatever was drawn before it was
+/// moved there, for the rest of the service. `CalculateNativeWinOcclusion` is
+/// the Chromium feature that does the calculating.
+///
+/// Unverified on Windows, as all of Windows is until a release reaches a
+/// machine. A feed from a screenless output that freezes or never shows the
+/// verse is this paragraph being wrong.
+///
+/// # Why it is on every window and not only the outputs
+///
+/// WebView2 will not start a second webview with different arguments from the
+/// first; the window fails to open. So the operator window in
+/// `tauri.conf.json` carries this exact string too, and a test holds the two
+/// together.
+///
+/// The first three features and the autoplay flag are what wry passes when
+/// nobody says anything. Naming our own replaces those rather than adding to
+/// them, so they are repeated here -- autoplay is what lets a video background
+/// start on a screen nobody can click.
+pub const WEBVIEW_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required";
+
+/// Keeps an output's page drawing when macOS says nobody can see it.
+///
+/// # What went wrong without it
+///
+/// An NDI-only output on a Mac appeared on the network and showed nothing.
+/// Measured in the window itself: `document.visibilityState` was `hidden`, no
+/// animation frames ran, and its timers fired forty seconds late in a burst.
+/// WebKit asks the window server whether any of a window is visible, and for
+/// one placed off every screen the answer is no -- so it stops drawing, and the
+/// capture faithfully sends the page as it was before anything went live.
+///
+/// # What does not fix it
+///
+/// Tauri's background-throttling policy, measured: the timers came back, the
+/// page stayed hidden and nothing was drawn. It governs scheduling, not
+/// whether the view counts as visible.
+///
+/// # What does
+///
+/// Telling the webview not to consult occlusion at all -- a private WebKit
+/// switch, asked for by selector and skipped if a future macOS drops it -- and
+/// then hiding and showing the view once, because WebKit only re-reads its
+/// visibility when something changes. Measured afterwards: `visible`, sixty
+/// frames a second, off every screen.
+///
+/// The cost is that an output keeps drawing while it is covered. It has work
+/// to do only when something on it changes, and an output that has stopped
+/// drawing is an output that has stopped working.
+#[cfg(target_os = "macos")]
+fn keep_painting(window: &tauri::WebviewWindow) {
+    let done = window.with_webview(|platform| {
+        let view = platform.inner() as *mut objc2::runtime::AnyObject;
+        if view.is_null() {
+            return;
+        }
+        // SAFETY: `view` is the live WKWebView wry hands us on the main thread,
+        // and each message is sent only after the view says it answers it.
+        unsafe {
+            let switch = objc2::sel!(_setWindowOcclusionDetectionEnabled:);
+            let answers: bool = objc2::msg_send![view, respondsToSelector: switch];
+            if !answers {
+                crate::log_line!("[projector] this WebKit has no occlusion switch; a covered output may stop drawing");
+                return;
+            }
+            let () = objc2::msg_send![view, _setWindowOcclusionDetectionEnabled: false];
+            let () = objc2::msg_send![view, setHidden: true];
+            let () = objc2::msg_send![view, setHidden: false];
+        }
+    });
+    if let Err(error) = done {
+        crate::log_line!("[projector] could not reach the output's webview: {error}");
+    }
+}
 
 /// What the platform sees, and only the platform.
 ///
@@ -357,6 +447,11 @@ pub struct Projector {
     /// Where each output's window landed, by output id. `None` for one that
     /// has no screen and exists only on the network.
     windows: Mutex<std::collections::HashMap<String, Option<usize>>>,
+    /// Whether each output's window was built see-through, by output id.
+    ///
+    /// Remembered because it cannot be changed afterwards: a window has paper
+    /// or it does not from the moment it exists. See [`Self::refit`].
+    keyable: Mutex<std::collections::HashMap<String, bool>>,
     audio: Mutex<AudioState>,
     media: Mutex<MediaCommand>,
     progress: Mutex<MediaProgress>,
@@ -372,6 +467,7 @@ impl Projector {
             display: Mutex::new(None),
             second: Mutex::new(None),
             windows: Mutex::new(std::collections::HashMap::new()),
+            keyable: Mutex::new(std::collections::HashMap::new()),
             audio: Mutex::new(AudioState::default()),
             media: Mutex::new(MediaCommand::default()),
             progress: Mutex::new(MediaProgress::default()),
@@ -600,27 +696,51 @@ impl Projector {
                     Some(index),
                 )
             }
-            None => (
-                (OFF_SCREEN, OFF_SCREEN),
-                (size.0.max(16) as f64, size.1.max(16) as f64),
-                None,
-            ),
+            None => {
+                let wide = size.0.max(16) as f64;
+                let high = size.1.max(16) as f64;
+                // The leftmost edge of every monitor there is, so the window
+                // clears all of them whatever order they are arranged in.
+                let (left, top) = self
+                    .app
+                    .available_monitors()
+                    .ok()
+                    .and_then(|monitors| {
+                        monitors
+                            .iter()
+                            .map(|monitor| (monitor.position().x as f64, monitor.position().y as f64))
+                            .reduce(|a, b| (a.0.min(b.0), a.1.min(b.1)))
+                    })
+                    .unwrap_or((0.0, 0.0));
+                ((left - wide - PAST_THE_EDGE, top), (wide, high), None)
+            }
         };
 
         if let Some(window) = self.app.get_webview_window(&label) {
-            // Already open: move it rather than tearing down a live display.
-            let _ = window.set_position(tauri::PhysicalPosition::new(position.0, position.1));
-            let _ = window.set_size(tauri::PhysicalSize::new(extent.0, extent.1));
-            // Not focused when it has no screen: taking the operator's focus to
-            // a window they cannot see is the worst kind of nothing happening.
-            if landed.is_some() {
-                let _ = window.set_focus();
+            if self.keyable.lock().get(id).copied() == Some(overlay) {
+                // Already open: move it rather than tearing down a live display.
+                return Ok(self.move_open(id, &window, position, extent, landed));
             }
-            self.windows.lock().insert(id.to_string(), landed);
-            return Ok(landed);
+            /*
+             * Open, but with the wrong paper, and that cannot be changed in
+             * place: a window is transparent or not from the moment it is
+             * built. An output opened as a full picture and then switched to a
+             * lower third kept its opaque window, and the lower third went out
+             * over NDI on a solid block.
+             *
+             * So it is closed and built again: a blink, once, when its look
+             * changes between a full picture and an overlay.
+             */
+            let _ = window.destroy();
+            let asked = std::time::Instant::now();
+            while self.app.get_webview_window(&label).is_some()
+                && asked.elapsed() < std::time::Duration::from_secs(2)
+            {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
         }
 
-        WebviewWindowBuilder::new(&self.app, &label, WebviewUrl::App("projector.html".into()))
+        let window = WebviewWindowBuilder::new(&self.app, &label, WebviewUrl::App("projector.html".into()))
             .title(&title)
             // Borderless and sized to the monitor rather than true fullscreen:
             // fullscreen on macOS moves the window to its own Space, which
@@ -631,6 +751,14 @@ impl Projector {
             // kept above everything can surprise an operator if a monitor is
             // unplugged and the desktop re-arranges under it.
             .always_on_top(landed.is_some())
+            // Not in the taskbar or the window switcher when it has no screen.
+            // A window nobody is meant to see should not be one a volunteer can
+            // Alt-Tab onto mid-service and then close.
+            .skip_taskbar(landed.is_none())
+            // Nor does it take the keyboard when it opens. Built focused, it
+            // would take the operator's shortcuts with it -- the space bar
+            // going to a window that is not on any screen.
+            .focused(landed.is_some())
             .position(position.0, position.1)
             .inner_size(extent.0, extent.1)
             /*
@@ -657,11 +785,70 @@ impl Projector {
             } else {
                 tauri::window::Color(244, 241, 234, 255)
             })
+            .additional_browser_args(WEBVIEW_ARGS)
             .build()
             .map_err(|err| anyhow!("could not open the {name} window: {err}"))?;
 
+        // Unconditionally, and not only for an output with no screen: one on a
+        // monitor that something covers -- a stage display under a slide
+        // deck, a feed on the laptop screen under the operator's window -- is
+        // just as occluded, and its network feed would freeze just the same.
+        #[cfg(target_os = "macos")]
+        keep_painting(&window);
+        #[cfg(not(target_os = "macos"))]
+        let _ = window;
+
         self.windows.lock().insert(id.to_string(), landed);
+        self.keyable.lock().insert(id.to_string(), overlay);
         Ok(landed)
+    }
+
+    /// Moves a window that is already open rather than tearing down a live display.
+    fn move_open(
+        &self,
+        id: &str,
+        window: &tauri::WebviewWindow,
+        position: (f64, f64),
+        extent: (f64, f64),
+        landed: Option<usize>,
+    ) -> Option<usize> {
+        let _ = window.set_position(tauri::PhysicalPosition::new(position.0, position.1));
+        let _ = window.set_size(tauri::PhysicalSize::new(extent.0, extent.1));
+        let _ = window.set_skip_taskbar(landed.is_none());
+        // Not focused when it has no screen: taking the operator's focus to
+        // a window they cannot see is the worst kind of nothing happening.
+        if landed.is_some() {
+            let _ = window.set_focus();
+        }
+        self.windows.lock().insert(id.to_string(), landed);
+        landed
+    }
+
+    /// Rebuilds any open output whose window has the wrong paper for its look.
+    ///
+    /// Called after the Displays dialog saves. Only the windows that need it
+    /// are touched; everything else an output can be told reaches its window
+    /// without one.
+    ///
+    /// Not from the main thread: a rebuild waits for the old window to go, and
+    /// the main thread is what makes it go.
+    pub fn refit(&self, outputs: &[crate::settings::Output]) {
+        for output in outputs {
+            let built = self.keyable.lock().get(&output.id).copied();
+            let open = self.output_open(&output.id);
+            if !open || built == Some(output.is_overlay()) {
+                continue;
+            }
+            if let Err(error) = self.open_output(
+                &output.id,
+                &output.name,
+                output.display,
+                (output.width, output.height),
+                output.is_overlay(),
+            ) {
+                crate::log_line!("[projector] could not rebuild {}: {error}", output.name);
+            }
+        }
     }
 
     /// Closes an output's window. Closing one that is not open is not an error.
@@ -670,6 +857,7 @@ impl Projector {
             let _ = window.close();
         }
         self.windows.lock().remove(id);
+        self.keyable.lock().remove(id);
     }
 
     /// Whether an output's window is open.
@@ -687,10 +875,28 @@ impl Projector {
     /// service the projector is essentially never the laptop screen.
     pub fn open(&self, requested: Option<usize>) -> Result<ProjectorState> {
         let index = self
-            .open_output(MAIN_ID, "Projector", Some(Self::chosen(&self.app, requested)?), (0, 0), false)?
+            .open_output(
+                MAIN_ID,
+                "Projector",
+                Some(Self::chosen(&self.app, requested)?),
+                (0, 0),
+                self.is_overlay(MAIN_ID),
+            )?
             .ok_or_else(|| anyhow!("the projector must land on a display"))?;
         *self.display.lock() = Some(index);
         Ok(self.state())
+    }
+
+    /// Whether an output's look is an overlay, as its settings say.
+    ///
+    /// The keyboard opens the projector and the second display without going
+    /// through the Displays dialog, and used to build both opaque whatever
+    /// they were set to -- then the next save from the dialog rebuilt them.
+    fn is_overlay(&self, id: &str) -> bool {
+        crate::settings::load(&self.app)
+            .ok()
+            .and_then(|settings| settings.outputs.into_iter().find(|output| output.id == id))
+            .is_some_and(|output| output.is_overlay())
     }
 
     /// Which monitor a request lands on. Only ever called on the main thread.
@@ -739,7 +945,7 @@ impl Projector {
                 "Second display",
                 Some(Self::chosen(&self.app, requested)?),
                 (0, 0),
-                false,
+                self.is_overlay(SECOND_ID),
             )?
             .ok_or_else(|| anyhow!("the second display must land on a display"))?;
         *self.second.lock() = Some(index);
@@ -772,6 +978,37 @@ pub struct SecondState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every webview is started with the same arguments, or Windows opens one.
+    ///
+    /// WebView2 refuses a second webview whose arguments differ from the
+    /// first's. The operator window's are in the config file and the outputs'
+    /// are in code, so an edit to either alone passes every Mac test and ships
+    /// a Windows build whose projector cannot open.
+    #[test]
+    fn every_window_starts_its_webview_the_same_way() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("the config parses");
+        let windows = config["app"]["windows"].as_array().expect("windows are listed");
+        assert!(!windows.is_empty());
+        for window in windows {
+            assert_eq!(
+                window["additionalBrowserArgs"].as_str(),
+                Some(WEBVIEW_ARGS),
+                "window {} must start its webview exactly as the outputs do",
+                window["label"],
+            );
+        }
+    }
+
+    /// The arguments keep what wry would have passed on its own.
+    #[test]
+    fn the_webview_arguments_keep_the_defaults_they_replace() {
+        for kept in ["msWebOOUI", "msPdfOOUI", "msSmartScreenProtection", "--autoplay-policy=no-user-gesture-required"] {
+            assert!(WEBVIEW_ARGS.contains(kept), "{kept} was dropped");
+        }
+        assert!(WEBVIEW_ARGS.contains("CalculateNativeWinOcclusion"));
+    }
 
     #[test]
     fn a_picture_keeps_how_it_meets_the_frame() {

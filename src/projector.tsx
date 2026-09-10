@@ -79,6 +79,35 @@ function Projector() {
   const [form, setForm] = useState<OverlayForm>("none");
   /** Empty follows the Scripture panel, which is what every window did. */
   const [translation, setTranslation] = useState("");
+
+  /*
+   * The page itself has to be see-through, not only the window around it.
+   *
+   * An overlay went out over NDI as a solid block because `body` carries the
+   * application's charcoal from the stylesheet. The window was transparent,
+   * the capture kept the alpha, NDI carried BGRA and the overlay's own box was
+   * transparent -- every layer but the one that paints first, which filled the
+   * frame before any of the others were reached.
+   *
+   * Set here rather than in the stylesheet because it is the one window that
+   * wants it. The operator window is the same application and must keep its
+   * ground; a whole-screen output wants the theme's background, not nothing.
+   */
+  useEffect(() => {
+    const clear = form !== "none" && form !== "stage";
+    const was = {
+      html: document.documentElement.style.background,
+      body: document.body.style.background,
+    };
+    if (clear) {
+      document.documentElement.style.background = "transparent";
+      document.body.style.background = "transparent";
+    }
+    return () => {
+      document.documentElement.style.background = was.html;
+      document.body.style.background = was.body;
+    };
+  }, [form]);
   const [uppercase, setUppercase] = useState(false);
   const [stageClock, setStageClock] = useState(true);
   const [stageLive, setStageLive] = useState(true);

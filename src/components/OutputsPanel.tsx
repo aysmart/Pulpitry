@@ -53,6 +53,15 @@ const FORMATS: Array<{
 interface OutputState {
   id: string;
   open: boolean;
+  /** On the network right now. */
+  sending: boolean;
+  /** Why it is not, when it was asked to be. */
+  problem: string | null;
+}
+
+/** What the network would call an output's feed. */
+function feedName(output: Output): string {
+  return output.ndiName.trim() || `Pulpitry — ${output.name.trim() || "Output"}`;
 }
 
 const FIELD =
@@ -86,11 +95,42 @@ export function OutputsPanel({
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [live, setLive] = useState<OutputState[]>([]);
 
+  /*
+   * What the network can see, asked for rather than polled, per output.
+   *
+   * "Is anybody able to see this?" is the one question an operator has about
+   * a feed, and the honest answer comes from discovery rather than from us
+   * saying we are sending. A source we announce that this machine cannot find
+   * is a network that will not carry it -- guest wifi with client isolation, a
+   * VLAN, a firewall -- which is worth finding out on a Tuesday.
+   */
+  const [seen, setSeen] = useState<Record<string, string[] | "looking">>({});
+
   const refreshLive = useCallback(() => {
     void invoke<OutputState[]>("outputs_state")
       .then(setLive)
       .catch(() => undefined);
   }, []);
+
+  /*
+   * Kept current while the dialog is open.
+   *
+   * A feed starts after the window appears and after a save lands, both
+   * behind the button that caused them, and can fail seconds later -- a Mac
+   * waiting on Screen Recording, a runtime not installed. Asked once, the row
+   * would say "starting" for ever.
+   */
+  useEffect(() => {
+    const timer = window.setInterval(refreshLive, 2000);
+    return () => window.clearInterval(timer);
+  }, [refreshLive]);
+
+  const lookFor = (id: string) => {
+    setSeen((current) => ({ ...current, [id]: "looking" }));
+    void invoke<string[]>("ndi_sources")
+      .catch(() => [] as string[])
+      .then((sources) => setSeen((current) => ({ ...current, [id]: sources })));
+  };
 
   useEffect(() => {
     void listDisplays()
@@ -396,14 +436,22 @@ export function OutputsPanel({
             </label>
 
             {output.ndiEnabled ? (
-              <input
-                value={output.ndiName}
-                onChange={(event) =>
-                  update(output.id, { ndiName: event.target.value })
-                }
-                placeholder={`Pulpitry — ${output.name || "Output"}`}
-                className={FIELD}
-              />
+              <>
+                <input
+                  value={output.ndiName}
+                  onChange={(event) =>
+                    update(output.id, { ndiName: event.target.value })
+                  }
+                  placeholder={`Pulpitry — ${output.name || "Output"}`}
+                  className={FIELD}
+                />
+                <FeedStatus
+                  name={feedName(output)}
+                  state={state}
+                  seen={seen[output.id]}
+                  onLook={() => lookFor(output.id)}
+                />
+              </>
             ) : null}
 
             {/* Said where it is chosen. A church learning during a service that
@@ -412,7 +460,7 @@ export function OutputsPanel({
             {output.display === null ? (
               <p className="text-[11px] leading-snug text-pulpitry-muted">
                 Drawn at {output.width}×{output.height} and never shown on a
-                screen. Only useful with NDI switched on below — and each feed
+                screen. Only useful with NDI switched on above — and each feed
                 is around 100 Mbit/s, so this is for a wired network.
               </p>
             ) : null}
@@ -427,6 +475,78 @@ export function OutputsPanel({
       >
         Add an output
       </button>
+    </div>
+  );
+}
+
+/**
+ * Whether a feed is on the network, and if it was asked to be and is not, why.
+ *
+ * The failures are the operator's to fix and were once only in the log: a Mac
+ * that had not been given Screen Recording published nothing and said nothing,
+ * which from the switcher looks exactly like a network fault.
+ */
+function FeedStatus({
+  name,
+  state,
+  seen,
+  onLook,
+}: {
+  name: string;
+  state: OutputState | undefined;
+  seen: string[] | "looking" | undefined;
+  onLook: () => void;
+}) {
+  if (!state?.open) {
+    return (
+      <p className="text-[11px] leading-snug text-pulpitry-muted">
+        Goes on the network as &ldquo;{name}&rdquo; while this output is open.
+      </p>
+    );
+  }
+  if (state.problem) {
+    return (
+      <p role="alert" className="text-[11.5px] leading-snug text-pulpitry-gold">
+        {state.problem}
+      </p>
+    );
+  }
+  if (!state.sending) {
+    return <p className="text-[11px] text-pulpitry-muted">Starting the feed…</p>;
+  }
+
+  // A source is listed as "MACHINE (name)", so the name is matched in brackets
+  // rather than anywhere: "Pulpitry" alone is inside every one of ours.
+  const found = Array.isArray(seen) && seen.some((source) => source.endsWith(`(${name})`));
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="text-[11.5px] text-pulpitry-teal">
+          On the network as &ldquo;{name}&rdquo;
+        </span>
+        <button
+          type="button"
+          disabled={seen === "looking"}
+          onClick={onLook}
+          className="rounded px-1 py-0.5 text-[11.5px] text-pulpitry-muted underline-offset-2 hover:underline disabled:opacity-60 focus-visible:focus-ring"
+        >
+          {seen === "looking" ? "Looking…" : "Check the network can see it"}
+        </button>
+      </div>
+      {Array.isArray(seen) ? (
+        found ? (
+          <span className="text-[11.5px] text-pulpitry-teal">
+            Found on the network. Any NDI software here can take it.
+          </span>
+        ) : (
+          <span className="text-[11.5px] leading-snug text-pulpitry-gold">
+            Sending, but this machine cannot find it on the network.
+            {seen.length > 0
+              ? " Other sources are visible, so NDI works — something is blocking this one."
+              : " No NDI sources at all are visible, which usually means the network blocks discovery: guest wifi, client isolation, or a firewall."}
+          </span>
+        )
+      ) : null}
     </div>
   );
 }

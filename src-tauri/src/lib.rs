@@ -188,6 +188,29 @@ fn save_settings(
     }
     apply_voice(&app, &detector, &settings);
 
+    /*
+     * Every open output's feed follows what was just saved.
+     *
+     * On a thread of its own: this is a synchronous command, so it runs on
+     * the main thread, and starting a capture can wait up to three seconds
+     * for a window macOS has not listed yet. The dialog saves as it is
+     * changed; it must not freeze while it does.
+     */
+    {
+        let app = app.clone();
+        let saved = settings.clone();
+        std::thread::spawn(move || {
+            // Windows first: a rebuilt window is a new window, and its feed
+            // has to find that one rather than the one that just went.
+            if let Some(projector) = app.try_state::<Arc<Projector>>() {
+                projector.refit(&saved.outputs);
+            }
+            if let Some(senders) = app.try_state::<NdiOutputs>() {
+                senders.reconcile(&app, &saved);
+            }
+        });
+    }
+
     if let Some(mirror) = app.try_state::<Arc<mirror::Mirror>>() {
         mirror.configure(&settings);
     }
@@ -961,73 +984,184 @@ fn announce(app: &AppHandle, library: &Library) {
     }
 }
 
-/*
- * The NDI output, as the operator drives it.
- *
- * The running output lives in a Mutex<Option<..>> in app state: `Some` while it
- * is publishing, `None` otherwise, and dropping the old one is what stops the
- * threads and takes the source off the network. Nothing else is needed to stop
- * it, which is the point of `Output` owning its own shutdown.
- */
-struct NdiOutput(std::sync::Mutex<Option<ndi_output::Output>>);
-
 /// The senders for the configured outputs, one per output that asked for one.
 ///
-/// Separate from `NdiOutput`, which is the projector's own and predates these.
 /// Keyed by output id so closing one output cannot take another off the air --
 /// which, on a Sunday, is somebody's stream.
 #[derive(Default)]
-struct NdiOutputs(std::sync::Mutex<std::collections::HashMap<String, ndi_output::Output>>);
-
-impl NdiOutputs {
-    /// Publishes one output's window, replacing any sender it already had.
+struct NdiOutputs {
+    running: std::sync::Mutex<std::collections::HashMap<String, Running>>,
+    /// Why an output that asked to be on the network is not, in words for the
+    /// operator.
     ///
-    /// Failure is logged and swallowed. A church that has not installed the
-    /// NDI runtime should still get their screen: the window is the thing they
-    /// asked for and the feed is the extra.
-    fn start(&self, output: &settings::Output) {
-        let title = projector::title_for(&output.id, &output.name);
+    /// Kept until it next starts or is switched off, so the Displays dialog can
+    /// say so. A failure that reached only the log is a feed a church finds
+    /// missing during the service: a Mac that had not been given Screen
+    /// Recording once published nothing, said nothing, and looked exactly
+    /// like a network problem.
+    problems: std::sync::Mutex<std::collections::HashMap<String, String>>,
+    /// Held while a feed is being started, so that pressing Open and the
+    /// dialog's save arriving together cannot start the same feed twice.
+    turn: std::sync::Mutex<()>,
+}
+
+/// A running sender and what it was started as.
+struct Running {
+    /// Dropping it takes the source off the network. Never read otherwise.
+    _sender: ndi_output::Output,
+    shape: FeedShape,
+}
+
+/// Everything about a feed that needs a restart to change.
+#[derive(PartialEq)]
+struct FeedShape {
+    name: String,
+    fps: u32,
+    keyable: bool,
+}
+
+impl FeedShape {
+    fn of(output: &settings::Output) -> Self {
         let name = if output.ndi_name.trim().is_empty() {
             format!("Pulpitry — {}", output.name.trim())
         } else {
             output.ndi_name.trim().to_string()
         };
+        Self { name, fps: output.fps, keyable: output.is_overlay() }
+    }
+}
 
-        match ndi_output::Output::start_window(&title, &name, output.fps, output.is_overlay()) {
+impl NdiOutputs {
+    /// Publishes one output's window, replacing any sender it already had.
+    ///
+    /// Failure is logged, kept for the dialog, and otherwise swallowed. A
+    /// church that has not installed the NDI runtime should still get their
+    /// screen: the window is the thing they asked for and the feed is the
+    /// extra.
+    fn start(&self, app: &AppHandle, output: &settings::Output) {
+        let _turn = self.turn.lock();
+        self.start_now(app, output);
+    }
+
+    fn start_now(&self, app: &AppHandle, output: &settings::Output) {
+        // The old one first: a rename has to take the old name off the network
+        // before the new one appears, or a switcher briefly lists both.
+        self.stop(&output.id);
+
+        // The title the window actually has. A custom output's title carries
+        // its name, and one renamed since it opened still has the old one --
+        // looked for by the new, it would be reported as not open.
+        let title = app
+            .get_webview_window(&projector::label_for(&output.id))
+            .and_then(|window| window.title().ok())
+            .unwrap_or_else(|| projector::title_for(&output.id, &output.name));
+        let shape = FeedShape::of(output);
+
+        match ndi_output::Output::start_window(&title, &shape.name, shape.fps, shape.keyable) {
             Ok(sender) => {
-                if let Ok(mut held) = self.0.lock() {
-                    held.insert(output.id.clone(), sender);
+                if let Ok(mut running) = self.running.lock() {
+                    running.insert(output.id.clone(), Running { _sender: sender, shape });
                 }
             }
-            Err(why) => log_line!("[ndi] {} could not be published: {why}", output.name),
+            Err(why) => {
+                log_line!("[ndi] {} could not be published: {why}", output.name);
+                if let Ok(mut problems) = self.problems.lock() {
+                    problems.insert(output.id.clone(), why);
+                }
+            }
         }
     }
 
     /// Takes one output off the network. Dropping the sender is what stops it.
     fn stop(&self, id: &str) {
-        if let Ok(mut held) = self.0.lock() {
-            held.remove(id);
+        let gone = self.running.lock().ok().and_then(|mut running| running.remove(id));
+        // Dropped outside the lock: dropping joins the sender's thread, and the
+        // dialog asking for state should not wait on that.
+        drop(gone);
+        if let Ok(mut problems) = self.problems.lock() {
+            problems.remove(id);
+        }
+    }
+
+    /// Whether an output is on the network, and if it asked to be and is not, why.
+    fn state(&self, id: &str) -> (bool, Option<String>) {
+        let sending = self.running.lock().map(|running| running.contains_key(id)).unwrap_or(false);
+        let problem = self.problems.lock().ok().and_then(|problems| problems.get(id).cloned());
+        (sending, problem)
+    }
+
+    /// Brings every open output's feed into line with its settings.
+    ///
+    /// # Why this exists
+    ///
+    /// The Displays dialog saves as it is changed, and a feed used to follow
+    /// only the Open button: ticking "Send this on the network" on an output
+    /// already on a screen did nothing until it was closed and opened again,
+    /// and neither did renaming the source. An operator reads that as "NDI
+    /// does not work", and was right to.
+    ///
+    /// A feed whose name, rate and keyability are unchanged is left alone, so
+    /// a save that touched something else does not blink a live source.
+    fn reconcile(&self, app: &AppHandle, settings: &Settings) {
+        let _turn = self.turn.lock();
+        let open = |output: &&settings::Output| {
+            app.get_webview_window(&projector::label_for(&output.id)).is_some()
+        };
+
+        // Off, closed, or no longer an output at all.
+        let wanted: Vec<&str> = settings
+            .outputs
+            .iter()
+            .filter(open)
+            .filter(|output| output.ndi_enabled)
+            .map(|output| output.id.as_str())
+            .collect();
+        let unwanted: Vec<String> = self
+            .running
+            .lock()
+            .map(|running| {
+                running.keys().filter(|id| !wanted.contains(&id.as_str())).cloned().collect()
+            })
+            .unwrap_or_default();
+        for id in unwanted {
+            self.stop(&id);
+        }
+
+        for output in settings.outputs.iter().filter(open).filter(|output| output.ndi_enabled) {
+            let unchanged = self
+                .running
+                .lock()
+                .map(|running| {
+                    running.get(&output.id).is_some_and(|live| live.shape == FeedShape::of(output))
+                })
+                .unwrap_or(false);
+            if !unchanged {
+                self.start_now(app, output);
+            }
         }
     }
 }
 
-/// What the settings panel needs to draw the row.
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct NdiState {
-    /// Whether the runtime is installed at all.
-    available: bool,
-    running: bool,
-    name: String,
-    /// Set when starting failed, in words for the operator.
-    error: Option<String>,
+/// Starts or stops one output's feed to match its settings.
+///
+/// Called whenever an output's window appears, from whichever button opened
+/// it: there is nothing to capture before the window exists, so starting the
+/// sender first would fail on an absent window and report it as a missing
+/// projector. The window appearing is the moment this becomes possible, which
+/// makes here the right place rather than a convenient one.
+fn feed_follows(app: &AppHandle, senders: &NdiOutputs, id: &str) {
+    let settings = settings::load(app).unwrap_or_default();
+    match settings.outputs.iter().find(|output| output.id == id) {
+        Some(output) if output.ndi_enabled => senders.start(app, output),
+        _ => senders.stop(id),
+    }
 }
 
 /// What NDI sources this machine can see, ours included.
 ///
 /// Asked on demand rather than with the status, because it costs two seconds of
-/// discovery and the settings panel opens far more often than anybody wonders
-/// whether the network is carrying the feed.
+/// discovery and the dialog opens far more often than anybody wonders whether
+/// the network is carrying the feed.
 #[tauri::command]
 async fn ndi_sources() -> Vec<String> {
     // On a thread: discovery blocks, and blocking the async runtime stalls
@@ -1035,60 +1169,6 @@ async fn ndi_sources() -> Vec<String> {
     tauri::async_runtime::spawn_blocking(ndi_output::Output::visible_sources)
         .await
         .unwrap_or_default()
-}
-
-#[tauri::command]
-fn ndi_status(state: State<'_, NdiOutput>, app: AppHandle) -> NdiState {
-    let settings = settings::load(&app).unwrap_or_default();
-    NdiState {
-        available: ndi_output::Output::available(),
-        running: state.0.lock().map(|held| held.is_some()).unwrap_or(false),
-        name: settings.ndi_name,
-        error: None,
-    }
-}
-
-/// Starts or stops publishing, and saves the choice.
-///
-/// The setting is written whatever happens, including when starting fails: an
-/// operator who asked for this and was told the runtime is missing should find
-/// the switch still on after installing it, rather than having to remember what
-/// they were doing.
-#[tauri::command]
-fn ndi_set(
-    state: State<'_, NdiOutput>,
-    app: AppHandle,
-    enabled: bool,
-    name: String,
-) -> CommandResult<NdiState> {
-    let mut settings = settings::load(&app).unwrap_or_default();
-    settings.ndi_enabled = enabled;
-    settings.ndi_name = name.trim().to_string();
-    let _ = settings::save(&app, &settings);
-
-    let mut held = state.0.lock().map_err(|_| "the NDI output is wedged".to_string())?;
-
-    // Always dropped first, even when starting again: a rename has to close the
-    // old source before opening the new one, or the network briefly carries two.
-    *held = None;
-
-    let mut error = None;
-    if enabled {
-        match ndi_output::Output::start(&settings.ndi_name) {
-            Ok(output) => *held = Some(output),
-            Err(problem) => {
-                crate::log_line!("[ndi] {problem}");
-                error = Some(problem);
-            }
-        }
-    }
-
-    Ok(NdiState {
-        available: ndi_output::Output::available(),
-        running: held.is_some(),
-        name: settings.ndi_name,
-        error,
-    })
 }
 
 /// Who the bundled texts belong to, for the About dialog.
@@ -1651,15 +1731,13 @@ async fn list_displays(projector: State<'_, Arc<Projector>>) -> CommandResult<Ve
 fn outputs_state(
     app: AppHandle,
     projector: State<'_, Arc<Projector>>,
+    senders: State<'_, NdiOutputs>,
 ) -> CommandResult<Vec<OutputState>> {
     let settings = settings::load(&app).map_err(to_message)?;
     Ok(settings
         .outputs
         .iter()
-        .map(|output| OutputState {
-            id: output.id.clone(),
-            open: projector.output_open(&output.id),
-        })
+        .map(|output| OutputState::of(&output.id, &projector, &senders))
         .collect())
 }
 
@@ -1694,21 +1772,8 @@ async fn open_output(
         )
         .map_err(to_message)?;
 
-    /*
-     * The feed follows the window, and only after it exists.
-     *
-     * There is nothing to capture until the window is up, so starting the
-     * sender first would fail on an absent window and report it as a missing
-     * projector. The window appearing is the moment this becomes possible,
-     * which makes here the right place rather than a convenient one.
-     */
-    if output.ndi_enabled {
-        senders.start(output);
-    } else {
-        senders.stop(&output.id);
-    }
-
-    Ok(OutputState { open: projector.output_open(&id), id })
+    feed_follows(&app, &senders, &id);
+    Ok(OutputState::of(&id, &projector, &senders))
 }
 
 #[tauri::command]
@@ -1721,55 +1786,50 @@ async fn close_output(
     // nothing and announces a dead source on the network.
     senders.stop(&id);
     projector.close_output(&id);
-    Ok(OutputState { open: false, id })
+    Ok(OutputState::of(&id, &projector, &senders))
 }
 
-/// Whether one output's window is up.
+/// Whether one output's window is up, and whether its feed is.
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OutputState {
     pub id: String,
     pub open: bool,
+    /// On the network right now.
+    pub sending: bool,
+    /// Why it is not, when it was asked to be. In words for the operator.
+    pub problem: Option<String>,
+}
+
+impl OutputState {
+    fn of(id: &str, projector: &Projector, senders: &NdiOutputs) -> Self {
+        let (sending, problem) = senders.state(id);
+        Self { id: id.to_string(), open: projector.output_open(id), sending, problem }
+    }
 }
 
 #[tauri::command]
 async fn open_projector(
     projector: State<'_, Arc<Projector>>,
-    ndi: State<'_, NdiOutput>,
+    senders: State<'_, NdiOutputs>,
     app: AppHandle,
     display: Option<usize>,
 ) -> CommandResult<ProjectorState> {
     let state = projector.open(display).map_err(to_message)?;
-
-    /*
-     * Resume the NDI output, if it was left on.
-     *
-     * It cannot start at launch: there is no projector window then, so there is
-     * nothing to capture and the capture would fail on an empty room. The
-     * window appearing is the moment it becomes possible, which makes this the
-     * right place rather than a convenient one.
-     *
-     * A failure here is logged and swallowed. Opening the projector is the
-     * thing the operator asked for and it has already worked; refusing it
-     * because a network feature could not start would be the wrong way round.
-     */
-    let settings = settings::load(&app).unwrap_or_default();
-    if settings.ndi_enabled {
-        if let Ok(mut held) = ndi.0.lock() {
-            if held.is_none() {
-                match ndi_output::Output::start(&settings.ndi_name) {
-                    Ok(output) => *held = Some(output),
-                    Err(problem) => crate::log_line!("[ndi] could not resume: {problem}"),
-                }
-            }
-        }
-    }
-
+    // The keyboard opens the projector without the Displays dialog, and its
+    // feed should come with it exactly as it does from there. A failure is
+    // kept for the dialog rather than refusing the window: the window is what
+    // the operator asked for, and it has already worked.
+    feed_follows(&app, &senders, projector::MAIN_ID);
     Ok(state)
 }
 
 #[tauri::command]
-async fn close_projector(projector: State<'_, Arc<Projector>>) -> CommandResult<ProjectorState> {
+async fn close_projector(
+    projector: State<'_, Arc<Projector>>,
+    senders: State<'_, NdiOutputs>,
+) -> CommandResult<ProjectorState> {
+    senders.stop(projector::MAIN_ID);
     // Result rather than a bare value: an async command has to return one.
     Ok(projector.close())
 }
@@ -1787,15 +1847,21 @@ fn projector_state(projector: State<'_, Arc<Projector>>) -> ProjectorState {
 #[tauri::command]
 async fn open_second(
     projector: State<'_, Arc<Projector>>,
+    senders: State<'_, NdiOutputs>,
+    app: AppHandle,
     display: Option<usize>,
 ) -> CommandResult<projector::SecondState> {
-    projector.open_second(display).map_err(to_message)
+    let state = projector.open_second(display).map_err(to_message)?;
+    feed_follows(&app, &senders, projector::SECOND_ID);
+    Ok(state)
 }
 
 #[tauri::command]
 async fn close_second(
     projector: State<'_, Arc<Projector>>,
+    senders: State<'_, NdiOutputs>,
 ) -> CommandResult<projector::SecondState> {
+    senders.stop(projector::SECOND_ID);
     Ok(projector.close_second())
 }
 
@@ -1946,10 +2012,9 @@ pub fn run() {
             }
 
             app.manage(Projector::new(app.handle().clone()));
-            // Not started here even when the setting is on: the projector has
-            // no window yet, so there would be nothing to capture. The window
-            // is what starts it.
-            app.manage(NdiOutput(std::sync::Mutex::new(None)));
+            // Nothing is started here: no output has a window yet, so there
+            // would be nothing to capture. A window appearing is what starts
+            // its feed.
             app.manage(NdiOutputs::default());
 
             let library = Arc::new(Library::open(app.handle())?);
@@ -2148,9 +2213,7 @@ pub fn run() {
             bible_attributions,
             original_words,
             lexicon_entry,
-            ndi_status,
             ndi_sources,
-            ndi_set,
             get_settings,
             save_settings,
             save_assist_key,

@@ -21,7 +21,8 @@
         "minHeight": 680,
         "resizable": true,
         "center": true,
-        "backgroundColor": "#1C1B18"
+        "backgroundColor": "#1C1B18",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required"
       }
     ],
     "security": {

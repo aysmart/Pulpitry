@@ -34,19 +34,25 @@ use crate::ndi_capture::{self, Latest};
 /// What the source is called when the operator has not named it.
 pub const DEFAULT_NAME: &str = "Pulpitry";
 
-/// The projector window's title, which is how the capture finds it.
-///
-/// Tauri sets this from the builder in [`crate::projector`]. Matched by title
-/// *and* process id there, so a browser tab with the same words cannot be
-/// mistaken for it.
-const PROJECTOR_TITLE: &str = "Pulpitry — Projector";
-
-/// Frames a second, sent and captured.
+/// Frames a second, as the sender labels them.
 ///
 /// Thirty rather than sixty. A projector output has nothing in it that sixty
 /// improves — text does not move — and thirty halves both the network cost and
 /// the work the capture does per second.
 const FPS: u32 = 30;
+
+/// How long a window that has just opened is given to become capturable.
+///
+/// macOS lists a new window to capture a moment after it exists, not when it
+/// exists. Asked straight away, the answer is that there is no such window,
+/// and an operator who pressed Open and was told the projector is not open
+/// pressed it again -- which worked, and taught them that it needs pressing
+/// twice. Measured at up to two seconds; three leaves room.
+const SETTLE: Duration = Duration::from_secs(3);
+const SETTLE_STEP: Duration = Duration::from_millis(250);
+
+/// When the first report on a feed is written, once it is running.
+const FIRST_REPORT: Duration = Duration::from_secs(5);
 
 /// A running output. Dropping it stops everything and closes the source.
 pub struct Output {
@@ -57,12 +63,6 @@ pub struct Output {
 }
 
 impl Output {
-    /// Whether the runtime is present at all, for a settings panel that has to
-    /// say something before anybody switches this on.
-    pub fn available() -> bool {
-        ndi::Runtime::open().is_some()
-    }
-
     /// What this machine can see on the network, our own source included.
     ///
     /// "Is anybody able to see this?" is the only question an operator has
@@ -76,11 +76,6 @@ impl Output {
     /// network, and a settings panel that hangs for longer feels broken.
     pub fn visible_sources() -> Vec<String> {
         ndi::Runtime::open().map(|runtime| runtime.sources(2000)).unwrap_or_default()
-    }
-
-    /// Starts publishing the projector, or says why it could not.
-    pub fn start(name: &str) -> Result<Self, String> {
-        Self::start_window(PROJECTOR_TITLE, name, FPS, false)
     }
 
     /// Starts publishing one window, whichever it is.
@@ -111,8 +106,16 @@ impl Output {
         }
 
         let latest = Latest::default();
-        let capture = ndi_capture::start(window_title, fps.max(1), keep_alpha, latest.clone())
-            .map_err(|problem| problem.to_string())?;
+        let settling = Instant::now();
+        let capture = loop {
+            match ndi_capture::start(window_title, fps.max(1), keep_alpha, latest.clone()) {
+                Err(ndi_capture::Problem::NoProjector) if settling.elapsed() < SETTLE => {
+                    std::thread::sleep(SETTLE_STEP);
+                }
+                other => break other,
+            }
+        }
+        .map_err(|problem| problem.to_string())?;
 
         let running = Arc::new(AtomicBool::new(true));
         let name = name.to_string();
@@ -144,6 +147,9 @@ impl Output {
 
                 crate::log_line!("[ndi] publishing as {name:?} at {rate} fps");
                 let interval = Duration::from_micros(1_000_000 / rate as u64);
+                let began = Instant::now();
+                let mut sent = 0u64;
+                let mut reported = false;
 
                 while stop.load(Ordering::Relaxed) {
                     let started = Instant::now();
@@ -151,6 +157,35 @@ impl Output {
 
                     if !frame.is_empty() {
                         sender.send_bgra(frame.width, frame.height, &frame.pixels, FPS);
+                        sent += 1;
+                    }
+
+                    /*
+                     * One line, a few seconds in, saying whether this is a
+                     * feed or a name on the network with nothing behind it.
+                     *
+                     * "It showed nothing" can be a window that was never
+                     * drawn, a capture that never started or a picture that
+                     * is all transparent, and a receiver shows all three the
+                     * same way. Counts and shares only -- never what is on
+                     * the screen.
+                     */
+                    if !reported && began.elapsed() >= FIRST_REPORT {
+                        reported = true;
+                        let captured = latest.delivered();
+                        if captured == 0 {
+                            crate::log_line!(
+                                "[ndi] {name:?}: nothing has come from the capture in {}s -- the window is not being drawn",
+                                FIRST_REPORT.as_secs(),
+                            );
+                        } else {
+                            let (clear, partial, solid) = ndi_capture::coverage(&frame);
+                            crate::log_line!(
+                                "[ndi] {name:?}: {captured} frames captured, {sent} sent, {}x{}, {clear}% clear / {partial}% partial / {solid}% solid",
+                                frame.width,
+                                frame.height,
+                            );
+                        }
                     }
 
                     /*
@@ -168,7 +203,10 @@ impl Output {
                     }
                 }
 
-                crate::log_line!("[ndi] stopped publishing as {name:?}");
+                crate::log_line!(
+                    "[ndi] stopped publishing as {name:?} after {sent} frames, {} captured",
+                    latest.delivered(),
+                );
             })
             .map_err(|error| format!("could not start the sender: {error}"))?;
 
@@ -207,13 +245,6 @@ mod tests {
         assert_eq!(interval.as_micros(), 33_333);
     }
 
-    /// Without a runtime this must report absence rather than panic, because
-    /// the settings panel asks on every open and most machines will not have it.
-    #[test]
-    fn availability_is_a_question_that_can_always_be_asked() {
-        let _ = Output::available();
-    }
-
     /// Starting says which of the two things is missing, and does not confuse them.
     ///
     /// The runtime and the projector are the two reasons this fails, they have
@@ -229,11 +260,12 @@ mod tests {
         // Matched rather than `expect_err`: `Output` holds live threads and a
         // capture, so making it Debug purely to unwrap an error in a test would
         // be the test dictating the shape of the thing it tests.
-        let Err(problem) = Output::start("Pulpitry test") else {
+        let Err(problem) = Output::start_window("Pulpitry — Projector", "Pulpitry test", FPS, false)
+        else {
             panic!("there is no projector window in a test, so this cannot succeed");
         };
 
-        if Output::available() {
+        if ndi::Runtime::open().is_some() {
             assert!(
                 !problem.contains("runtime is not installed"),
                 "the runtime is here, so this must not blame it: {problem}",

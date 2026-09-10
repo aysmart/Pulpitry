@@ -91,25 +91,22 @@ pub struct Settings {
     pub mirror_pairings: Vec<castavox_core::mirror::Pairing>,
 
     /*
-     * Publishing the projector to the network as an NDI source.
+     * The old whole-projector NDI switch, kept only to be read once.
      *
-     * Off unless asked for, for the mirror's reason and one of its own. It
-     * announces this machine on the network and, on macOS, the first attempt
-     * raises the Screen Recording prompt -- a permission dialog nobody asked
-     * for is alarming, and one that appears on a Sunday morning is worse.
+     * Settings → Stage had a "Send the screen over NDI" row of its own, from
+     * before every output could be put on the network from Displays. Two
+     * places to turn on one feed was one too many, and the older one could do
+     * less: no overlay, no size, no second feed. It is gone, and what it held
+     * is moved onto the Projector output by `carry_the_old_feed` so that a
+     * church which had it on keeps its feed -- under the same name, so the
+     * switcher's source list still has it where they left it.
      *
-     * It is also the one feature here that is heavy: the projector's pixels,
-     * uncompressed, at around 100 Mbit/s for 1080p. That is a wired-network
-     * feature and turning it on by accident on church wifi would take the
-     * stream down with it.
+     * Not deleted from the struct, because a settings file written by 0.8.5
+     * or earlier still has these keys, and they are how the move knows to
+     * happen.
      */
     #[serde(default)]
     pub ndi_enabled: bool,
-    /// What the source is called on the network.
-    ///
-    /// Empty means the default below. A church with two campuses on one network
-    /// needs to tell them apart, and "Pulpitry" twice in a switcher's source
-    /// list is a coin toss.
     #[serde(default)]
     pub ndi_name: String,
 
@@ -551,7 +548,41 @@ pub fn load(app: &AppHandle) -> Result<Settings> {
     correct_miscalibrated_threshold(&mut settings);
     retire_own_azure(app, &mut settings);
     seat_the_original_two(&mut settings);
+    if carry_the_old_feed(&mut settings) {
+        let _ = save(app, &settings);
+    }
     Ok(settings)
+}
+
+/// Moves the old Settings → Stage NDI switch onto the Projector output.
+///
+/// Once: the old switch is cleared as it is carried, so turning the Projector's
+/// feed off afterwards stays off rather than coming back on the next launch.
+///
+/// The name is kept as the network knew it. The old row published as
+/// "Pulpitry" when left empty, and an output left empty publishes as
+/// "Pulpitry — Projector" -- a different source, as far as a switcher is
+/// concerned, and a church would find its feed missing from the one place
+/// they had set it up.
+///
+/// Returns whether anything moved, so the caller knows to write it down.
+fn carry_the_old_feed(settings: &mut Settings) -> bool {
+    if !settings.ndi_enabled {
+        return false;
+    }
+    let name = match settings.ndi_name.trim() {
+        "" => "Pulpitry".to_string(),
+        named => named.to_string(),
+    };
+    if let Some(main) = settings.outputs.iter_mut().find(|output| output.id == OUTPUT_MAIN) {
+        main.ndi_enabled = true;
+        if main.ndi_name.trim().is_empty() {
+            main.ndi_name = name;
+        }
+    }
+    settings.ndi_enabled = false;
+    settings.ndi_name.clear();
+    true
 }
 
 /// The projector and the second display, as rows in the outputs list.
@@ -727,6 +758,46 @@ mod tests {
 
     #[test]
     /// The projector and second display are always reachable.
+    /// A church that had the old NDI row on keeps its feed, under its name.
+    #[test]
+    fn the_old_feed_moves_onto_the_projector_once() {
+        let mut settings = Settings { ndi_enabled: true, ..Settings::default() };
+        seat_the_original_two(&mut settings);
+
+        assert!(carry_the_old_feed(&mut settings));
+        let main = settings.outputs.iter().find(|output| output.id == OUTPUT_MAIN).unwrap();
+        assert!(main.ndi_enabled);
+        // What the old row published as when its name was left empty.
+        assert_eq!(main.ndi_name, "Pulpitry");
+
+        // Once. Turning the Projector's feed off must not be undone next launch.
+        assert!(!settings.ndi_enabled);
+        assert!(!carry_the_old_feed(&mut settings));
+    }
+
+    /// A name the church chose is the name the switcher knows, so it is kept.
+    #[test]
+    fn the_old_feed_keeps_its_name() {
+        let mut settings = Settings {
+            ndi_enabled: true,
+            ndi_name: "Main hall".into(),
+            ..Settings::default()
+        };
+        seat_the_original_two(&mut settings);
+        carry_the_old_feed(&mut settings);
+        let main = settings.outputs.iter().find(|output| output.id == OUTPUT_MAIN).unwrap();
+        assert_eq!(main.ndi_name, "Main hall");
+    }
+
+    /// Off stays off: nothing is switched on for a church that never asked.
+    #[test]
+    fn no_old_feed_moves_nothing() {
+        let mut settings = Settings::default();
+        seat_the_original_two(&mut settings);
+        assert!(!carry_the_old_feed(&mut settings));
+        assert!(settings.outputs.iter().all(|output| !output.ndi_enabled));
+    }
+
     #[test]
     fn the_original_two_are_seated_and_kept_in_order() {
         // A file from before the outputs list existed.

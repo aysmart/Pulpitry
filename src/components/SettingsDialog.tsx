@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
 import { MirrorPanel } from "./MirrorPanel";
-import { NdiPanel } from "./NdiPanel";
 import { HostedSubscription } from "./HostedSubscription";
 import { NodeRuntimeNotice } from "./NodeRuntimeNotice";
 import { Feedback } from "./Feedback";
@@ -1746,13 +1745,6 @@ export function SettingsDialog({
                   enabled={mirrorEnabled}
                   onEnabledChange={setMirrorEnabled}
                 />
-              </Section>
-              <div className="border-t border-pulpitry-line" />
-              <Section
-                title="Send the screen elsewhere"
-                note="For a video team whose switcher is not Castavox, or who need the picture itself rather than the verse."
-              >
-                <NdiPanel />
               </Section>
             </Pane>
 

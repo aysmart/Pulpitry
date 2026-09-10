@@ -29,10 +29,11 @@
 //!
 //! ScreenCaptureKit needs Screen Recording permission, even for an
 //! application's own window. There is no way around that and no way to ask for
-//! it quietly, so the settings panel says what the prompt will be before it
-//! appears rather than letting it arrive unexplained.
+//! it quietly, so the manual says what the prompt will be before it appears,
+//! and a refusal is shown on the output's row in Displays with where to allow
+//! it -- not only written to the log.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 // The trait that puts `image_buffer()` on a sample buffer. At module scope
@@ -61,18 +62,53 @@ impl Frame {
 /// a frame that is already out of date. Dropping it is the correct behaviour
 /// and a queue would only decide when to do so, more slowly.
 #[derive(Clone, Default)]
-pub struct Latest(Arc<Mutex<Frame>>);
+pub struct Latest {
+    slot: Arc<Mutex<Frame>>,
+    /// How many frames have ever been put here, for the log.
+    ///
+    /// The difference between "the capture is working and the picture is
+    /// still" and "the capture has never produced anything" is invisible from
+    /// the receiving end -- both are a source that shows the same thing -- and
+    /// it is the first question when a feed is reported blank.
+    delivered: Arc<AtomicU64>,
+}
 
 impl Latest {
     pub fn put(&self, frame: Frame) {
-        if let Ok(mut slot) = self.0.lock() {
+        if let Ok(mut slot) = self.slot.lock() {
             *slot = frame;
+            self.delivered.fetch_add(1, Ordering::Relaxed);
         }
     }
 
     pub fn get(&self) -> Frame {
-        self.0.lock().map(|slot| slot.clone()).unwrap_or_default()
+        self.slot.lock().map(|slot| slot.clone()).unwrap_or_default()
     }
+
+    pub fn delivered(&self) -> u64 {
+        self.delivered.load(Ordering::Relaxed)
+    }
+}
+
+/// How much of a frame is see-through, as whole percentages: clear, partly
+/// clear, solid. Sampled, not counted -- this is for a log line, and every
+/// pixel of a 1080p frame is two million of them.
+///
+/// Numbers and nothing else. What is *on* the output is a congregation's
+/// service and does not belong in a log; whether it is keyable does.
+pub fn coverage(frame: &Frame) -> (u32, u32, u32) {
+    let (mut clear, mut partial, mut solid) = (0u32, 0u32, 0u32);
+    // A prime stride, so the samples do not line up with a column of text.
+    for alpha in frame.pixels.iter().skip(3).step_by(4 * 97) {
+        match alpha {
+            0 => clear += 1,
+            255 => solid += 1,
+            _ => partial += 1,
+        }
+    }
+    let total = (clear + partial + solid).max(1);
+    let share = |part: u32| part * 100 / total;
+    (share(clear), share(partial), share(solid))
 }
 
 /// A capture that stops when it is dropped.
@@ -276,6 +312,19 @@ pub fn start(
             of_type: SCStreamOutputType,
         ) {
             if of_type != SCStreamOutputType::Screen {
+                return;
+            }
+            /*
+             * Only a frame with something in it replaces the last one.
+             *
+             * ScreenCaptureKit also delivers frames that are blank, suspended
+             * or the last of a stopped stream, and some carry a buffer. Put
+             * into the slot, one would replace the last real picture with an
+             * empty one, and the sender would repeat the empty one until the
+             * next change -- which on a projector can be minutes.
+             */
+            use screencapturekit::cm::CMSampleBufferSCExt;
+            if sample.frame_status().is_some_and(|status| !status.has_content()) {
                 return;
             }
             if let Some(frame) = frame_from(&sample) {
@@ -498,6 +547,32 @@ pub fn start(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The log can tell a keyable frame from a solid one, and nothing more.
+    #[test]
+    fn coverage_tells_clear_from_solid() {
+        let frame = |alpha: u8| Frame {
+            width: 64,
+            height: 64,
+            pixels: [0u8, 0, 0, alpha].repeat(64 * 64),
+        };
+        assert_eq!(coverage(&frame(0)), (100, 0, 0));
+        assert_eq!(coverage(&frame(255)), (0, 0, 100));
+        assert_eq!(coverage(&frame(128)), (0, 100, 0));
+        // An empty frame is not a division by zero.
+        assert_eq!(coverage(&Frame::default()), (0, 0, 0));
+    }
+
+    /// Every frame put is counted, so a blank feed can be told from a still one.
+    #[test]
+    fn the_slot_counts_what_it_is_given() {
+        let latest = Latest::default();
+        assert_eq!(latest.delivered(), 0);
+        latest.put(Frame { width: 1, height: 1, pixels: vec![0; 4] });
+        latest.clone().put(Frame { width: 1, height: 1, pixels: vec![0; 4] });
+        // Shared across clones, as the capture and the sender each hold one.
+        assert_eq!(latest.delivered(), 2);
+    }
 
     #[test]
     fn the_latest_frame_replaces_rather_than_queues() {
