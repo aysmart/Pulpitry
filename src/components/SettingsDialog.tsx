@@ -1317,7 +1317,7 @@ export function SettingsDialog({
                       is not a price. */}
                   <p className="text-[11.5px] leading-snug text-pulpitry-muted">
                     {hosted
-                      ? "Changing plan, or adding hours: "
+                      ? "Changing plan: "
                       : "Plans and prices: "}
                     <button
                       type="button"

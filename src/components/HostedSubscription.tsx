@@ -309,8 +309,8 @@ export function HostedSubscription({
           ) : plan.warnAt ? (
             <p className="text-[11.5px] leading-snug text-pulpitry-muted">
               {Math.round(plan.warnAt * 100)}% of this month&rsquo;s hours are
-              used. More can be added at any time, and this machine can always
-              fall back to transcribing locally.
+              used. This machine can always fall back to transcribing locally,
+              which is free and unlimited.
             </p>
           ) : null}
         </>
