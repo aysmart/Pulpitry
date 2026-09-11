@@ -235,6 +235,53 @@ jobs:
       - name: Test the core
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib
 
+      # The Mac build is signed with a certificate of our own, so that macOS
+      # recognises each release as the same application as the last.
+      #
+      # Unsigned -- ad-hoc, which is what the linker does on its own -- every
+      # build was a stranger. Screen Recording and the microphone are granted
+      # to an application's signature, so each update asked for both again,
+      # and Settings went on showing the old grant switched on while refusing
+      # the new build. A church that updated on Saturday found its NDI feed
+      # blank on Sunday, and the permission it had given still ticked.
+      #
+      # Self-signed, not Apple's: Gatekeeper still warns about an unfamiliar
+      # developer exactly as before. What changes is only that the signature
+      # is the same one every time. Tauri signs with the identity named in
+      # APPLE_SIGNING_IDENTITY and the keychain search list; the certificate
+      # itself is never passed to Tauri, whose own import looks for an
+      # Apple-issued identity and would not find this one.
+      - name: Signing identity
+        if: runner.os == 'macOS'
+        env:
+          CERTIFICATE: ${{ secrets.MACOS_SIGNING_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$CERTIFICATE" ]; then
+            # A release must never go out unsigned: it would cost every church
+            # on a Mac its permissions, once more, for nothing.
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "::error::MACOS_SIGNING_CERTIFICATE is not set; a release cannot be built unsigned."
+              exit 1
+            fi
+            echo "::warning::No signing certificate; this Mac build is unsigned."
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password=$(openssl rand -hex 16)
+          echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/signing.p12" -P "$CERTIFICATE_PASSWORD" -A \
+            -t cert -f pkcs12 -k "$keychain" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/signing.p12"
+          echo "APPLE_SIGNING_IDENTITY=Castavox Code Signing" >> "$GITHUB_ENV"
+
       - name: Package
         env:
           # Signs the update artifacts. Without it `createUpdaterArtifacts`
@@ -256,9 +303,34 @@ jobs:
           npx tauri build --target ${{ matrix.target }}
           --config '{"bundle":{"createUpdaterArtifacts":true}}'
 
-      # Unsigned. Signing needs certificates this repository does not carry;
-      # see the release job below for what has to be added before these are
-      # handed to anyone outside the team.
+      # Proof, rather than trust, that the step above signed what it built.
+      #
+      # The requirement is what macOS stores a permission against: this
+      # identifier, from this certificate. If it ever reads otherwise -- a
+      # Tauri change that quietly skips signing, a replaced certificate --
+      # every church on a Mac would be asked for Screen Recording and the
+      # microphone again, and this is the last place anyone could notice
+      # before they are. The hash is the certificate's, and changes only if
+      # the certificate does; if it is ever replaced, change it here too.
+      - name: Signed as Pulpitry
+        if: runner.os == 'macOS' && env.APPLE_SIGNING_IDENTITY != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=$(ls -d "$TARGET_ROOT/${{ matrix.target }}/release/bundle/macos/"*.app | head -1)
+          codesign --verify --deep --strict "$app"
+          requirement=$(codesign -d -r- "$app" 2>&1)
+          echo "$requirement"
+          expected='identifier "com.pulpitry.desktop" and certificate root = H"73af553e776da311688d97b1778d68940ec2c693"'
+          if ! grep -qF "$expected" <<< "$requirement"; then
+            echo "::error::Pulpitry.app is not signed as expected; every Mac would ask for its permissions again."
+            exit 1
+          fi
+
+      # Windows and Linux are unsigned; the Mac build is signed, above, with a
+      # certificate of our own rather than Apple's, so Gatekeeper and
+      # SmartScreen still warn. See the release job below for what that means
+      # for the people downloading these.
       - name: Collect installers
         uses: actions/upload-artifact@v4
         with:
@@ -364,9 +436,9 @@ jobs:
           Installers for macOS (Apple silicon), Windows, and Linux
           (.deb, .rpm and .AppImage, x86_64).
 
-          These builds are **not code signed**. macOS will refuse to open the
-          app until it is opened once from the right-click menu, and Windows
-          SmartScreen will warn.
+          These builds are **not notarised by Apple or signed for Windows**.
+          macOS will refuse to open the app until it is opened once from the
+          right-click menu, and Windows SmartScreen will warn.
           FALLBACK
           fi
 
