@@ -437,8 +437,9 @@ jobs:
           (.deb, .rpm and .AppImage, x86_64).
 
           These builds are **not notarised by Apple or signed for Windows**.
-          macOS will refuse to open the app until it is opened once from the
-          right-click menu, and Windows SmartScreen will warn.
+          macOS asks you to confirm the app the first time it is opened —
+          https://castavox.com/download#mac shows how — and Windows
+          SmartScreen will warn.
           FALLBACK
           fi
 
