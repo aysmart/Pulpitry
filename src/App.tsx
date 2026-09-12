@@ -165,7 +165,7 @@ export default function App() {
     step,
     canStepBack,
     canStepForward,
-  } = usePresentation();
+  } = usePresentation(workspace);
   /*
    * The verse the Original panel is showing, held rather than derived.
    *

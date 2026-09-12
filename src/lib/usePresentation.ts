@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { adjacentVerse, getChapter, listBooks, type Verse } from "./bible";
 import type { SongSection } from "./catalog";
 import type { Background } from "./design";
+import type { Workspace } from "./workspaces";
 import {
   componentText,
   getLive,
@@ -266,15 +267,43 @@ function keyOf(item: Presentable): string {
 /**
  * Preview and Live for the operator window.
  *
- * Preview is local — only this window cares what is staged next. Live is not:
- * it belongs to the Rust side so the projector and this window render from one
- * source and cannot disagree about what the congregation is seeing.
+ * # One wall, four desks
+ *
+ * **Live is one thing**, and has to be: there is a single projector, and a
+ * window that showed a different "live" per arrangement would be lying about
+ * what a congregation is looking at. It belongs to the Rust side so this window
+ * and the projector cannot disagree.
+ *
+ * **What is staged is not.** Each arrangement holds its own, and that is the
+ * whole point of having arrangements: an operator with a song on the wall who
+ * moves to the slide desk to get the notices ready has not changed their mind
+ * about the song. Sharing one staged item meant preparing anything cost
+ * whatever was queued somewhere else -- and moving back showed the deck the
+ * operator had just been preparing where their next verse used to be.
+ *
+ * So staging is per desk, and going live sends the desk the operator is on.
+ * Stepping, winding and the spoken instructions all act on that desk's item,
+ * which is the one in front of them.
  *
  * What comes next belongs to the service plan, in [`useSchedule`], because it
  * outlives the session.
  */
-export function usePresentation() {
-  const [preview, setPreview] = useState<Presentable | null>(null);
+export function usePresentation(desk: Workspace) {
+  /*
+   * Kept as a map rather than four pieces of state, so adding an arrangement
+   * is adding a name to a union rather than another `useState` and another
+   * four places that forgot it.
+   */
+  const [byDesk, setByDesk] = useState<
+    Partial<Record<Workspace, Presentable | null>>
+  >({});
+  const preview = byDesk[desk] ?? null;
+  const setPreview = useCallback(
+    (next: Presentable | null) => {
+      setByDesk((current) => ({ ...current, [desk]: next }));
+    },
+    [desk],
+  );
   const [live, setLiveState] = useState<LiveContent | null>(null);
   const [history, setHistory] = useState<Shown[]>([]);
   // Verse ids identify live scripture, but a lyric has none, so remember what
@@ -303,12 +332,18 @@ export function usePresentation() {
     };
   }, []);
 
-  const previewVerses = useCallback((verses: Verse[]) => {
-    if (verses.length === 0) return;
-    setPreview({ kind: "scripture", verses });
-  }, []);
+  const previewVerses = useCallback(
+    (verses: Verse[]) => {
+      if (verses.length === 0) return;
+      setPreview({ kind: "scripture", verses });
+    },
+    [setPreview],
+  );
 
-  const previewItem = useCallback((item: Presentable) => setPreview(item), []);
+  const previewItem = useCallback(
+    (item: Presentable) => setPreview(item),
+    [setPreview],
+  );
 
   const previewVerse = useCallback(
     (verse: Verse) => previewVerses([verse]),
@@ -339,7 +374,14 @@ export function usePresentation() {
       );
       return [{ item, at: Date.now() }, ...withoutDuplicate].slice(0, 50);
     });
-  }, []);
+    /*
+     * `setPreview` is in the dependencies, and it matters.
+     *
+     * It is bound to the desk this window is on, so a callback that kept an
+     * older one would stage onto the desk the operator has just left -- and the
+     * fault would show as the wrong thing going live from the right button.
+     */
+  }, [setPreview]);
 
   /**
    * Forgets what has been shown.
@@ -449,7 +491,7 @@ export function usePresentation() {
         void setLive(toLiveContent(next));
       }
     },
-    [preview, liveKey],
+    [preview, liveKey, setPreview],
   );
 
   /**
@@ -481,7 +523,7 @@ export function usePresentation() {
       }
       return true;
     },
-    [preview, liveKey],
+    [preview, liveKey, setPreview],
   );
 
   /**
@@ -552,7 +594,7 @@ export function usePresentation() {
         // an operator could act on mid-service.
       }
     },
-    [preview, liveKey, show],
+    [preview, liveKey, show, setPreview],
   );
 
   /**
@@ -620,7 +662,7 @@ export function usePresentation() {
         void setLive(toLiveContent(next));
       }
     },
-    [preview, liveKey],
+    [preview, liveKey, setPreview],
   );
 
   const canStepForward =
