@@ -169,7 +169,14 @@ export type ItemBody =
    * reorder the service, and the person planning the service cannot delete a
    * song out from under the band.
    */
-  | { kind: "songSet"; entries: PlanEntry[] };
+  | { kind: "songSet"; entries: PlanEntry[] }
+  /**
+   * A display shape: the furniture an overlay output draws around the words.
+   *
+   * Elements, as a designed slide holds them, with two marked as the holes the
+   * live words and their citation drop into. See lib/shapes.ts.
+   */
+  | { kind: "overlay"; elements: SlideElement[] };
 
 export type ItemKind = ItemBody["kind"];
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-import { catalogList, type Item } from "../lib/catalog";
+import { catalogList, newItem, type Item } from "../lib/catalog";
 import type { Output } from "../lib/api";
 import { libraryStatus, type Translation } from "../lib/bible";
 import {
@@ -11,6 +11,8 @@ import {
   type Ticker,
 } from "../lib/projector";
 import { OVERLAY_FORMS, type OverlayForm } from "../lib/overlays";
+import { formFor, listShapes, shapeIdOf, starterShape } from "../lib/shapes";
+import { ShapeStudio } from "./ShapeStudio";
 import type { ProjectorTheme } from "../lib/theme";
 import { OutputPreview } from "./OutputPreview";
 
@@ -96,6 +98,7 @@ export function OutputsPanel({
   theme,
   live,
   ticker,
+  onError,
 }: {
   outputs: Output[];
   onChange: (outputs: Output[]) => void;
@@ -103,10 +106,23 @@ export function OutputsPanel({
   theme: ProjectorTheme;
   /** What is on the screens now, so each preview shows it. */
   live: LiveContent | null;
+  onError: (message: string) => void;
   ticker: Ticker;
 }) {
   const [displays, setDisplays] = useState<Display[]>([]);
   const [templates, setTemplates] = useState<Item[]>([]);
+  /** The shapes this church has drawn, and the one open in the studio. */
+  const [shapes, setShapes] = useState<Item[]>([]);
+  const [designing, setDesigning] = useState<Item | null>(null);
+  /** Which output opened it, so what is drawn lands on that output. */
+  const [designingFor, setDesigningFor] = useState<string | null>(null);
+
+  /** Re-read after the studio saves or deletes, so the picker is current. */
+  const refreshShapes = () => {
+    void listShapes()
+      .then(setShapes)
+      .catch(() => undefined);
+  };
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [states, setStates] = useState<OutputState[]>([]);
 
@@ -153,6 +169,9 @@ export function OutputsPanel({
       .catch(() => undefined);
     void catalogList("template")
       .then(setTemplates)
+      .catch(() => undefined);
+    void listShapes()
+      .then(setShapes)
       .catch(() => undefined);
     void libraryStatus()
       .then((status) => setTranslations(status.translations))
@@ -337,8 +356,58 @@ export function OutputsPanel({
                         {form.name}
                       </option>
                     ))}
+                    {/* The church's own, after the six that ship. An output
+                        pointed at one draws that and nothing else. */}
+                    {shapes.length > 0 ? (
+                      <optgroup label="Yours">
+                        {shapes.map((drawn) => (
+                          <option key={drawn.id} value={formFor(drawn.id ?? 0)}>
+                            {drawn.title}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
                   </select>
                 </label>
+
+                {/*
+                  A way in, beside the choice it belongs to.
+
+                  Editing the shape this output is drawing is the commonest
+                  reason to open the studio -- it is being looked at right here,
+                  in the preview underneath.
+                */}
+                <span className="flex items-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = shapeIdOf(output.overlay || "");
+                      const existing =
+                        id === null
+                          ? null
+                          : shapes.find((drawn) => drawn.id === id);
+                      setDesigningFor(output.id);
+                      setDesigning(
+                        existing ?? {
+                          ...newItem("", {
+                            kind: "overlay",
+                            elements: starterShape(),
+                          }),
+                        },
+                      );
+                    }}
+                    title={
+                      shapeIdOf(output.overlay || "") === null
+                        ? "Draw a shape of your own: a band, a rule, your logo"
+                        : "Change this shape"
+                    }
+                    className="rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-2 text-[12px] text-pulpitry-text hover:border-pulpitry-gold-dim hover:text-pulpitry-gold focus-visible:focus-ring"
+                  >
+                    {shapeIdOf(output.overlay || "") === null
+                      ? "Draw one…"
+                      : "Edit shape…"}
+                  </button>
+                </span>
 
                 <label className="flex min-w-[9rem] flex-1 flex-col gap-1">
                   <span className="text-[11px] text-pulpitry-muted">Format</span>
@@ -523,6 +592,32 @@ export function OutputsPanel({
       >
         Add an output
       </button>
+
+      {/* The studio, over this pane: a shape is drawn against the output that
+          will draw it, with that output's preview underneath. */}
+      {designing ? (
+        <ShapeStudio
+          shape={designing}
+          theme={theme}
+          onClose={() => {
+            setDesigning(null);
+            refreshShapes();
+          }}
+          onSaved={(saved) => {
+            setDesigning(null);
+            refreshShapes();
+            /*
+             * The output that opened the studio is pointed at what was just
+             * drawn. Saving a shape and then having to choose it from a menu
+             * would be asking twice for one decision.
+             */
+            if (saved.id !== null && designingFor) {
+              update(designingFor, { overlay: formFor(saved.id) });
+            }
+          }}
+          onError={onError}
+        />
+      ) : null}
     </div>
   );
 }
@@ -596,5 +691,6 @@ function FeedStatus({
         )
       ) : null}
     </div>
+
   );
 }

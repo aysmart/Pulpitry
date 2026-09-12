@@ -40,6 +40,10 @@ import { Backdrop } from "./components/Backdrop";
 import { OverlayView } from "./components/OverlayView";
 import { StageView } from "./components/StageView";
 import { plainText, type OverlayForm } from "./lib/overlays";
+import { filled, shapeIdOf } from "./lib/shapes";
+import { catalogGet } from "./lib/catalog";
+import type { SlideElement } from "./lib/design";
+import { DesignedView } from "./components/DesignedView";
 import { scriptureIn } from "./lib/bible";
 import { TickerBand } from "./components/TickerBand";
 import "./styles.css";
@@ -72,6 +76,20 @@ function titledItself(body: LiveBody): boolean {
   );
 }
 
+/** The shape an output names, or null where it names a built-in form. */
+async function loadShape(form: string): Promise<SlideElement[] | null> {
+  const id = shapeIdOf(form || "");
+  if (id === null) return null;
+  try {
+    const item = await catalogGet(id);
+    return item?.body.kind === "overlay" ? item.body.elements : null;
+  } catch {
+    // A shape that cannot be read is a shape that is not drawn. The window
+    // stays empty rather than falling back to furniture nobody chose.
+    return null;
+  }
+}
+
 function Projector() {
   const [content, setContent] = useState<LiveContent | null>(null);
   const [theme, setTheme] = useState<ProjectorTheme>(DEFAULT_THEME);
@@ -96,6 +114,16 @@ function Projector() {
    * lower third with its own template went on printing them.
    */
   const [captions, setCaptions] = useState(true);
+  /*
+   * The church's own furniture, where this output names one.
+   *
+   * Loaded once when the window learns which form it draws, and again if that
+   * changes. Null means one of the six built-in forms -- or a shape that has
+   * since been deleted, in which case drawing nothing is the honest answer: an
+   * output falling back to somebody else's furniture mid-service is worse than
+   * one that is plainly empty.
+   */
+  const [shape, setShape] = useState<SlideElement[] | null>(null);
 
   /*
    * The page itself has to be see-through, not only the window around it.
@@ -169,6 +197,7 @@ function Projector() {
         if (!active) return;
         setTheme(look.theme);
         setForm(look.overlay as OverlayForm);
+        void loadShape(look.overlay).then((drawn) => active && setShape(drawn));
         setTranslation(look.translation);
         setUppercase(look.uppercase);
         setStageClock(look.stageClock);
@@ -210,6 +239,9 @@ function Projector() {
             if (!active) return;
             setTheme(look.theme);
             setForm(look.overlay as OverlayForm);
+            void loadShape(look.overlay).then(
+              (drawn) => active && setShape(drawn),
+            );
             setTranslation(look.translation);
             setUppercase(look.uppercase);
             setStageClock(look.stageClock);
@@ -327,6 +359,30 @@ function Projector() {
    * than something a switcher can key. The container query unit still works,
    * so a form drawn at 1280 and at 3840 is the same design.
    */
+  /*
+   * A shape the church drew, filled with what is live.
+   *
+   * The same renderer a designed slide uses, on nothing: an overlay is keyed,
+   * so the frame stays transparent and only the furniture is drawn.
+   */
+  if (shape) {
+    return (
+      <div
+        className="relative h-full w-full overflow-hidden [container-type:size]"
+        style={{ background: "transparent" }}
+      >
+        <DesignedView
+          elements={filled(
+            shape,
+            plainText(drawn),
+            captions ? (drawn?.caption ?? null) : null,
+          )}
+          theme={theme}
+        />
+      </div>
+    );
+  }
+
   if (form !== "none") {
     return (
       <div

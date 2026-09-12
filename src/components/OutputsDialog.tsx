@@ -123,6 +123,7 @@ export function OutputsDialog({
             outputs={outputs}
             onChange={setOutputs}
             theme={settings.projector ?? DEFAULT_THEME}
+            onError={setError}
             live={live}
             ticker={ticker}
           />

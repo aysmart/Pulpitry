@@ -72,6 +72,22 @@ export interface TextElement extends Box, Typeset {
   kind: "text";
   id: string;
   text: string;
+  /**
+   * What fills this box at the moment it is drawn, where it is not the text
+   * above.
+   *
+   * A display shape is furniture with holes in it: a band, a rule, a church's
+   * logo, and two boxes whose contents change every time something goes live.
+   * The holes are marked here rather than by a special element kind, because
+   * everything else about them is an ordinary text element -- a position, a
+   * size, a typeface, a colour -- and a second kind would mean a second copy of
+   * all of it.
+   *
+   * `words` is whatever is live; `reference` is its citation. The text above is
+   * what stands in for them while the shape is being designed, so the canvas
+   * shows something real rather than an empty rectangle.
+   */
+  slot?: "words" | "reference";
 }
 
 /**

@@ -304,6 +304,20 @@ pub enum ItemBody {
      * resolves an entry works on both without knowing which it has.
      */
     SongSet { entries: Vec<PlanEntry> },
+    /**
+     * A display shape: the furniture an overlay output draws around the words.
+     *
+     * Pulpitry shipped six of these as geometry in the renderer -- a lower
+     * third, a ribbon, a card -- which a church could choose between and not
+     * change. A church's stream has their own proportions, their own colours
+     * and usually their own logo, and none of that could be expressed.
+     *
+     * Elements, exactly as a designed slide holds them, with two of them
+     * marked as the holes the live words and their citation drop into. Carried
+     * as JSON here on the same terms as everything else laid out by hand: this
+     * side stores a shape and never draws one.
+     */
+    Overlay { elements: serde_json::Value },
 }
 
 impl ItemBody {
@@ -318,6 +332,7 @@ impl ItemBody {
             ItemBody::Deck { .. } => "deck",
             ItemBody::Service { .. } => "service",
             ItemBody::SongSet { .. } => "songSet",
+            ItemBody::Overlay { .. } => "overlay",
         }
     }
 
@@ -356,7 +371,13 @@ impl ItemBody {
                 .map(|entry| entry.label.clone())
                 .collect::<Vec<_>>()
                 .join(" "),
-            ItemBody::Image { .. } | ItemBody::Media { .. } | ItemBody::Template { .. } => String::new(),
+            // A shape is furniture: its own words are placeholders standing in
+            // for what will be dropped into it, and finding a shape by them
+            // would be finding it by something nobody will ever see.
+            ItemBody::Image { .. }
+            | ItemBody::Media { .. }
+            | ItemBody::Template { .. }
+            | ItemBody::Overlay { .. } => String::new(),
         }
     }
 }
