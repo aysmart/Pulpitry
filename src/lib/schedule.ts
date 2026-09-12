@@ -1,5 +1,6 @@
 import { getChapter, type Verse } from "./bible";
 import { catalogGet, type Item, type PlanEntry } from "./catalog";
+import { screensOf } from "./lyrics";
 import { presentableLabel, type Presentable } from "./usePresentation";
 
 /**
@@ -70,7 +71,14 @@ export function presentableFor(item: Item): Presentable | null {
         songId: item.id,
         title: item.title,
         index: 0,
-        sections: item.body.sections,
+        /*
+         * Broken into screenfuls here, at the one moment every path goes
+         * through: the library, a line of the plan, a set, a song just added
+         * from the Song Finder. The song itself is stored as the writer broke
+         * it -- see lib/lyrics.ts for why how-many-lines-at-once is a fact
+         * about the room rather than an edit to the song.
+         */
+        sections: screensOf(item.body.sections),
       };
     // A deck is a song's shape with a sermon's content, so it stages as one:
     // stepping, keys and the projector all work without knowing the

@@ -16,6 +16,8 @@ import { ScripturePanel } from "./components/ScripturePanel";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { OutputsDialog } from "./components/OutputsDialog";
 import { useFollow } from "./lib/useFollow";
+import { catalogGet } from "./lib/catalog";
+import { rememberLines, sameScreen, type LinesPerScreen } from "./lib/lyrics";
 import { presentableFor } from "./lib/schedule";
 import type { SongFinderHit } from "./lib/songfinder";
 import { SlidesFromSermon } from "./components/SlidesFromSermon";
@@ -373,6 +375,39 @@ export default function App() {
       });
     },
     [songSet, previewItem, showItem],
+  );
+
+  /**
+   * Changing how many lines a screen holds, mid-song.
+   *
+   * The staged item carries the *split*, so re-splitting it would label a
+   * continuation as a continuation of a continuation. The song is fetched
+   * again instead -- one round trip on a rare action -- and the operator is
+   * put back on the screenful they were on, matched by its first line.
+   */
+  const changeLines = useCallback(
+    (lines: LinesPerScreen) => {
+      rememberLines(lines);
+      if (preview?.kind !== "lyric" || !preview.songId) {
+        // Nothing staged to re-break; the next song staged takes the new value.
+        setNotice(`Songs will show ${lines === 0 ? "whole sections" : `${lines} lines`} at a time.`);
+        return;
+      }
+
+      const wasOn = preview.sections[preview.index]?.lines[0];
+      void catalogGet(preview.songId)
+        .then((item) => {
+          if (!item) return;
+          const staged = presentableFor(item);
+          if (staged?.kind !== "lyric") return;
+          previewItem({
+            ...staged,
+            index: sameScreen(staged.sections, wasOn),
+          });
+        })
+        .catch((err) => setError(describeError(err)));
+    },
+    [preview, previewItem],
   );
 
   /** The AI Song Finder entry being looked at, before it is added to the library. */
@@ -994,6 +1029,7 @@ export default function App() {
                 liveKey={liveKey}
                 keyOf={keyOf}
                 onSelect={chooseSection}
+                onLinesChange={changeLines}
               />
             </div>
 

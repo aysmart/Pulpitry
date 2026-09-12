@@ -1,3 +1,8 @@
+import {
+  LINE_CHOICES,
+  storedLines,
+  type LinesPerScreen,
+} from "../lib/lyrics";
 import type { Presentable } from "../lib/usePresentation";
 import { EmptyState, Panel } from "./Panel";
 
@@ -27,12 +32,15 @@ export function SectionsPanel({
   liveKey,
   keyOf,
   onSelect,
+  onLinesChange,
 }: {
   /** The staged song or deck, or null when what is staged is neither. */
   song: Presentable | null;
   liveKey: string | null;
   keyOf: (item: Presentable) => string;
   onSelect: (index: number, andShow?: boolean) => void;
+  /** Re-splits what is staged. See lib/lyrics.ts. */
+  onLinesChange: (lines: LinesPerScreen) => void;
 }) {
   const sections = song?.kind === "lyric" ? song.sections : [];
 
@@ -41,11 +49,28 @@ export function SectionsPanel({
       title="Sections"
       accent="teal"
       actions={
-        sections.length > 0 ? (
-          <span className="truncate text-[11px] text-pulpitry-muted">
-            {song?.kind === "lyric" ? song.title : ""}
-          </span>
-        ) : null
+        /*
+          How many lines a screen holds, where the operator can see the result.
+
+          Here rather than only in Settings because it is judged by looking: the
+          room, the screen and the song decide it, and the answer is obvious the
+          moment the list below re-breaks. It applies to every song, not this
+          one -- it is a fact about the room.
+        */
+        <select
+          value={storedLines()}
+          aria-label="Lines on a screen"
+          onChange={(event) =>
+            onLinesChange(Number(event.target.value) as LinesPerScreen)
+          }
+          className="rounded border border-pulpitry-line bg-pulpitry-raised px-1.5 py-0.5 text-[11px] text-pulpitry-text outline-none focus-visible:focus-ring"
+        >
+          {LINE_CHOICES.map((choice) => (
+            <option key={choice.value} value={choice.value}>
+              {choice.label}
+            </option>
+          ))}
+        </select>
       }
     >
       {song?.kind !== "lyric" || sections.length === 0 ? (
@@ -58,10 +83,6 @@ export function SectionsPanel({
             const at = { ...song, index };
             const isLive = keyOf(at) === liveKey;
             const isStaged = index === song.index;
-            // The first line, because "Verse 2" is not how anybody remembers
-            // which verse it is.
-            const opening = section.lines[0] ?? "";
-
             return (
               <li key={`${section.label}-${index}`}>
                 <button
@@ -85,9 +106,29 @@ export function SectionsPanel({
                     {section.label || `Part ${index + 1}`}
                     {isLive ? " · on screen" : ""}
                   </span>
-                  {opening ? (
-                    <span className="mt-0.5 block truncate text-[12px] text-pulpitry-text">
-                      {opening}
+                  {/*
+                    The words themselves, every line of the screenful.
+
+                    Not a title and not a thumbnail: what the operator is
+                    choosing between is what the congregation will read, and two
+                    verses of the same song have the same name and different
+                    words. Wrapped rather than truncated, because the line that
+                    gets cut off is the one that would have told them which
+                    screen this is.
+                  */}
+                  {section.lines.length > 0 ? (
+                    <span
+                      className={`mt-0.5 block text-[12px] leading-snug ${
+                        isStaged || isLive
+                          ? "text-pulpitry-text"
+                          : "text-pulpitry-muted"
+                      }`}
+                    >
+                      {section.lines.map((line, at) => (
+                        <span key={at} className="block truncate">
+                          {line}
+                        </span>
+                      ))}
                     </span>
                   ) : null}
                 </button>
