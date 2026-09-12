@@ -1,13 +1,8 @@
 import { open } from "@tauri-apps/plugin-dialog";
 
-import {
-  allowBackground,
-  FONT_FAMILIES,
-  TEXTURES,
-  type ProjectorTheme,
-} from "../lib/theme";
+import { allowBackground, TEXTURES, type ProjectorTheme } from "../lib/theme";
 
-import { Slider, Swatch } from "./Controls";
+import { FontPicker, Slider, Swatch } from "./Controls";
 
 const FIELD =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-2 text-[13px] text-pulpitry-text outline-none focus-visible:focus-ring";
@@ -101,20 +96,16 @@ export function DisplaySettings({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex gap-3">
-        <label className="flex flex-[2] flex-col gap-1">
-          <span className="text-[12px] text-pulpitry-muted">Typeface</span>
-          <select
+        {/* Any face on the machine, not only the bundled ones: a church with
+            a brand has a typeface, and it is already installed here. */}
+        <div className="flex flex-[2]">
+          <FontPicker
+            label="Typeface"
             value={theme.fontFamily}
-            onChange={(event) => set("fontFamily", event.target.value)}
+            onChange={(family) => set("fontFamily", family)}
             className={FIELD}
-          >
-            {FONT_FAMILIES.map((entry) => (
-              <option key={entry.key} value={entry.key}>
-                {entry.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          />
+        </div>
         <div className="flex flex-1 flex-col justify-end">
           <Slider
             label="Size"
@@ -187,28 +178,18 @@ export function DisplaySettings({
         {theme.showReference ? (
           <>
             <div className="flex gap-3">
-              <label className="flex flex-[2] flex-col gap-1">
-                <span className="text-[12px] text-pulpitry-muted">
-                  Reference typeface
-                </span>
-                <select
+              {/* Empty rather than a copy of the scripture's: a theme left on
+                  this keeps following the typeface above when it is changed
+                  later, which a copy would silently stop doing. */}
+              <div className="flex flex-[2]">
+                <FontPicker
+                  label="Reference typeface"
                   value={theme.referenceFontFamily}
-                  onChange={(event) =>
-                    set("referenceFontFamily", event.target.value)
-                  }
+                  onChange={(family) => set("referenceFontFamily", family)}
                   className={FIELD}
-                >
-                  {/* Empty rather than a copy of the scripture's: a theme left
-                      on this keeps following the typeface above when it is
-                      changed later, which a copy would silently stop doing. */}
-                  <option value="">Same as the scripture</option>
-                  {FONT_FAMILIES.map((entry) => (
-                    <option key={entry.key} value={entry.key}>
-                      {entry.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  inherit="Same as the scripture"
+                />
+              </div>
               <div className="flex flex-1 flex-col justify-end">
                 <Slider
                   label="Reference size"

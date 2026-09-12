@@ -28,6 +28,7 @@ mod ndi;
 mod ndi_capture;
 mod ndi_output;
 mod follow;
+mod fonts;
 mod projector;
 mod semantic;
 mod settings;
@@ -417,6 +418,16 @@ pub struct WindowLook {
     /// A stage display's two halves, each of which can be turned off.
     pub stage_clock: bool,
     pub stage_live: bool,
+}
+
+/// The typefaces this machine has, for the pickers in Settings and the studio.
+///
+/// Read on demand rather than at launch: it is a few milliseconds of platform
+/// call that nothing needs until somebody opens a font list, and a church that
+/// never changes a typeface should not pay for it at all.
+#[tauri::command]
+fn list_fonts() -> Vec<String> {
+    fonts::families()
 }
 
 #[tauri::command]
@@ -2488,6 +2499,7 @@ pub fn run() {
             export_summary,
             semantic_status,
             semantic_search,
+            list_fonts,
             get_live,
             set_live,
             get_audio,

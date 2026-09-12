@@ -7,6 +7,7 @@ import { catalogSave, type Item, type SongSection } from "../lib/catalog";
 import {
   CANVAS,
   DEFAULT_BACKGROUND,
+  FADE_PRESETS,
   GRADIENT_PRESETS,
   MOTIONS,
   SHAPES,
@@ -27,14 +28,9 @@ import {
   type Typeset,
 } from "../lib/design";
 import { promote } from "../lib/promote";
-import {
-  alphaOf,
-  FONT_FAMILIES,
-  withColourAlpha,
-  type ProjectorTheme,
-} from "../lib/theme";
+import { alphaOf, withColourAlpha, type ProjectorTheme } from "../lib/theme";
 import { Backdrop } from "./Backdrop";
-import { Swatch } from "./Controls";
+import { FontPicker, Swatch } from "./Controls";
 import { boxStyle, DesignedView, typeStyle } from "./DesignedView";
 
 const FIELD =
@@ -1193,8 +1189,32 @@ export function DeckEditor({
                         ))}
                       </select>
                     </label>
-                    <Swatch
+                    <Segment<"solid" | "gradient">
                       label="Fill"
+                      value={chosen.fillKind ?? "solid"}
+                      options={[
+                        ["solid", "One colour", "A flat fill"],
+                        ["gradient", "Fade", "Two colours, for a scrim behind words"],
+                      ]}
+                      onChange={(fillKind) =>
+                        change(chosen.id, (element) =>
+                          element.kind === "shape"
+                            ? {
+                                ...element,
+                                fillKind,
+                                // Given a second stop the first time it is
+                                // needed: a fade to the same colour is not a
+                                // fade, and an empty one looks broken.
+                                fillTo: element.fillTo ?? "#00000000",
+                                fillAngle: element.fillAngle ?? 0,
+                              }
+                            : element,
+                        )
+                      }
+                    />
+
+                    <Swatch
+                      label={chosen.fillKind === "gradient" ? "From" : "Colour"}
                       value={chosen.fill}
                       onChange={(fill) =>
                         change(chosen.id, (element) =>
@@ -1202,6 +1222,69 @@ export function DeckEditor({
                         )
                       }
                     />
+
+                    {chosen.fillKind === "gradient" ? (
+                      <>
+                        <Swatch
+                          label="To"
+                          value={chosen.fillTo ?? "#00000000"}
+                          onChange={(fillTo) =>
+                            change(chosen.id, (element) =>
+                              element.kind === "shape"
+                                ? { ...element, fillTo }
+                                : element,
+                            )
+                          }
+                        />
+                        <NumberField
+                          label="Angle — 0 runs upwards"
+                          value={chosen.fillAngle ?? 0}
+                          min={0}
+                          max={360}
+                          onChange={(fillAngle) =>
+                            change(chosen.id, (element) =>
+                              element.kind === "shape"
+                                ? { ...element, fillAngle }
+                                : element,
+                            )
+                          }
+                        />
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {FADE_PRESETS.map((preset) => (
+                            <button
+                              key={preset.label}
+                              type="button"
+                              onClick={() =>
+                                change(chosen.id, (element) =>
+                                  element.kind === "shape"
+                                    ? {
+                                        ...element,
+                                        fill: preset.from,
+                                        fillTo: preset.to,
+                                        fillAngle: preset.angle,
+                                      }
+                                    : element,
+                                )
+                              }
+                              className="rounded border border-pulpitry-line p-1 text-left hover:border-pulpitry-gold-dim focus-visible:focus-ring"
+                            >
+                              {/* Over a chequer, because a fade to nothing
+                                  cannot be seen against a flat swatch. */}
+                              <span
+                                className="block h-6 w-full rounded-sm"
+                                style={{
+                                  backgroundImage: `linear-gradient(${preset.angle}deg, ${preset.from}, ${preset.to}), repeating-conic-gradient(#555 0% 25%, #888 0% 50%)`,
+                                  backgroundSize: "auto, 10px 10px",
+                                }}
+                              />
+                              <span className="mt-1 block truncate text-[10.5px] text-pulpitry-muted">
+                                {preset.label}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    ) : null}
                     {/* Only the shapes that have corners to round. */}
                     {chosen.shape === "rounded" || chosen.shape === "line" ? (
                       <NumberField
@@ -1266,29 +1349,20 @@ export function DeckEditor({
 
               {isTypeset(chosen) ? (
                 <Collapsible title="Text">
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] text-pulpitry-muted">
-                      Font
-                    </span>
-                    <select
-                      value={chosen.font}
-                      onChange={(event) =>
-                        change(chosen.id, (element) =>
-                          isTypeset(element)
-                            ? { ...element, font: event.target.value }
-                            : element,
-                        )
-                      }
-                      className={FIELD}
-                    >
-                      <option value="">The church's own ({churchTheme.fontFamily})</option>
-                      {FONT_FAMILIES.map((family) => (
-                        <option key={family.key} value={family.key}>
-                          {family.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  {/* Every face on this machine, and the church's own look as
+                      the first choice -- an element left on that follows the
+                      theme when the theme changes. */}
+                  <FontPicker
+                    label="Font"
+                    value={chosen.font}
+                    onChange={(font) =>
+                      change(chosen.id, (element) =>
+                        isTypeset(element) ? { ...element, font } : element,
+                      )
+                    }
+                    className={FIELD}
+                    inherit="The church's own look"
+                  />
 
                   <div className="flex gap-1.5">
                     <label className="min-w-0 flex-1">

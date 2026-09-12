@@ -151,7 +151,14 @@ function Shape({ element }: { element: ShapeElement }) {
     <div
       className="h-full w-full"
       style={{
-        background: element.fill,
+        // Two stops where the fill is a gradient, which is how a scrim is
+        // made: dark where the words are and nothing at the far end.
+        background:
+          element.fillKind === "gradient"
+            ? `linear-gradient(${element.fillAngle ?? 0}deg, ${element.fill}, ${
+                element.fillTo ?? "#00000000"
+              })`
+            : element.fill,
         opacity: element.opacity / 100,
         borderRadius: radius,
         clipPath: CLIP[element.shape],
@@ -322,8 +329,18 @@ function Scripture({
             textAlign: element.align,
           }}
         >
+          {/*
+            The reference exactly as the library composed it.
+
+            It already names the translation -- "John 1:1 (KJV)" -- and in that
+            translation's own language for the book, which is the whole reason
+            the label is built there rather than assembled at this end. Adding
+            the translation here as well produced "John 1:1 (KJV) (KJV)".
+
+            `element.translation` is kept as a record of which Bible the words
+            came from, and is not drawn.
+          */}
           {element.reference}
-          {element.translation ? ` (${element.translation})` : ""}
         </p>
       ) : null}
     </>

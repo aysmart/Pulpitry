@@ -114,10 +114,17 @@ screencapturekit = "8"
 # Already in the tree through the webview. Used for one message to the
 # webview that no Tauri API reaches: see `keep_painting` in projector.rs.
 objc2 = "0.6"
+# Reading the installed font families, through Core Text's font manager.
+# Already in the tree through the webview; Core Text itself is one extern
+# declaration in fonts.rs, so nothing new is compiled for it.
+core-foundation = "0.10"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6", features = ["windows-native"] }
 windows-capture = "2"
+# The installed fonts, which Windows keeps in the registry. Already in the
+# tree, so this pins what is there rather than adding anything.
+winreg = "0.55"
 
 # The Secret Service, reached over D-Bus, which is what GNOME Keyring and KWallet
 # both speak. Needs libsecret at build time; without this target the crate is

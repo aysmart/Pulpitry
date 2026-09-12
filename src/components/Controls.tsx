@@ -1,7 +1,11 @@
 /** Small shared controls, so the theme editor and the notice panel match. */
 
+import { useEffect, useState } from "react";
+
+import { isBundled, systemFonts } from "../lib/fonts";
 import {
   alphaOf,
+  FONT_FAMILIES,
   readColour,
   rgbOf,
   withColourAlpha,
@@ -9,6 +13,101 @@ import {
 
 export const FIELD =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-2 py-1.5 text-[12.5px] text-pulpitry-text outline-none placeholder:text-pulpitry-muted focus-visible:focus-ring";
+
+/**
+ * Choosing a typeface, from what ships and from what the machine has.
+ *
+ * Two groups, and the bundled ones first: those are the faces every look was
+ * designed in and the ones that exist on any machine the deck might be carried
+ * to. A church's own typeface is the second group, and it is the reason this
+ * exists — a brand's face is already installed on the machine that runs the
+ * service, and until now the answer was that it could not be used.
+ *
+ * Each name is drawn in its own face, because that is how anybody chooses one.
+ *
+ * The system list arrives after the first render: it is a platform call, and
+ * waiting on it before showing the picker would stall the dialogue for the
+ * benefit of a list most operators will not open.
+ */
+export function FontPicker({
+  label,
+  value,
+  onChange,
+  className = FIELD,
+  /** Offered as the first choice, for an element that may follow the theme. */
+  inherit,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+  inherit?: string;
+}) {
+  const [installed, setInstalled] = useState<string[]>([]);
+
+  useEffect(() => {
+    let live = true;
+    void systemFonts().then((families) => {
+      if (live) setInstalled(families);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  /*
+   * A family that is no longer here still shows.
+   *
+   * A deck made on the church's own machine and opened on a stand-in laptop
+   * names a face that machine may not have. Dropping it from the list would
+   * silently reset the deck's typeface the moment somebody touched the picker;
+   * keeping it says what the deck asks for, and the stack behind it is what
+   * makes the slide read anyway.
+   */
+  const missing =
+    value && !isBundled(value) && !installed.includes(value) ? value : null;
+
+  return (
+    <label className="flex flex-1 flex-col gap-1">
+      <span className="text-[12px] text-pulpitry-muted">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={className}
+      >
+        {inherit !== undefined ? <option value="">{inherit}</option> : null}
+
+        <optgroup label="Bundled with Pulpitry">
+          {FONT_FAMILIES.map((entry) => (
+            <option
+              key={entry.key}
+              value={entry.key}
+              style={{ fontFamily: entry.stack }}
+            >
+              {entry.label}
+            </option>
+          ))}
+        </optgroup>
+
+        {missing ? (
+          <optgroup label="Asked for, but not on this computer">
+            <option value={missing}>{missing}</option>
+          </optgroup>
+        ) : null}
+
+        {installed.length > 0 ? (
+          <optgroup label="On this computer">
+            {installed.map((family) => (
+              <option key={family} value={family} style={{ fontFamily: family }}>
+                {family}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+      </select>
+    </label>
+  );
+}
 
 export function Slider({
   label,

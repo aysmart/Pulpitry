@@ -253,10 +253,24 @@ export const FONT_FAMILIES: Array<{
 ];
 
 export function fontStack(key: string): string {
-  return (
-    FONT_FAMILIES.find((entry) => entry.key === key)?.stack ??
-    FONT_FAMILIES[0]!.stack
-  );
+  const bundled = FONT_FAMILIES.find((entry) => entry.key === key);
+  if (bundled) return bundled.stack;
+  if (!key.trim()) return FONT_FAMILIES[0]!.stack;
+
+  /*
+   * A family installed on this machine, named as the system reports it.
+   *
+   * Quoted, because family names have spaces in them, and with the bundled
+   * serif behind it — which is what makes a deck portable. A church's own
+   * typeface is on the machine that made the deck; carried to another church,
+   * or opened on the laptop that covers when the usual one fails, the words
+   * still read rather than falling back to whatever the browser defaults to.
+   *
+   * The quotation marks are stripped from the name first: a family cannot
+   * contain one, and a stray quote would end the declaration early and take
+   * the fallback with it.
+   */
+  return `"${key.replace(/["\\;]/g, "").trim()}", ${FONT_FAMILIES[0]!.stack}`;
 }
 
 /**

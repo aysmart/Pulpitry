@@ -87,10 +87,18 @@ export interface TextElement extends Box, Typeset {
 export interface ScriptureElement extends Box, Typeset {
   kind: "scripture";
   id: string;
+  /**
+   * The label, exactly as the library composed it: "John 1:1 (KJV)".
+   *
+   * Composed there rather than assembled here on purpose — the book is named
+   * in the translation's own language, so a Yoruba verse is not captioned in
+   * English. It already contains the translation, which is why nothing draws
+   * that separately.
+   */
   reference: string;
   /** As the library gave them. Empty while a reference is being typed. */
   lines: string[];
-  /** Which Bible the words came from, shown with the reference. */
+  /** A record of which Bible the words came from. Not drawn; see `reference`. */
   translation: string;
   /** Whether the reference is drawn under the words. */
   showReference: boolean;
@@ -143,11 +151,47 @@ export interface ShapeElement extends Box {
   kind: "shape";
   id: string;
   shape: ShapeKind;
+  /** The colour, or the first stop where the fill is a gradient. */
   fill: string;
+  /**
+   * Whether the fill is one colour or two.
+   *
+   * Absent on every shape made before gradients, which reads as solid — and
+   * that is exactly how those shapes are drawn today.
+   *
+   * A gradient fill exists for one device above all: the scrim. Words over a
+   * photograph need something behind them, and a flat tint over the whole
+   * picture dulls the picture. A band that is dark at the words and nothing at
+   * the other end gives the words their backing and leaves the photograph
+   * alone — which is what alpha in a colour is for, and what a second stop
+   * makes possible.
+   */
+  fillKind?: "solid" | "gradient";
+  fillTo?: string;
+  /** Degrees, as CSS reads them: 0 runs upwards, 90 to the right. */
+  fillAngle?: number;
   opacity: number;
   /** Corner rounding in canvas units. Only the boxy shapes use it. */
   radius: number;
 }
+
+/**
+ * Scrims, which are what a gradient fill is mostly for.
+ *
+ * Each is a fade to nothing rather than to another colour, because the point is
+ * to give words a backing without putting a band across the picture.
+ */
+export const FADE_PRESETS: Array<{
+  label: string;
+  from: string;
+  to: string;
+  angle: number;
+}> = [
+  { label: "Dark, from below", from: "#000000CC", to: "#00000000", angle: 0 },
+  { label: "Dark, from above", from: "#00000000", to: "#000000CC", angle: 0 },
+  { label: "Dark, from the left", from: "#000000CC", to: "#00000000", angle: 90 },
+  { label: "Light, from below", from: "#FFFFFFCC", to: "#FFFFFF00", angle: 0 },
+];
 
 /**
  * A comparison, a rota, a set of figures — the one arranged component that

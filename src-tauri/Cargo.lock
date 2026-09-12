@@ -3848,6 +3848,7 @@ dependencies = [
  "candle-nn",
  "candle-transformers",
  "castavox-core",
+ "core-foundation 0.10.1",
  "cpal",
  "flate2",
  "keyring",
@@ -3877,6 +3878,7 @@ dependencies = [
  "whisper-rs",
  "windows-capture",
  "windows-sys 0.59.0",
+ "winreg",
  "zip 2.4.2",
 ]
 
