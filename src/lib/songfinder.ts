@@ -5,7 +5,7 @@ import type { Item, SongRights, SongSection } from "./catalog";
 /**
  * The AI Song Finder: the catalogue that comes with a subscription.
  *
- * See src-tauri/src/songbook.rs for what it is and why it is the one part of
+ * See src-tauri/src/songfinder.rs for what it is and why it is the one part of
  * Pulpitry that is not on the machine. This end only asks and shows.
  */
 export interface SongFinderHit {

@@ -65,7 +65,7 @@ export type LibraryTab =
  *   driven by the operator: a deck is stepped, and stepping is the job.
  * - **song**: the same output column as the deck frame, with the work beside it
  *   in two rows — the plan and the song's parts above, the library, the
- *   Songbook and what would be added below. The output is identical to the
+ *   AI Song Finder and what would be added below. The output is identical to the
  *   slide desk's on purpose: an operator moves between these two arrangements
  *   during one service, and the pane they watch the congregation through
  *   should not change shape when they do.
@@ -134,7 +134,7 @@ export interface WorkspaceShape {
    * window — work beside output — in the deck and song frames.
    */
   columns: string;
-  /** The song frame's lower row: the library, the Songbook, the preview. */
+  /** The song frame's lower row: the library, the AI Song Finder, the preview. */
   bottomColumns?: string;
   /**
    * A height share. The working row's, in the desk frame; the deck strip's, in
@@ -183,7 +183,7 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     // Above the libraries: the running order, and the parts of the song that
     // is staged. Both are lists of names and neither needs width.
     topColumns: "minmax(220px,1fr) minmax(220px,1fr)",
-    // This church's library, the Songbook, and what would be added from it.
+    // This church's library, the AI Song Finder, and what would be added from it.
     // Even, because choosing a song is reading three lists against each other.
     bottomColumns: "minmax(0,1fr) minmax(0,1fr) minmax(0,1.05fr)",
     // The upper row's share. A third: a plan is a dozen lines and a song is
