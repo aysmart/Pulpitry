@@ -63,12 +63,12 @@ export type LibraryTab =
  *   library that stages it, and one tall column holding what is on the wall,
  *   what is staged behind it and the transport between them. Right for work
  *   driven by the operator: a deck is stepped, and stepping is the job.
- * - **song**: two rows of three. The plan, the output, and the song's parts
- *   across the top; the library, the Songbook and what would be added along
- *   the bottom. Right because a worship set is two jobs at once — running the
- *   song that is up, and having the next one ready — and a song is not stepped
- *   in order the way a deck is: the band repeats the chorus, goes back to verse
- *   two, and finishes on the bridge, so every part needs to be one press.
+ * - **song**: the same output column as the deck frame, with the work beside it
+ *   in two rows — the plan and the song's parts above, the library, the
+ *   Songbook and what would be added below. The output is identical to the
+ *   slide desk's on purpose: an operator moves between these two arrangements
+ *   during one service, and the pane they watch the congregation through
+ *   should not change shape when they do.
  */
 export type Frame = "desk" | "deck" | "song";
 
@@ -131,9 +131,11 @@ export interface WorkspaceShape {
   original: boolean;
   /**
    * Columns, in render order: the working row in the desk frame, and the whole
-   * window — work beside output — in the deck frame.
+   * window — work beside output — in the deck and song frames.
    */
   columns: string;
+  /** The song frame's lower row: the library, the Songbook, the preview. */
+  bottomColumns?: string;
   /**
    * A height share. The working row's, in the desk frame; the deck strip's, in
    * the deck frame.
@@ -174,17 +176,19 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     feed: false,
     queue: false,
     original: false,
-    // The plan, the output, the sections. The output takes the middle and most
-    // of the width: it is two 16:9 panes side by side, and everything either
-    // side of it is a list of names.
-    topColumns:
-      "minmax(200px,0.7fr) minmax(420px,1.9fr) minmax(200px,0.7fr)",
-    // The library, the Songbook, and what would be added. Even, because
-    // choosing a song is reading three lists against each other.
-    columns: "minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)",
-    // A little over half to the bottom row: the top is a preview and two short
-    // lists, and the bottom is where a set is actually built.
-    basis: "52%",
+    // Work, then output -- the deck frame's own split, so the pane an operator
+    // watches the congregation through is in the same place and the same shape
+    // in both arrangements.
+    columns: "minmax(0,1fr) minmax(340px,0.42fr)",
+    // Above the libraries: the running order, and the parts of the song that
+    // is staged. Both are lists of names and neither needs width.
+    topColumns: "minmax(220px,1fr) minmax(220px,1fr)",
+    // This church's library, the Songbook, and what would be added from it.
+    // Even, because choosing a song is reading three lists against each other.
+    bottomColumns: "minmax(0,1fr) minmax(0,1fr) minmax(0,1.05fr)",
+    // The upper row's share. A third: a plan is a dozen lines and a song is
+    // half a dozen parts, and the libraries below are where the work is.
+    basis: "34%",
   },
   slides: {
     label: "Slides",

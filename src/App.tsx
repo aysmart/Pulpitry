@@ -926,9 +926,18 @@ export default function App() {
           added from it).
         */}
         {shape.frame === "song" ? (
-          <>
+          <div
+            className="grid min-h-0 flex-1 gap-2"
+            style={{ gridTemplateColumns: shape.columns }}
+          >
+            {/* The work: what the service is doing above, where songs come
+                from below. */}
             <div
-              className="grid min-h-0 flex-1 gap-2"
+              className="grid min-h-0 gap-2"
+              style={{ gridTemplateRows: `${shape.basis} minmax(0,1fr)` }}
+            >
+            <div
+              className="grid min-h-0 gap-2"
               style={{ gridTemplateColumns: shape.topColumns }}
             >
               <Panel
@@ -950,37 +959,6 @@ export default function App() {
                 />
               </Panel>
 
-              <MainOutput
-                side="row"
-                preview={preview}
-                live={live}
-                onDisplay={display}
-                onClear={clearLive}
-                onStep={(forward) => void step(forward)}
-                canFollow={follow.canFollow}
-                following={follow.following}
-                onFollowChange={(on) =>
-                  on ? follow.setFollowing(true) : follow.stop()
-                }
-                advance={follow.advance}
-                onAdvanceChange={follow.setAdvance}
-                suggestion={follow.suggestion}
-                onTakeSuggestion={(index) => {
-                  goToSlide(index + 1);
-                  follow.clearSuggestion();
-                }}
-                onWind={wind}
-                onAdd={() => preview && schedule.add(preview)}
-                theme={settings?.projector ?? DEFAULT_THEME}
-                canStepBack={canStepBack}
-                canStepForward={canStepForward}
-                projectorOpen={projector.open}
-                audio={audio}
-                onAudioChange={changeAudio}
-                media={media}
-                ticker={ticker}
-              />
-
               <SectionsPanel
                 song={preview}
                 liveKey={liveKey}
@@ -991,10 +969,7 @@ export default function App() {
 
             <div
               className="grid min-h-0 gap-2"
-              style={{
-                flexBasis: shape.basis,
-                gridTemplateColumns: shape.columns,
-              }}
+              style={{ gridTemplateColumns: shape.bottomColumns }}
             >
               <ScripturePanel
                 tab={shownTab}
@@ -1057,7 +1032,41 @@ export default function App() {
                 onError={setError}
               />
             </div>
-          </>
+            </div>
+
+            {/* The same output column as the slide desk, in the same place and
+                the same shape: an operator moves between these two
+                arrangements during one service. */}
+            <MainOutput
+                preview={preview}
+                live={live}
+                onDisplay={display}
+                onClear={clearLive}
+                onStep={(forward) => void step(forward)}
+                canFollow={follow.canFollow}
+                following={follow.following}
+                onFollowChange={(on) =>
+                  on ? follow.setFollowing(true) : follow.stop()
+                }
+                advance={follow.advance}
+                onAdvanceChange={follow.setAdvance}
+                suggestion={follow.suggestion}
+                onTakeSuggestion={(index) => {
+                  goToSlide(index + 1);
+                  follow.clearSuggestion();
+                }}
+                onWind={wind}
+                onAdd={() => preview && schedule.add(preview)}
+                theme={settings?.projector ?? DEFAULT_THEME}
+                canStepBack={canStepBack}
+                canStepForward={canStepForward}
+                projectorOpen={projector.open}
+                audio={audio}
+                onAudioChange={changeAudio}
+                media={media}
+                ticker={ticker}
+              />
+          </div>
         ) : null}
 
         {shape.frame === "deck" ? (
