@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { catalogRemove, newItem, type Item } from "../lib/catalog";
-import { filled, listShapes, SAMPLE, starterShape } from "../lib/shapes";
+import { OVERLAY_FORMS, type OverlayForm } from "../lib/overlays";
+import {
+  filled,
+  listShapes,
+  SAMPLE,
+  shapeFromForm,
+  starterShape,
+} from "../lib/shapes";
 import type { ProjectorTheme } from "../lib/theme";
 import { DesignedView } from "./DesignedView";
+import { OverlayView } from "./OverlayView";
 import { ShapeStudio } from "./ShapeStudio";
 
 const BUTTON =
@@ -114,20 +122,14 @@ export function ShapeLibrary({
       </header>
 
       <div className="min-h-0 flex-1 overflow-auto p-4">
-        {shapes.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-            <p className="max-w-[40ch] text-[13px] leading-relaxed text-pulpitry-muted">
-              Nothing drawn yet. Pulpitry ships six shapes — a lower third, a
-              ribbon, a card and three others — and any output can use one of
-              those without anything here.
-            </p>
-            <p className="max-w-[40ch] text-[11.5px] leading-relaxed text-pulpitry-muted">
-              Draw your own when those are not your church&apos;s: your
-              proportions, your colours, your logo in the corner.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
+        {shapes.length > 0 ? (
+          <p className="mb-2 text-[11px] tracking-wide text-pulpitry-muted uppercase">
+            Yours
+          </p>
+        ) : null}
+
+        {shapes.length > 0 ? (
+          <div className="mb-5 grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
             {shapes.map((shape) => (
               <div key={shape.id} className="group relative flex flex-col gap-1">
                 <button
@@ -186,7 +188,66 @@ export function ShapeLibrary({
               </div>
             ))}
           </div>
-        )}
+        ) : null}
+
+        {/*
+          The six that ship, drawn by the renderer that draws them.
+
+          They were named in a sentence in the empty state, which is not the
+          same as being here: a church looking for "the existing ones" means
+          these, and a library that hides what already exists reads as broken
+          rather than as empty.
+
+          They cannot be edited -- there is nothing stored to edit, and a
+          shipped form that could be changed is one that eventually cannot be
+          got back. Copying gives the church a shape of their own at those
+          proportions, which is the thing they actually wanted.
+        */}
+        <p className="mb-2 text-[11px] tracking-wide text-pulpitry-muted uppercase">
+          Shipped with Pulpitry
+        </p>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
+          {OVERLAY_FORMS.filter(
+            (form) => form.id !== "none" && form.id !== "stage",
+          ).map((form) => (
+            <div key={form.id} className="group flex flex-col gap-1">
+              <button
+                type="button"
+                onClick={() =>
+                  setDesigning(
+                    newItem(`${form.name} — ours`, {
+                      kind: "overlay",
+                      elements: shapeFromForm(form.id),
+                    }),
+                  )
+                }
+                title={`${form.hint} Copying gives you one of your own at these proportions.`}
+                className="block text-left focus-visible:focus-ring"
+              >
+                <span
+                  className="relative block w-full overflow-hidden rounded border border-pulpitry-line [container-type:size]"
+                  style={{ aspectRatio: 16 / 9, ...CHEQUER }}
+                >
+                  {/* The real renderer, so a tile is what the output draws. */}
+                  <OverlayView
+                    form={form.id as OverlayForm}
+                    theme={theme}
+                    reference={SAMPLE.reference}
+                    text={SAMPLE.words}
+                    uppercase={false}
+                    captions
+                  />
+                </span>
+                <span className="mt-1.5 block truncate text-[12.5px] text-pulpitry-text">
+                  {form.name}
+                </span>
+                <span className="block truncate text-[11px] text-pulpitry-muted">
+                  Copy to make it yours
+                </span>
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -150,3 +150,88 @@ export const SAMPLE = {
   words: "Wait on the Lord\nand He will renew your strength",
   reference: "Isaiah 40:31 (KJV)",
 };
+
+
+/**
+ * One of the six shipped forms, as elements a church can then move.
+ *
+ * # Why a copy rather than an edit
+ *
+ * The built-in forms are geometry in the renderer. They cannot be edited,
+ * because there is nothing stored to edit — and they should not be: a church
+ * that drags the lower third about and regrets it must be able to get the
+ * original back, and a shipped form that can be changed is one that eventually
+ * cannot be got back.
+ *
+ * So a shipped form is copied, and the copy is theirs: the band, the rule and
+ * the two holes at the proportions the renderer draws them, from which the
+ * first thing most churches do is move the band up and drop a logo in it.
+ *
+ * # Approximate, and honestly so
+ *
+ * The renderer sizes its type from the output's width and its own scale; these
+ * numbers are that arrangement at 1920 × 1080, which is where every shape is
+ * measured. A copy looks like what it came from and is not a pixel-for-pixel
+ * duplicate of it — and from the moment it is copied it is not meant to be.
+ */
+export function shapeFromForm(form: string): SlideElement[] {
+  const band = (box: { x: number; y: number; w: number; h: number }) => ({
+    ...newBlock("rectangle"),
+    ...box,
+    fill: "#101C33E6",
+    radius: 0,
+  });
+
+  const words = (box: { x: number; y: number; w: number; h: number }, size: number) => ({
+    ...newSlot("words"),
+    ...box,
+    size,
+  });
+
+  const citation = (box: { x: number; y: number; w: number; h: number }, size: number) => ({
+    ...newSlot("reference"),
+    ...box,
+    size,
+  });
+
+  switch (form) {
+    case "ribbon":
+      return [
+        band({ x: 0, y: 780, w: 1920, h: 130 }),
+        citation({ x: 150, y: 805, w: 380, h: 80 }, 30),
+        words({ x: 540, y: 800, w: 1230, h: 90 }, 40),
+      ];
+
+    case "card":
+      return [
+        { ...newBlock("rounded"), x: 96, y: 560, w: 845, h: 330, fill: "#101C33E6", radius: 12 },
+        citation({ x: 150, y: 590, w: 740, h: 50 }, 26),
+        words({ x: 150, y: 650, w: 740, h: 210 }, 44),
+      ];
+
+    case "top-strip":
+      return [
+        band({ x: 0, y: 0, w: 1920, h: 150 }),
+        words({ x: 150, y: 20, w: 1620, h: 110 }, 40),
+      ];
+
+    case "side-panel":
+      return [
+        band({ x: 1344, y: 0, w: 576, h: 1080 }),
+        citation({ x: 1400, y: 380, w: 464, h: 60 }, 26),
+        words({ x: 1400, y: 450, w: 464, h: 260 }, 38),
+      ];
+
+    case "caption":
+      // No band at all: the words carry themselves on a heavy shadow, which is
+      // what the built-in does and why it is the one that works over a camera.
+      return [
+        citation({ x: 300, y: 790, w: 1320, h: 50 }, 28),
+        words({ x: 300, y: 845, w: 1320, h: 130 }, 50),
+      ];
+
+    case "lower-third":
+    default:
+      return starterShape();
+  }
+}
