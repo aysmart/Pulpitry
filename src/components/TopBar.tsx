@@ -1,5 +1,10 @@
 import type { AudioDevice, SpeechStatus } from "../lib/api";
 import { Logo } from "./Logo";
+import {
+  WORKSPACES,
+  WORKSPACE_ORDER,
+  type Workspace,
+} from "../lib/workspaces";
 
 const STATE_LABEL: Record<SpeechStatus["state"], string> = {
   idle: "Not listening",
@@ -18,6 +23,8 @@ export function TopBar({
   onOpenSettings,
   busy,
   onOpenOutputs,
+  workspace,
+  onWorkspace,
 }: {
   status: SpeechStatus;
   devices: AudioDevice[];
@@ -28,6 +35,8 @@ export function TopBar({
   busy: boolean;
   /** Opens the Display outputs dialog, which replaced four controls here. */
   onOpenOutputs: () => void;
+  workspace: Workspace;
+  onWorkspace: (workspace: Workspace) => void;
 }) {
   const live = status.state === "listening";
   const active =
@@ -40,6 +49,38 @@ export function TopBar({
         <span className="text-[15px] tracking-tight text-pulpitry-text">
           pulpitry
         </span>
+      </div>
+
+      {/*
+        How the desk is arranged, next to the name rather than out at the right.
+
+        It is the first choice of a session and the least frequent: what the
+        operator is doing this hour. The controls that get pressed during a
+        service -- listening, the microphone, the outputs -- stay where the hand
+        already goes.
+      */}
+      <div
+        role="tablist"
+        aria-label="Arrangement"
+        className="flex items-center gap-0.5 rounded border border-pulpitry-line bg-pulpitry-raised p-0.5"
+      >
+        {WORKSPACE_ORDER.map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={workspace === id}
+            title={WORKSPACES[id].hint}
+            onClick={() => onWorkspace(id)}
+            className={`rounded px-2.5 py-1 text-[12px] transition-colors focus-visible:focus-ring ${
+              workspace === id
+                ? "bg-pulpitry-gold/15 text-pulpitry-gold"
+                : "text-pulpitry-muted hover:text-pulpitry-text"
+            }`}
+          >
+            {WORKSPACES[id].label}
+          </button>
+        ))}
       </div>
 
       <div

@@ -27,7 +27,7 @@ const TABS = [
   "History",
   "Themes",
 ] as const;
-type Tab = (typeof TABS)[number];
+export type Tab = (typeof TABS)[number];
 
 /**
  * The verse column. Everything here belongs to the scripture/detection system,
@@ -57,6 +57,8 @@ export function ScripturePanel({
   libraryReady,
   libraryImporting,
   libraryError,
+  tab: chosenTab,
+  onTab,
 }: {
   translation: string;
   translations: Translation[];
@@ -82,8 +84,19 @@ export function ScripturePanel({
   libraryReady: boolean;
   libraryImporting: string | null;
   libraryError: string | null;
+  /** Which library is in front. Held by the desk, so a workspace can set it. */
+  tab: Tab;
+  onTab: (tab: Tab) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("Scripture");
+  /*
+   * Held by the caller, not here.
+   *
+   * A workspace chooses which library is in front: switching to Songs on the
+   * desk has to move this too, or the arrangement would give the width to a
+   * library the operator is not looking at. Pressing a tab still works and
+   * still wins -- it just tells the same state.
+   */
+  const tab = chosenTab;
   // Both are text written for the congregation to read; one replaces the
   // screen and one runs along the edge of it.
   const [slidesMode, setSlidesMode] = useState<"slides" | "notice">("slides");
@@ -101,7 +114,7 @@ export function ScripturePanel({
             <button
               key={name}
               type="button"
-              onClick={() => setTab(name)}
+              onClick={() => onTab(name)}
               className={`rounded px-[2px] py-0.5 text-[10.5px] transition-colors focus-visible:focus-ring ${
                 tab === name
                   ? "bg-pulpitry-teal-dim text-pulpitry-text"

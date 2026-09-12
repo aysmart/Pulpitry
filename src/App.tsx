@@ -15,6 +15,13 @@ import { SlidesFromSermon } from "./components/SlidesFromSermon";
 import { PreviewPanel, StagePanel } from "./components/StagePanel";
 import { TopBar } from "./components/TopBar";
 import { TranscriptPanel } from "./components/TranscriptPanel";
+import type { Tab } from "./components/ScripturePanel";
+import {
+  rememberWorkspace,
+  storedWorkspace,
+  WORKSPACES,
+  type Workspace,
+} from "./lib/workspaces";
 import {
   describeError,
   getSettings,
@@ -99,6 +106,22 @@ function ready(settings: SettingsView | null): boolean {
 
 export default function App() {
   const { lines, interim, status, clear } = useTranscript();
+  /*
+   * How the desk is arranged, and which library is in front.
+   *
+   * One state rather than two: choosing Songs on the desk has to bring the
+   * song library forward, or the arrangement would give the width to something
+   * the operator is not looking at. Pressing a tab moves the library alone,
+   * which is the finer adjustment and still allowed.
+   */
+  const [workspace, setWorkspace] = useState<Workspace>(storedWorkspace);
+  const [tab, setTab] = useState<Tab>(WORKSPACES[storedWorkspace()].tab);
+  const shape = WORKSPACES[workspace];
+  const chooseWorkspace = useCallback((next: Workspace) => {
+    setWorkspace(next);
+    setTab(WORKSPACES[next].tab);
+    rememberWorkspace(next);
+  }, []);
   const {
     preview,
     live,
@@ -722,6 +745,8 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         busy={busy || !settings}
         onOpenOutputs={() => setOutputsOpen(true)}
+        workspace={workspace}
+        onWorkspace={chooseWorkspace}
       />
 
       {/*
@@ -942,8 +967,13 @@ export default function App() {
           panels for one build, and the third silently wrapped onto a second row
           underneath the library rather than sitting beside it.
         */}
-        <div className="grid min-h-0 basis-[38%] gap-2 [grid-template-columns:minmax(0,1fr)_minmax(0,0.8fr)_minmax(320px,0.95fr)]">
+        <div
+          className="grid min-h-0 gap-2"
+          style={{ flexBasis: shape.basis, gridTemplateColumns: shape.columns }}
+        >
           <ScripturePanel
+            tab={tab}
+            onTab={setTab}
             translation={translation}
             translations={library.translations}
             onSelectTranslation={selectTranslation}
@@ -989,6 +1019,7 @@ export default function App() {
           belongs next to the thing it explains: an operator reading a chapter
           is the operator who wants to know what a word is doing in it.
         */}
+          {shape.original ? (
           <OriginalPanel
             verse={originalVerse}
             onOpenLexicon={openLexicon}
@@ -1129,6 +1160,7 @@ export default function App() {
               else previewItem(item);
             }}
           />
+          ) : null}
 
           <PreviewPanel
             preview={preview}
