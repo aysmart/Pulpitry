@@ -217,14 +217,17 @@ its own songs already there — and only one of us can make that true.
 - English: from the 266 we carry to the thousands that are genuinely public
   domain (Hymnary, the Cyber Hymnal, Wikisource), with author, year and source
   on every record.
-- **Local-language hymnals**, which is the part nobody else is doing:
-  *Ìwé Orin Mímọ́*, the Yoruba Anglican hymnal, is about 600 hymns and exists
-  as Bodleian/Google Books scans; there are Igbo, Hausa, Twi and Swahili
-  equivalents from the same mission era. Those translations are old enough to
-  be out of copyright, which is exactly why they are the right place to start.
-  Where only scans exist, that is an OCR and proofreading job — the text is
-  Yoruba with diacritics, so it needs a person to check it, not just a model.
 - Traditional choruses, credited as traditional where no author is known.
+- **Local-language hymnals: shelved 2026-09-12, not abandoned.** The Yoruba
+  *Ìwé Orin Mímọ́* and its Igbo, Hausa, Twi and Swahili equivalents are the
+  part nobody else is doing, and the mission-era translations are out of
+  copyright. What stopped it is text quality, measured rather than assumed:
+  the open archive.org scans carry OCR from before any Yoruba model — `Ql9run`
+  for Ọlọ́run, not one correct diacritic — and the hymn websites are typed
+  without diacritics at all. The routes that would work are a clean file from
+  a diocese or press, or diacritic restoration followed by a Yoruba reader's
+  proofing. Both need somebody who reads Yoruba, so the work waits for that
+  rather than for engineering.
 
 **Track B — the contemporary catalogue.** The aim is that a church opens
 Pulpitry and finds the songs it actually sings — including Nigerian gospel.

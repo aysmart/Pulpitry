@@ -32,9 +32,12 @@
 //!   inside a column.
 //! - **Pasted text**: whatever somebody has in an email or a document.
 //!
-//! EasyWorship is next and is not here yet: version 6 and 7 keep a SQLite
-//! database whose words are RTF, so it needs an RTF reader as well as a
-//! schema, and it is worth doing properly rather than half.
+//! - **EasyWorship** (6 and 7): a SQLite database whose words are RTF, so it
+//!   needs an RTF reader as well as a schema.
+//!
+//! EasyWorship 2009 and earlier kept Paradox database files instead, which are
+//! a different job and are not read here. A church on one of those can export
+//! to a newer EasyWorship, or paste.
 
 use std::path::Path;
 
@@ -275,6 +278,29 @@ pub fn from_openlyrics(xml: &str) -> Result<Imported> {
 /// operator less than retyping: they can edit a section, but they will not
 /// retype forty.
 pub fn from_plain(title: &str, text: &str) -> Result<Imported> {
+    let sections = sections_from_text(text);
+
+    if sections.is_empty() {
+        return Err(anyhow!("there are no words here"));
+    }
+
+    Ok(Imported {
+        title: title.trim().to_string(),
+        sections,
+        rights: SongRights {
+            status: RightsStatus::Unknown,
+            source: "Typed or pasted in".into(),
+            ..SongRights::default()
+        },
+    })
+}
+
+/// Blocks of words, split and labelled the way people write songs down.
+///
+/// Shared by the paste box and by EasyWorship, whose words arrive as one run of
+/// RTF with blank lines between what it calls slides -- which is the same
+/// problem, once the RTF is gone.
+fn sections_from_text(text: &str) -> Vec<SongSection> {
     let mut sections = Vec::new();
     let mut verse = 0;
 
@@ -294,19 +320,7 @@ pub fn from_plain(title: &str, text: &str) -> Result<Imported> {
         sections.push(section(label, words.iter().map(|line| line.to_string()).collect()));
     }
 
-    if sections.is_empty() {
-        return Err(anyhow!("there are no words here"));
-    }
-
-    Ok(Imported {
-        title: title.trim().to_string(),
-        sections,
-        rights: SongRights {
-            status: RightsStatus::Unknown,
-            source: "Typed or pasted in".into(),
-            ..SongRights::default()
-        },
-    })
+    sections
 }
 
 /// Whether a line is a section heading rather than a line of the song.
@@ -438,6 +452,272 @@ fn openlp_authors(connection: &rusqlite::Connection, song: i64) -> Result<String
         .filter(|name| !name.trim().is_empty())
         .collect::<Vec<_>>();
     Ok(names.join(", "))
+}
+
+
+/**
+ * A whole EasyWorship library, from the database the application keeps.
+ *
+ * Versions 6 and 7 store songs in SQLite: a `song` table for the titles and
+ * credits, and a `word` table holding the lyrics as RTF. The RTF is why this
+ * is more than a query -- EasyWorship writes fonts, colours and view state
+ * around the words, and none of that belongs anywhere near a screen.
+ *
+ * The columns are read from the schema rather than assumed, because they differ
+ * between versions and a missing `reference_number` should cost the church a
+ * CCLI number rather than the import.
+ *
+ * Opened read-only: it is the church's own library and this must not be what
+ * damages it.
+ */
+pub fn from_easyworship(path: &Path) -> Result<Vec<Imported>> {
+    use rusqlite::{Connection, OpenFlags};
+
+    let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .with_context(|| format!("could not open {}", path.display()))?;
+
+    let has = |table: &str, column: &str| -> bool {
+        connection
+            .prepare(&format!("SELECT {column} FROM {table} LIMIT 0"))
+            .is_ok()
+    };
+    if !has("song", "title") || !has("word", "words") {
+        return Err(anyhow!(
+            "{} is not an EasyWorship song database",
+            path.file_name().and_then(|name| name.to_str()).unwrap_or("that file")
+        ));
+    }
+
+    // Absent in some versions; asked for only where the schema has it.
+    let author = if has("song", "author") { "s.author" } else { "''" };
+    let copyright = if has("song", "copyright") { "s.copyright" } else { "''" };
+    let ccli = if has("song", "reference_number") { "s.reference_number" } else { "''" };
+
+    let sql = format!(
+        "SELECT s.title, {author}, {copyright}, {ccli}, w.words \
+         FROM song s JOIN word w ON w.song_id = s.rowid ORDER BY s.title"
+    );
+    let mut statement = connection.prepare(&sql)?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?.unwrap_or_default(),
+                row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                row.get::<_, Option<String>>(4)?.unwrap_or_default(),
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let mut songs = Vec::new();
+    for (title, author, copyright, ccli, words) in rows {
+        let sections = sections_from_text(&strip_rtf(&words));
+        if title.trim().is_empty() || sections.is_empty() {
+            continue;
+        }
+        songs.push(Imported {
+            title: title.trim().to_string(),
+            sections,
+            rights: SongRights {
+                status: RightsStatus::Unknown,
+                author: author.trim().to_string(),
+                composer: String::new(),
+                terms: copyright.trim().to_string(),
+                source: "Imported from EasyWorship".into(),
+                ccli: ccli.trim().to_string(),
+            },
+        });
+    }
+
+    Ok(songs)
+}
+
+/**
+ * The words out of RTF, and nothing else.
+ *
+ * Not a general RTF reader: a lyric needs the text, the line breaks and the
+ * accented characters, and nothing RTF says about fonts, colours or windows.
+ *
+ * The four things that actually matter in EasyWorship's output:
+ *
+ * - `\par` and `\line` are where a line ends. Everything else is discarded,
+ *   so a missed one would run two lines of a verse together.
+ * - `{\*\...}` groups are destinations meant for the application rather than
+ *   the reader -- generators, colour tables, stylesheets -- and are skipped
+ *   whole, because their *contents* are not text either.
+ * - `\uN` is a real character, often an accent in a name; `\'XX` is one in
+ *   Windows-1252. Dropping those silently would mangle somebody's language.
+ * - A control word swallows one following space, which is RTF's own rule and
+ *   the difference between "Lordis" and "Lord is".
+ */
+fn strip_rtf(rtf: &str) -> String {
+    let bytes: Vec<char> = rtf.chars().collect();
+    let mut out = String::with_capacity(rtf.len() / 2);
+    let mut at = 0;
+    // Depth of a `{\*\...}` group we are inside and ignoring.
+    let mut skipping: Option<usize> = None;
+    let mut depth = 0usize;
+
+    while at < bytes.len() {
+        let c = bytes[at];
+        match c {
+            '{' => {
+                depth += 1;
+                if skipping.is_none() && opens_a_destination(&bytes, at) {
+                    skipping = Some(depth);
+                }
+                at += 1;
+            }
+            '}' => {
+                if skipping == Some(depth) {
+                    skipping = None;
+                }
+                depth = depth.saturating_sub(1);
+                at += 1;
+            }
+            '\\' => {
+                at += 1;
+                match bytes.get(at) {
+                    // An escaped brace or backslash is that character.
+                    Some(&escaped @ ('{' | '}' | '\\')) => {
+                        if skipping.is_none() {
+                            out.push(escaped);
+                        }
+                        at += 1;
+                    }
+                    // A byte in Windows-1252, written as two hex digits.
+                    Some(&'\'') => {
+                        let hex: String = bytes.iter().skip(at + 1).take(2).collect();
+                        if let Ok(byte) = u8::from_str_radix(&hex, 16) {
+                            if skipping.is_none() {
+                                out.push(cp1252(byte));
+                            }
+                        }
+                        at += 3;
+                    }
+                    Some(_) => {
+                        let start = at;
+                        while at < bytes.len() && bytes[at].is_ascii_alphabetic() {
+                            at += 1;
+                        }
+                        let word: String = bytes[start..at].iter().collect();
+                        // A signed number may follow: \fs40, \u241, \li-720.
+                        let digits_at = at;
+                        if bytes.get(at) == Some(&'-') {
+                            at += 1;
+                        }
+                        while at < bytes.len() && bytes[at].is_ascii_digit() {
+                            at += 1;
+                        }
+                        let number: String = bytes[digits_at..at].iter().collect();
+                        // RTF's rule: one space after a control word is its
+                        // delimiter and not part of the text.
+                        if bytes.get(at) == Some(&' ') {
+                            at += 1;
+                        }
+                        if skipping.is_some() {
+                            continue;
+                        }
+                        match word.as_str() {
+                            "par" | "line" | "row" => out.push('\n'),
+                            "tab" => out.push('\t'),
+                            "u" => {
+                                if let Ok(code) = number.parse::<i64>() {
+                                    // Negative values are the same character
+                                    // written as a signed 16-bit integer.
+                                    let code = if code < 0 { (code + 65_536) as u32 } else { code as u32 };
+                                    if let Some(ch) = char::from_u32(code) {
+                                        out.push(ch);
+                                    }
+                                }
+                                // The replacement character that follows a \u
+                                // is for readers that cannot do Unicode.
+                                if bytes.get(at) == Some(&'?') {
+                                    at += 1;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    None => break,
+                }
+            }
+            '\n' | '\r' => {
+                // Raw newlines in RTF are formatting, not line breaks.
+                at += 1;
+            }
+            _ => {
+                if skipping.is_none() {
+                    out.push(c);
+                }
+                at += 1;
+            }
+        }
+    }
+
+    out
+}
+
+/**
+ * Whether a group opens something that is not text.
+ *
+ * `{\*\...}` says so explicitly, and RTF readers are expected to know the
+ * rest by name: the font and colour tables, the stylesheet, the document
+ * information, an embedded picture. Their contents are data, not words, and
+ * the test that caught this found "Arial" and a run of semicolons in the
+ * middle of a hymn.
+ */
+fn opens_a_destination(chars: &[char], brace_at: usize) -> bool {
+    if chars.get(brace_at + 1) != Some(&'\\') {
+        return false;
+    }
+    if chars.get(brace_at + 2) == Some(&'*') {
+        return true;
+    }
+    let word: String = chars
+        .iter()
+        .skip(brace_at + 2)
+        .take_while(|c| c.is_ascii_alphabetic())
+        .collect();
+    matches!(
+        word.as_str(),
+        "fonttbl"
+            | "colortbl"
+            | "stylesheet"
+            | "listtable"
+            | "listoverridetable"
+            | "revtbl"
+            | "rsidtbl"
+            | "info"
+            | "pict"
+            | "object"
+            | "themedata"
+            | "datastore"
+            | "latentstyles"
+            | "filetbl"
+            | "xmlnstbl"
+            | "generator"
+            | "shppict"
+            | "nonshppict"
+    )
+}
+
+/// One byte of Windows-1252 as a character.
+///
+/// Only the range that differs from Latin-1 needs a table; the rest is the
+/// same number. EasyWorship writes curly quotes and dashes this way constantly.
+fn cp1252(byte: u8) -> char {
+    const HIGH: [char; 32] = [
+        '\u{20AC}', '\u{FFFD}', '\u{201A}', '\u{0192}', '\u{201E}', '\u{2026}', '\u{2020}', '\u{2021}',
+        '\u{02C6}', '\u{2030}', '\u{0160}', '\u{2039}', '\u{0152}', '\u{FFFD}', '\u{017D}', '\u{FFFD}',
+        '\u{FFFD}', '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}', '\u{2022}', '\u{2013}', '\u{2014}',
+        '\u{02DC}', '\u{2122}', '\u{0161}', '\u{203A}', '\u{0153}', '\u{FFFD}', '\u{017E}', '\u{0178}',
+    ];
+    match byte {
+        0x80..=0x9F => HIGH[(byte - 0x80) as usize],
+        other => other as char,
+    }
 }
 
 #[cfg(test)]
@@ -600,6 +880,113 @@ Praise the Lord
         assert_eq!(song.sections[0].label, "Verse 1");
         assert_eq!(song.sections[1].label, "Chorus");
         assert_eq!(song.sections[0].lines.len(), 2);
+    }
+
+    /// RTF carries the words, the breaks and the accents; everything else goes.
+    #[test]
+    fn rtf_gives_back_the_words_and_the_line_breaks() {
+        let rtf = concat!(
+            r"{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fnil Arial;}}",
+            r"{\colortbl ;\red255\green255\blue255;}",
+            r"{\*\generator EasyWorship;}",
+            r"\viewkind4\uc1\pard\cf1\f0\fs40 Amazing grace how sweet the sound\par",
+            "\n",
+            r"That saved a wretch like me\par",
+            "\n",
+            r"\par",
+            "\n",
+            r"Chorus\par",
+            "\n",
+            r"Se\'f1or, praise the Lord\u241 ?\par",
+            "\n}",
+        );
+
+        let text = strip_rtf(rtf);
+        assert!(text.contains("Amazing grace how sweet the sound"), "got {text:?}");
+        // The control word swallows its delimiting space, not the word after it.
+        assert!(text.contains("That saved a wretch like me"), "got {text:?}");
+        // A destination group is not text: the generator name must not appear.
+        assert!(!text.contains("EasyWorship"), "got {text:?}");
+        assert!(!text.contains("Arial"), "got {text:?}");
+        // Both ways of writing an accent survive.
+        assert!(text.contains("Señor"), "got {text:?}");
+        assert!(text.contains('ñ'), "got {text:?}");
+        // The blank line between slides is kept, because it is where a section ends.
+        assert!(text.contains("\n\n"), "got {text:?}");
+    }
+
+    #[test]
+    fn easyworship_reads_a_library_with_its_credits() {
+        let directory = std::env::temp_dir().join(format!("pulpitry-ew-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).expect("a temporary directory");
+        let path = directory.join("Songs.db");
+
+        {
+            let db = rusqlite::Connection::open(&path).expect("a database");
+            db.execute_batch(
+                "CREATE TABLE song (title TEXT, author TEXT, copyright TEXT, reference_number TEXT);
+                 CREATE TABLE word (song_id INTEGER, words TEXT);",
+            )
+            .expect("the EasyWorship shape");
+            db.execute(
+                "INSERT INTO song VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params!["Way Maker", "Osinachi Okoro", "Integrity Music", "7115744"],
+            )
+            .expect("a song");
+            db.execute(
+                "INSERT INTO word VALUES (1, ?1)",
+                rusqlite::params![concat!(
+                    r"{\rtf1\ansi{\fonttbl{\f0\fnil Arial;}}\fs40 You are here\par",
+                    "\n",
+                    r"Moving in our midst\par",
+                    "\n",
+                    r"\par",
+                    "\n",
+                    r"Chorus\par",
+                    "\n",
+                    r"Way maker\par",
+                    "\n}",
+                )],
+            )
+            .expect("its words");
+        }
+
+        let songs = from_easyworship(&path).expect("a library");
+        std::fs::remove_dir_all(&directory).ok();
+
+        assert_eq!(songs.len(), 1);
+        let song = &songs[0];
+        assert_eq!(song.title, "Way Maker");
+        assert_eq!(song.rights.author, "Osinachi Okoro");
+        assert_eq!(song.rights.terms, "Integrity Music");
+        // EasyWorship's reference number is the CCLI song number.
+        assert_eq!(song.rights.ccli, "7115744");
+        // Still nothing claimed about whether this church may use it.
+        assert_eq!(song.rights.status, RightsStatus::Unknown);
+        assert_eq!(
+            song.sections.iter().map(|s| s.label.as_str()).collect::<Vec<_>>(),
+            vec!["Verse 1", "Chorus"],
+        );
+        assert_eq!(song.sections[0].lines, vec!["You are here", "Moving in our midst"]);
+        assert_eq!(song.sections[1].lines, vec!["Way maker"]);
+    }
+
+    /// A database that is not EasyWorship's says so, rather than returning nothing.
+    #[test]
+    fn a_database_of_the_wrong_shape_is_named_as_such() {
+        let directory = std::env::temp_dir().join(format!("pulpitry-ew-wrong-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).expect("a temporary directory");
+        let path = directory.join("Other.db");
+        {
+            let db = rusqlite::Connection::open(&path).expect("a database");
+            db.execute_batch("CREATE TABLE something (a TEXT);").expect("a table");
+        }
+        let outcome = from_easyworship(&path);
+        std::fs::remove_dir_all(&directory).ok();
+
+        let message = outcome.expect_err("not an EasyWorship database").to_string();
+        assert!(message.contains("EasyWorship"), "got {message}");
+        assert!(message.contains("Other.db"), "the file is named: {message}");
     }
 
     #[test]

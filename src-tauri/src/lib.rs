@@ -1984,6 +1984,11 @@ async fn import_songs(
             let file = path.clone().ok_or_else(|| "no file was chosen".to_string())?;
             songs.extend(songs_import::from_openlp(std::path::Path::new(&file)).map_err(to_message)?);
         }
+        "easyworship" => {
+            let file = path.clone().ok_or_else(|| "no file was chosen".to_string())?;
+            songs
+                .extend(songs_import::from_easyworship(std::path::Path::new(&file)).map_err(to_message)?);
+        }
         "opensong" | "openlyrics" => {
             let chosen = path.clone().ok_or_else(|| "no file was chosen".to_string())?;
             for file in song_files(std::path::Path::new(&chosen)) {
