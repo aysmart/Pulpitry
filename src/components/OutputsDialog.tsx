@@ -10,6 +10,7 @@ import {
 import { DEFAULT_THEME } from "../lib/theme";
 import type { LiveContent, Ticker } from "../lib/projector";
 import { OutputsPanel } from "./OutputsPanel";
+import { ShapeLibrary } from "./ShapeLibrary";
 import { StageControls } from "./StageControls";
 
 /**
@@ -45,6 +46,8 @@ export function OutputsDialog({
 }) {
   const [outputs, setOutputs] = useState<Output[]>(settings.outputs ?? []);
   const [error, setError] = useState<string | null>(null);
+  /** The shape library, over this dialogue. */
+  const [shapesOpen, setShapesOpen] = useState(false);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -113,11 +116,24 @@ export function OutputsDialog({
             </p>
           ) : null}
 
-          <p className="mb-4 text-[11.5px] leading-snug text-pulpitry-muted">
-            Every screen shows the same verse at the same moment. What differs
-            is the look, the translation, the shape it is drawn in, and where it
-            goes.
-          </p>
+          <div className="mb-4 flex items-start gap-3">
+            <p className="min-w-0 flex-1 text-[11.5px] leading-snug text-pulpitry-muted">
+              Every screen shows the same verse at the same moment. What differs
+              is the look, the translation, the shape it is drawn in, and where
+              it goes.
+            </p>
+            {/* The shapes as a library rather than only as a menu on one
+                output: a shape is a thing the church owns, and one that
+                nothing currently uses could not otherwise be found at all. */}
+            <button
+              type="button"
+              onClick={() => setShapesOpen(true)}
+              title="Draw and change the furniture an output puts around the words"
+              className="shrink-0 rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-1.5 text-[12px] text-pulpitry-text transition-colors hover:border-pulpitry-gold-dim hover:text-pulpitry-gold focus-visible:focus-ring"
+            >
+              Display shapes…
+            </button>
+          </div>
 
           <OutputsPanel
             outputs={outputs}
@@ -141,6 +157,15 @@ export function OutputsDialog({
           </div>
         </div>
       </div>
+
+      {/* Over the dialogue, as every studio in this application is. */}
+      {shapesOpen ? (
+        <ShapeLibrary
+          theme={settings.projector ?? DEFAULT_THEME}
+          onClose={() => setShapesOpen(false)}
+          onError={setError}
+        />
+      ) : null}
     </div>
   );
 }
