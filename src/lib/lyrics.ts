@@ -28,15 +28,21 @@ import type { SongSection } from "./catalog";
  * somewhere new. That is what a worship leader says out loud too.
  */
 
-/** How many lines of a song go on one screen. Zero means the whole section. */
-export type LinesPerScreen = 0 | 2 | 3 | 4 | 6;
+/**
+ * How many lines of a song go on one screen.
+ *
+ * Zero is Auto, which puts the whole part up and lets the renderer shrink it to
+ * fit -- right for a two-line chorus and wrong for an eight-line verse, which
+ * is why it is not the default.
+ */
+export type LinesPerScreen = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 export const LINE_CHOICES: Array<{ value: LinesPerScreen; label: string }> = [
-  { value: 2, label: "2 lines" },
-  { value: 3, label: "3 lines" },
-  { value: 4, label: "4 lines" },
-  { value: 6, label: "6 lines" },
-  { value: 0, label: "Whole section" },
+  { value: 0, label: "Auto — the whole part" },
+  ...([1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const).map((value) => ({
+    value: value as LinesPerScreen,
+    label: value === 1 ? "1 line" : `${value} lines`,
+  })),
 ];
 
 const KEY = "pulpitry.lyrics.lines";

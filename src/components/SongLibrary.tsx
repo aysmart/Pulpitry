@@ -184,6 +184,7 @@ function SongSections({
 
 export function SongLibrary({
   theme,
+  onApplyTheme,
   onPreview,
   onAddToSet,
   previewKey,
@@ -192,6 +193,8 @@ export function SongLibrary({
   onError,
 }: {
   theme: ProjectorTheme;
+  /** Saving a change to the church's look, made while a song is being set. */
+  onApplyTheme: (theme: ProjectorTheme) => void;
   onPreview: (item: Presentable, andShow?: boolean) => void;
   /**
    * Puts a song in the set being built, without staging it.
@@ -289,6 +292,7 @@ export function SongLibrary({
         sections={parseSections(editing.body)}
         rights={editing.rights}
         theme={theme}
+        onTheme={onApplyTheme}
         parse={parseSections}
         toText={toText}
         onClose={() => setEditing(null)}

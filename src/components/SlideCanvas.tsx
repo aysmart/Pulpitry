@@ -5,7 +5,7 @@ import {
   type TextBlock,
 } from "../lib/projector";
 import { withBackground } from "../lib/design";
-import type { ProjectorTheme } from "../lib/theme";
+import { verticalStyle, type ProjectorTheme } from "../lib/theme";
 import { Backdrop } from "./Backdrop";
 import { LiveBodyView, type Extent } from "./LiveBodyView";
 
@@ -80,9 +80,11 @@ export function SlideCanvas({
           meant to be the screen is not inset, or the preview would disagree
           with the wall about where its edges are. */}
       <div
-        className={`absolute inset-0 flex flex-col items-center justify-center ${
+        className={`absolute inset-0 flex flex-col items-center ${
           body && fillsFrame(body) ? "" : "px-[6cqw] py-[5cqh]"
         }`}
+        // The same placement the wall uses, from the same function.
+        style={verticalStyle(theme)}
       >
         <LiveBodyView
           body={body ?? { kind: "richText", blocks }}

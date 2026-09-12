@@ -31,6 +31,7 @@ import {
   themeForWindow,
   onTheme,
   referenceStyle,
+  verticalStyle,
   type ProjectorTheme,
 } from "./lib/theme";
 import { withBackground } from "./lib/design";
@@ -372,9 +373,13 @@ function Projector() {
         */}
         <div className="[aspect-ratio:16/9] [width:min(100cqw,177.78cqh)]">
           <div
-            className={`relative flex h-full w-full flex-col items-center justify-center overflow-hidden [container-type:size] ${
+            className={`relative flex h-full w-full flex-col items-center overflow-hidden [container-type:size] ${
               drawn && fillsFrame(drawn.body) ? "" : "px-[6cqw] py-[5cqh]"
             }`}
+            // Where the words sit in the frame, which the theme decides: a
+            // church with a logo across the bottom of their screen ranges the
+            // words to the top and nothing overlaps.
+            style={verticalStyle(theme)}
           >
             {drawn ? (
               <>

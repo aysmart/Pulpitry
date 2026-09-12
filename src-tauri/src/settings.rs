@@ -439,6 +439,57 @@ pub struct ProjectorTheme {
     pub panel_color: String,
     /// Text on that fill. Empty follows the body's.
     pub panel_text_color: String,
+
+    /* -- how the type is set, which the theme never described -- */
+    /*
+     * These seven were fixed in the renderer: centred, middle of the frame,
+     * 1.3 leading, no tracking, whatever weight the face defaults to, and a
+     * shadow that was either on or off. Every one of them is a decision a
+     * church makes about their room -- words ranged left under a logo, a
+     * heavier weight for a hall with sun in it, tighter leading for a wide
+     * screen -- and none of them could be made.
+     *
+     * Defaulted to exactly what the renderer already did, so every theme,
+     * every shipped look and every deck is drawn today as it was yesterday.
+     */
+    /// "left" | "center" | "right"
+    #[serde(default = "centre")]
+    pub align: String,
+    /// "top" | "middle" | "bottom"
+    #[serde(default = "middle")]
+    pub vertical: String,
+    /// Multiplied by the font size. 1.3 is what the renderer always used.
+    #[serde(default = "one_point_three")]
+    pub line_height: f32,
+    /// Tracking, in pixels at 1080p. Negative tightens.
+    #[serde(default)]
+    pub letter_spacing: f32,
+    /// 300 to 900. Zero means the typeface's own.
+    #[serde(default)]
+    pub font_weight: u16,
+    /// "none" | "upper" | "title" | "lower", applied when drawn and never to
+    /// the stored words.
+    #[serde(default)]
+    pub text_case: String,
+    /// How strongly the shadow reads, 1 to 5. Ignored when `shadow` is off.
+    #[serde(default = "two")]
+    pub shadow_level: u8,
+}
+
+fn centre() -> String {
+    "center".into()
+}
+
+fn middle() -> String {
+    "middle".into()
+}
+
+fn one_point_three() -> f32 {
+    1.3
+}
+
+fn two() -> u8 {
+    2
 }
 
 impl Default for ProjectorTheme {
@@ -474,6 +525,13 @@ impl Default for ProjectorTheme {
             reference_color: String::new(),
             panel_color: String::new(),
             panel_text_color: String::new(),
+            align: centre(),
+            vertical: middle(),
+            line_height: one_point_three(),
+            letter_spacing: 0.0,
+            font_weight: 0,
+            text_case: String::new(),
+            shadow_level: two(),
         }
     }
 }

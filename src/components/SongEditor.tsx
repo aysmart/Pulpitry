@@ -10,6 +10,7 @@ import {
 } from "../lib/lyrics";
 import type { ProjectorTheme } from "../lib/theme";
 import { SlideCanvas } from "./SlideCanvas";
+import { TypeControls } from "./TypeControls";
 
 const FIELD =
   "w-full rounded border border-pulpitry-line bg-pulpitry-raised px-2 py-1.5 text-[12.5px] text-pulpitry-text outline-none placeholder:text-pulpitry-muted focus-visible:focus-ring";
@@ -47,6 +48,7 @@ export function SongEditor({
   sections: initialSections,
   rights: initialRights,
   theme,
+  onTheme,
   onSave,
   onClose,
   parse,
@@ -57,6 +59,8 @@ export function SongEditor({
   sections: SongSection[];
   rights: SongRights;
   theme: ProjectorTheme;
+  /** Changing how words are set: the church's look, not this song's. */
+  onTheme: (theme: ProjectorTheme) => void;
   onSave: (song: {
     title: string;
     author: string;
@@ -153,14 +157,33 @@ export function SongEditor({
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col">
-            <span className="mb-1 flex items-baseline justify-between gap-2">
+            <span className="mb-1 flex items-center justify-between gap-2">
               <span className="text-[11px] tracking-wide text-pulpitry-muted uppercase">
                 Lyrics
               </span>
-              <span className="text-[11px] text-pulpitry-muted">
-                A blank line starts a part; a short first line names it
-              </span>
+              {/* Beside the words, because the answer to "how many lines" is
+                  judged against them: a verse of long lines wants fewer. */}
+              <select
+                value={lines}
+                aria-label="Lines on a screen"
+                onChange={(event) => {
+                  const next = Number(event.target.value) as LinesPerScreen;
+                  setLines(next);
+                  rememberLines(next);
+                  setAt(0);
+                }}
+                className="rounded border border-pulpitry-line bg-pulpitry-raised px-1.5 py-1 text-[11px] text-pulpitry-text outline-none focus-visible:focus-ring"
+              >
+                {LINE_CHOICES.map((choice) => (
+                  <option key={choice.value} value={choice.value}>
+                    {choice.label}
+                  </option>
+                ))}
+              </select>
             </span>
+            <p className="mb-1 text-[11px] text-pulpitry-muted">
+              A label or a blank line starts a part.
+            </p>
             <textarea
               value={text}
               placeholder={
@@ -175,34 +198,9 @@ export function SongEditor({
 
         {/* One screenful, on the church's own look. */}
         <div className="flex min-h-0 flex-col gap-3 overflow-auto p-3">
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="text-[11px] tracking-wide text-pulpitry-muted uppercase">
-              On the screen
-            </span>
-            <span className="flex-1" />
-            <label className="flex items-center gap-1.5 text-[11px] text-pulpitry-muted">
-              Lines at a time
-              <select
-                value={lines}
-                onChange={(event) => {
-                  const next = Number(event.target.value) as LinesPerScreen;
-                  setLines(next);
-                  // Remembered from here too: it is one setting, and an
-                  // operator who decides it while typing a song should not
-                  // have to decide it again at the desk.
-                  rememberLines(next);
-                  setAt(0);
-                }}
-                className="rounded border border-pulpitry-line bg-pulpitry-raised px-1.5 py-0.5 text-[11px] text-pulpitry-text outline-none focus-visible:focus-ring"
-              >
-                {LINE_CHOICES.map((choice) => (
-                  <option key={choice.value} value={choice.value}>
-                    {choice.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <span className="shrink-0 text-[11px] tracking-wide text-pulpitry-muted uppercase">
+            On the screen
+          </span>
 
           {/*
             The real renderer on the real theme, which is not the same as
@@ -221,6 +219,10 @@ export function SongEditor({
               ? "Type the words and they appear here as the congregation will read them."
               : `${screens.length} ${screens.length === 1 ? "screen" : "screens"} from ${sections.length} ${sections.length === 1 ? "part" : "parts"}. The song keeps your own lines — the breaking happens when it is put on screen, so changing this changes every song and edits none of them.`}
           </p>
+
+          {/* How the words are set, against the words themselves. It is the
+              church's look and says so -- see TypeControls. */}
+          <TypeControls theme={theme} onChange={onTheme} />
 
           <RightsFields rights={rights} onChange={setRights} />
         </div>

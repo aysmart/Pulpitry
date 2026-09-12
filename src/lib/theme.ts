@@ -76,6 +76,31 @@ export interface ProjectorTheme {
   /** Text on that fill. Empty follows the body's, which the derived fill is
    *  chosen to stay readable under. */
   panelTextColor: string;
+
+  /* -- how the type is set -- */
+
+  /**
+   * These seven were fixed in the renderer: centred, in the middle of the
+   * frame, 1.3 leading, no tracking, the typeface's own weight, and a shadow
+   * that was on or off. Each is a decision a church makes about their room —
+   * words ranged left under a logo in the corner, a heavier weight for a hall
+   * with sun in it — and none of them could be made.
+   *
+   * Defaulted to exactly what the renderer already did, so every theme and
+   * every shipped look is drawn as it was.
+   */
+  align: "left" | "center" | "right";
+  vertical: "top" | "middle" | "bottom";
+  /** Multiplied by the font size. */
+  lineHeight: number;
+  /** Tracking, in pixels at 1080p. Negative tightens. */
+  letterSpacing: number;
+  /** 300 to 900. Zero means the typeface's own. */
+  fontWeight: number;
+  /** Applied when drawn, never to the stored words. */
+  textCase: "" | "none" | "upper" | "title" | "lower";
+  /** How strongly the shadow reads, 1 to 5. Ignored when `shadow` is off. */
+  shadowLevel: number;
 }
 
 export type BackgroundKind = "color" | "gradient" | "image" | "video" | "motion";
@@ -113,6 +138,13 @@ export const DEFAULT_THEME: ProjectorTheme = {
   // existed has these empty, and must look considered rather than unfinished.
   panelColor: "",
   panelTextColor: "",
+  align: "center",
+  vertical: "middle",
+  lineHeight: 1.3,
+  letterSpacing: 0,
+  fontWeight: 0,
+  textCase: "",
+  shadowLevel: 2,
 };
 
 /**
@@ -352,10 +384,32 @@ export function textStyle(
   /** Smallest setting this body may be shrunk to; see [`baseSize`]. */
   floor = 0,
 ): React.CSSProperties {
+  const size = baseSize(body, floor) * theme.fontScale;
   const style: React.CSSProperties = {
     fontFamily: fontStack(theme.fontFamily),
-    fontSize: `${(baseSize(body, floor) * theme.fontScale).toFixed(2)}${unit}`,
+    fontSize: `${size.toFixed(2)}${unit}`,
     color: theme.textColor,
+    /*
+     * Leading, tracking and weight are inline rather than in a class, because
+     * every surface that draws words already carries `leading-[1.3]` from the
+     * days when that was the only answer, and a declaration here wins over the
+     * class. An arranged slide sets its own after spreading this, so a heading
+     * keeps its tight leading.
+     *
+     * Alignment is deliberately *not* here. A composed slide's alignment is its
+     * layout's decision -- a heading ranged left under a hanging rule, a list
+     * ranged left beneath it -- and those are set as classes, which an inline
+     * declaration would silently overrule. It is applied by the bodies that
+     * have no layout of their own: see `alignOf`.
+     */
+    lineHeight: theme.lineHeight || 1.3,
+    fontWeight: theme.fontWeight || undefined,
+    // Tracking is authored in pixels against a 1920 screen and has to scale
+    // with the type, or a wide setting becomes a word per line in a preview.
+    letterSpacing: theme.letterSpacing
+      ? `${((theme.letterSpacing / 1920) * 100).toFixed(3)}cqw`
+      : undefined,
+    textTransform: caseOf(theme),
   };
 
   if (theme.outlineWidth > 0) {
@@ -368,10 +422,74 @@ export function textStyle(
   }
 
   if (theme.shadow) {
-    style.textShadow = "0 0.06em 0.14em rgba(0,0,0,0.55)";
+    style.textShadow = shadowOf(theme.shadowLevel);
   }
 
   return style;
+}
+
+/**
+ * The shadow, in five strengths rather than on and off.
+ *
+ * A shadow is doing one of two different jobs and the same one cannot do both:
+ * lifting light words a little off a gradient, or keeping them readable over a
+ * photograph of a sky. The offset and blur grow together, in ems, so a shadow
+ * holds its proportion at every size.
+ */
+export function shadowOf(level: number): string {
+  const steps = [
+    "none",
+    "0 0.03em 0.07em rgba(0,0,0,0.45)",
+    "0 0.06em 0.14em rgba(0,0,0,0.55)",
+    "0 0.07em 0.2em rgba(0,0,0,0.65)",
+    "0 0.08em 0.28em rgba(0,0,0,0.75)",
+    "0 0.1em 0.36em rgba(0,0,0,0.85)",
+  ];
+  return steps[Math.max(0, Math.min(5, Math.round(level || 2)))]!;
+}
+
+/**
+ * How plain words are ranged.
+ *
+ * Applied only to the bodies with no arrangement of their own -- a passage, a
+ * lyric, a written slide. An arranged slide's alignment belongs to its layout,
+ * and overruling that from the theme would range a heading's hanging rule away
+ * from the heading it hangs over.
+ */
+export function alignOf(theme: ProjectorTheme): React.CSSProperties {
+  return { textAlign: theme.align || "center" };
+}
+
+/** What the theme does to the case of the words, as CSS names it. */
+export function caseOf(theme: ProjectorTheme): React.CSSProperties["textTransform"] {
+  switch (theme.textCase) {
+    case "upper":
+      return "uppercase";
+    case "lower":
+      return "lowercase";
+    case "title":
+      return "capitalize";
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Where the words sit in the frame.
+ *
+ * Returned as a style rather than applied here, because the frame belongs to
+ * each surface: the projector's 16:9 box, the preview panes, a thumbnail. Each
+ * puts it on the flex column it already has.
+ */
+export function verticalStyle(theme: ProjectorTheme): React.CSSProperties {
+  return {
+    justifyContent:
+      theme.vertical === "top"
+        ? "flex-start"
+        : theme.vertical === "bottom"
+          ? "flex-end"
+          : "center",
+  };
 }
 
 /**

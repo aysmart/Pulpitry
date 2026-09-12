@@ -190,6 +190,7 @@ export function ScripturePanel({
       {tab === "Songs" ? (
         <SongLibrary
           theme={theme}
+          onApplyTheme={onApplyTheme}
           onPreview={onPreviewItem}
           onAddToSet={onAddToSet}
           previewKey={previewKey}

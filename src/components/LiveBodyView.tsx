@@ -20,6 +20,7 @@ import {
   type TextBlock,
 } from "../lib/projector";
 import {
+  alignOf,
   fontStack,
   panelStyle,
   referenceStyle,
@@ -884,8 +885,8 @@ export function LiveBodyView({
     case "scripture":
       return (
         <p
-          className="w-full text-center leading-[1.3] text-balance"
-          style={style}
+          className="w-full leading-[1.3] text-balance"
+          style={{ ...style, ...alignOf(theme) }}
         >
           {body.lines.map((line, index) => (
             <span key={line.number}>
@@ -905,7 +906,7 @@ export function LiveBodyView({
 
     case "lyric":
       return (
-        <p className="w-full text-center leading-[1.35]" style={style}>
+        <p className="w-full leading-[1.35]" style={{ ...style, ...alignOf(theme) }}>
           {body.lines.map((line, index) => (
             <span key={index} className="block">
               {line}
