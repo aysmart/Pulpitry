@@ -1126,6 +1126,7 @@ export default function App() {
                 libraryReady={library.ready && Boolean(translation)}
                 libraryImporting={library.importing}
                 libraryError={library.error}
+                deskLabel={shape.label}
                 onAddToSet={(item) => songSet.add(item)}
               />
 
@@ -1250,6 +1251,7 @@ export default function App() {
                 libraryReady={library.ready && Boolean(translation)}
                 libraryImporting={library.importing}
                 libraryError={library.error}
+                deskLabel={shape.label}
               />
             </div>
 
@@ -1480,6 +1482,7 @@ export default function App() {
             libraryReady={library.ready && Boolean(translation)}
             libraryImporting={library.importing}
             libraryError={library.error}
+            deskLabel={shape.label}
           />
 
           {/*

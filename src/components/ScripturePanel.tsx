@@ -59,6 +59,7 @@ export function ScripturePanel({
   libraryImporting,
   libraryError,
   onAddToSet,
+  deskLabel,
   tab: chosenTab,
   tabs,
   onTab,
@@ -100,6 +101,8 @@ export function ScripturePanel({
    * list that is not on screen.
    */
   onAddToSet?: (item: Presentable) => void;
+  /** The arrangement's own name, for the looks screen: each desk has a look. */
+  deskLabel: string;
   /** Which library is in front. Held by the desk, so a workspace can set it. */
   tab: Tab;
   /** The ones this arrangement offers, in order. */
@@ -118,6 +121,15 @@ export function ScripturePanel({
   // Both are text written for the congregation to read; one replaces the
   // screen and one runs along the edge of it.
   const [slidesMode, setSlidesMode] = useState<"slides" | "notice">("slides");
+  /*
+   * Themes open a screen rather than filling this pane.
+   *
+   * A look is chosen by seeing it, and a tile the width of this column shows a
+   * typeface as a grey smudge. So the tab is a way in rather than a place: it
+   * opens the looks screen and leaves whatever library was in front still in
+   * front underneath, which is where the operator returns to.
+   */
+  const [looksOpen, setLooksOpen] = useState(false);
 
   /*
    * One library means no chooser.
@@ -144,7 +156,9 @@ export function ScripturePanel({
             <button
               key={name}
               type="button"
-              onClick={() => onTab(name)}
+              onClick={() =>
+                name === "Themes" ? setLooksOpen(true) : onTab(name)
+              }
               className={`rounded px-[2px] py-0.5 text-[10.5px] transition-colors focus-visible:focus-ring ${
                 tab === name
                   ? "bg-pulpitry-teal-dim text-pulpitry-text"
@@ -200,10 +214,12 @@ export function ScripturePanel({
         />
       ) : null}
 
-      {tab === "Themes" ? (
+      {looksOpen ? (
         <TemplateLibrary
           theme={theme}
+          deskLabel={deskLabel}
           onApply={onApplyTheme}
+          onClose={() => setLooksOpen(false)}
           onError={onError}
         />
       ) : null}

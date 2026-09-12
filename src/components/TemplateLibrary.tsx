@@ -50,12 +50,18 @@ function Tile({
           <SlideCanvas blocks={sample} theme={theme} />
         </span>
         <span
-          className={`mt-1 block truncate text-[11px] ${
-            current ? "text-pulpitry-gold" : "text-pulpitry-muted"
+          className={`mt-1.5 block truncate text-[12.5px] ${
+            current ? "text-pulpitry-gold" : "text-pulpitry-text"
           }`}
         >
           {name}
           {current ? " · in use" : ""}
+        </span>
+        {/* What it is for, which is what an operator actually chooses by:
+            "built for a camera", "for a hall with sun in it". There was no
+            room for it at tile size and it lived in a tooltip. */}
+        <span className="block truncate text-[11px] text-pulpitry-muted">
+          {hint}
         </span>
       </button>
 
@@ -102,11 +108,16 @@ function Tile({
  */
 export function TemplateLibrary({
   theme,
+  deskLabel,
   onApply,
+  onClose,
   onError,
 }: {
   theme: ProjectorTheme;
+  /** Which desk this look is for, because each desk keeps its own. */
+  deskLabel: string;
   onApply: (theme: ProjectorTheme) => void;
+  onClose: () => void;
   onError: (message: string) => void;
 }) {
   const [saved, setSaved] = useState<Item[]>([]);
@@ -185,8 +196,11 @@ export function TemplateLibrary({
 
   if (editing) {
     return (
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="flex shrink-0 gap-1.5 border-b border-pulpitry-line px-2.5 py-2">
+      <div
+        data-dialog
+        className="fixed inset-0 z-50 flex flex-col bg-pulpitry-ink"
+      >
+        <div className="flex shrink-0 gap-1.5 border-b border-pulpitry-line px-3 py-2.5">
           <input
             value={editing.name}
             placeholder="Name this theme"
@@ -230,7 +244,7 @@ export function TemplateLibrary({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto p-2.5">
+        <div className="mx-auto min-h-0 w-full max-w-[64rem] flex-1 overflow-auto p-4">
           {/* The whole point of an editor here rather than in a dialog: every
               change lands on a full-size render of the real thing. */}
           <SlideCanvas blocks={sample} theme={editing.theme} />
@@ -249,10 +263,27 @@ export function TemplateLibrary({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-1.5 border-b border-pulpitry-line px-2.5 py-2">
-        <span className="min-w-0 flex-1 truncate text-[11px] text-pulpitry-muted">
-          Click a theme to use it. Copy one to make it yours.
+    /*
+      A screen rather than a pane.
+      
+      A look is chosen by seeing it, and a tile the width of a sidebar shows a
+      typeface as a grey smudge -- which is how a church ends up choosing by
+      name and finding out on Sunday. At this size each one is a screen: the
+      real renderer, the real typeface, the real background, drawn at the
+      proportions of the wall it will be on.
+      
+      It is also the one job here nobody does during a service, so taking the
+      window costs nothing.
+    */
+    <div data-dialog className="fixed inset-0 z-50 flex flex-col bg-pulpitry-ink">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-pulpitry-line bg-pulpitry-surface px-3">
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] text-pulpitry-text">Looks</span>
+          {/* Which desk, because each keeps its own: choosing here sets how the
+              songs read, and leaves the scripture desk alone. */}
+          <span className="block text-[11.5px] text-pulpitry-muted">
+            For the {deskLabel.toLowerCase()} desk — click one to use it
+          </span>
         </span>
         {/*
           Three ways in, and they are genuinely different starting points.
@@ -282,15 +313,22 @@ export function TemplateLibrary({
         >
           Adjust
         </button>
-      </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-1.5 text-[12.5px] text-pulpitry-text focus-visible:focus-ring"
+        >
+          Close
+        </button>
+      </header>
 
-      <div className="min-h-0 flex-1 overflow-auto p-2">
+      <div className="min-h-0 flex-1 overflow-auto p-4">
         {saved.length > 0 ? (
           <>
-            <p className="mb-1.5 text-[11px] tracking-wide text-pulpitry-muted uppercase">
+            <p className="mb-2 text-[11px] tracking-wide text-pulpitry-muted uppercase">
               Yours
             </p>
-            <div className="mb-3 grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-2">
+            <div className="mb-5 grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
               {saved.map((item) =>
                 item.body.kind === "template" ? (
                   <Tile
@@ -324,11 +362,11 @@ export function TemplateLibrary({
         ) : null}
 
         {TEMPLATE_GROUPS.map((group) => (
-          <section key={group} className="mb-3 last:mb-0">
-            <p className="mb-1.5 text-[11px] tracking-wide text-pulpitry-muted uppercase">
+          <section key={group} className="mb-5 last:mb-0">
+            <p className="mb-2 text-[11px] tracking-wide text-pulpitry-muted uppercase">
               {group}
             </p>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-2">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
               {SAMPLE_TEMPLATES.filter((preset) => preset.group === group).map(
                 (preset) => (
                   <Tile
