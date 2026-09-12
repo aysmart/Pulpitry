@@ -18,6 +18,36 @@ const FIELD =
  * The controls are grouped by the problem they solve rather than by CSS
  * property: choosing type, then keeping it readable over whatever is behind it.
  */
+/**
+ * The drawn motions, in the order they suit words.
+ *
+ * Drift first because nothing in it has an edge, which is what a screen
+ * carrying a verse wants; the others are for a room that wants something to
+ * look at between items.
+ */
+const MOTIONS: Array<{ id: string; name: string; hint: string }> = [
+  {
+    id: "drift",
+    name: "Drift",
+    hint: "Wide washes of colour moving against each other. Nothing has an edge, so nothing competes with the words.",
+  },
+  {
+    id: "bokeh",
+    name: "Bokeh",
+    hint: "Soft discs rising, the way light behaves behind a shallow lens.",
+  },
+  {
+    id: "rays",
+    name: "Rays",
+    hint: "Faint beams turning slowly about a point above the screen.",
+  },
+  {
+    id: "stars",
+    name: "Stars",
+    hint: "A slow field of points, brightening and fading out of step.",
+  },
+];
+
 export function DisplaySettings({
   theme,
   onChange,
@@ -227,12 +257,12 @@ export function DisplaySettings({
       <div className="border-t border-pulpitry-line pt-3">
         <span className="text-[12px] text-pulpitry-muted">Background</span>
         <div className="mt-1.5 flex gap-1.5">
-          {(["color", "gradient", "image", "video"] as const).map((kind) => (
+          {(["color", "gradient", "motion", "image", "video"] as const).map((kind) => (
             <button
               key={kind}
               type="button"
               onClick={() => {
-                if (kind === "color" || kind === "gradient")
+                if (kind === "color" || kind === "gradient" || kind === "motion")
                   set("backgroundKind", kind);
                 else void pickBackground(kind);
               }}
@@ -263,6 +293,53 @@ export function DisplaySettings({
               value={theme.backgroundColor}
               onChange={(value) => set("backgroundColor", value)}
             />
+          ) : theme.backgroundKind === "motion" ? (
+            <>
+              {/* The colours come from the gradient's ends, which is what
+                  makes a drawn background the church's own rather than stock
+                  footage in somebody else's palette. Said here, because two
+                  fields called From and To under a heading called Motion
+                  would otherwise look like a mistake. */}
+              <div className="flex gap-1.5">
+                {MOTIONS.map((motion) => (
+                  <button
+                    key={motion.id}
+                    type="button"
+                    onClick={() => set("motion", motion.id)}
+                    title={motion.hint}
+                    className={`flex-1 rounded border px-2 py-1.5 text-[12px] transition-colors focus-visible:focus-ring ${
+                      (theme.motion || "drift") === motion.id
+                        ? "border-pulpitry-gold-dim bg-pulpitry-gold/10 text-pulpitry-gold"
+                        : "border-pulpitry-line bg-pulpitry-raised text-pulpitry-text hover:border-pulpitry-muted"
+                    }`}
+                  >
+                    {motion.name}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] leading-snug text-pulpitry-muted">
+                {MOTIONS.find((motion) => motion.id === (theme.motion || "drift"))?.hint}
+              </p>
+              <Swatch
+                label="From"
+                value={theme.gradientFrom}
+                onChange={(value) => set("gradientFrom", value)}
+              />
+              <Swatch
+                label="To"
+                value={theme.gradientTo}
+                onChange={(value) => set("gradientTo", value)}
+              />
+              <Slider
+                label="Speed"
+                value={theme.motionSpeed ?? 1}
+                min={0.25}
+                max={2}
+                step={0.25}
+                format={(value) => `${value}×`}
+                onChange={(value) => set("motionSpeed", value)}
+              />
+            </>
           ) : theme.backgroundKind === "gradient" ? (
             <>
               <Swatch

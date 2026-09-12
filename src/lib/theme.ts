@@ -24,6 +24,16 @@ export interface ProjectorTheme {
   backgroundScale: number;
   /** Blurs the picture, in pixels at 1080p. 0 is off. */
   backgroundBlur: number;
+  /**
+   * Which drawn motion the background is, when the kind is "motion".
+   *
+   * Drawn rather than played: see MotionBackground. It takes its colours from
+   * the gradient ends, so a church's own palette moves rather than somebody
+   * else's stock footage.
+   */
+  motion: string;
+  /** Multiplies how fast it moves. 1 is as designed; 0.5 is half as fast. */
+  motionSpeed: number;
   texture: Texture;
   /** How strongly the texture reads, 0 to 1. */
   textureStrength: number;
@@ -68,7 +78,7 @@ export interface ProjectorTheme {
   panelTextColor: string;
 }
 
-export type BackgroundKind = "color" | "gradient" | "image" | "video";
+export type BackgroundKind = "color" | "gradient" | "image" | "video" | "motion";
 
 export type Texture = "none" | "grain" | "linen" | "dots" | "vignette";
 
@@ -89,6 +99,8 @@ export const DEFAULT_THEME: ProjectorTheme = {
   backgroundFit: "",
   backgroundScale: 1,
   backgroundBlur: 0,
+  motion: "drift",
+  motionSpeed: 1,
   texture: "none",
   textureStrength: 0.35,
   showReference: true,

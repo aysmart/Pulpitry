@@ -1,3 +1,4 @@
+import { MotionBackground } from "./MotionBackground";
 import {
   backgroundStyle,
   backgroundUrl,
@@ -35,6 +36,12 @@ export function Backdrop({
           reach the edges: the bars are the theme's own colour rather than
           black, which is what makes contain usable at all. */}
       <div className="absolute inset-0" style={backgroundStyle(theme)} />
+
+      {theme.backgroundKind === "motion" ? (
+        /* Drawn, not played, so `playVideo` governs it for the same reason:
+           a thumbnail wants one frame and the wall wants the movement. */
+        <MotionBackground theme={theme} playing={playVideo} />
+      ) : null}
 
       {file && theme.backgroundKind === "image" ? (
         <img

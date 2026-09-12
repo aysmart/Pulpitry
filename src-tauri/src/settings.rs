@@ -31,6 +31,16 @@ fn manual() -> String {
     "manual".into()
 }
 
+/// The gentlest of the drawn motions, and the one that suits text best.
+fn drift() -> String {
+    "drift".into()
+}
+
+/// As designed, for a theme written before the speed could be changed.
+fn one() -> f32 {
+    1.0
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -390,6 +400,16 @@ pub struct ProjectorTheme {
     pub background_blur: f32,
     /// "none" | "grain" | "linen" | "dots" | "vignette". Laid over whatever
     /// the background is, so a flat colour stops looking like a flat colour.
+    /// Which drawn motion a "motion" background is: drift, bokeh, rays, stars.
+    ///
+    /// Drawn in the window from the theme's own gradient colours rather than
+    /// played from a file, so it needs no licence, no download, and looks like
+    /// the church rather than like stock footage.
+    #[serde(default = "drift")]
+    pub motion: String,
+    /// Multiplies how fast it moves. 1 is as designed.
+    #[serde(default = "one")]
+    pub motion_speed: f32,
     pub texture: String,
     /// How strongly the texture reads, 0 to 1.
     pub texture_strength: f32,
@@ -442,6 +462,8 @@ impl Default for ProjectorTheme {
             background_fit: String::new(),
             background_scale: 1.0,
             background_blur: 0.0,
+            motion: drift(),
+            motion_speed: one(),
             texture: "none".into(),
             texture_strength: 0.35,
             show_reference: true,
@@ -746,6 +768,47 @@ pub fn device_id(app: &AppHandle) -> Result<String> {
 mod tests {
     use super::*;
 
+    /// A theme saved before drawn backgrounds existed still loads.
+    ///
+    /// The fields are defaulted rather than required, so an upgrade does not
+    /// meet a parse error -- and the motion that comes back has to be a real
+    /// one, because an empty string would draw nothing at all.
+    #[test]
+    fn a_theme_without_the_motion_fields_still_loads() {
+        // Two hashes: the fixture is full of hex colours, and `"#` would end a
+        // string opened with one.
+        let json = r##"{
+            "fontFamily": "inter",
+            "fontScale": 1.0,
+            "textColor": "#1C1B18",
+            "outlineWidth": 0.0,
+            "outlineColor": "#000000",
+            "shadow": false,
+            "backgroundKind": "color",
+            "backgroundColor": "#F4F1EA",
+            "gradientFrom": "#F4F1EA",
+            "gradientTo": "#D9D2C2",
+            "gradientAngle": 160.0,
+            "backgroundPath": null,
+            "backgroundDim": 0.0,
+            "backgroundFit": "",
+            "backgroundScale": 1.0,
+            "backgroundBlur": 0.0,
+            "texture": "none",
+            "textureStrength": 0.35,
+            "showReference": true,
+            "referenceFontFamily": "",
+            "referenceScale": 1.0,
+            "referenceColor": "",
+            "panelColor": "",
+            "panelTextColor": ""
+        }"##;
+
+        let theme: ProjectorTheme = serde_json::from_str(json).expect("an older theme loads");
+        assert_eq!(theme.motion, "drift");
+        assert_eq!(theme.motion_speed, 1.0);
+    }
+
     #[test]
     fn the_old_default_threshold_is_lifted_to_the_measured_one() {
         // Nobody chose 0.60 — it was a default calibrated against the wrong
@@ -756,8 +819,6 @@ mod tests {
         assert_eq!(settings.semantic_threshold, 0.70);
     }
 
-    #[test]
-    /// The projector and second display are always reachable.
     /// A church that had the old NDI row on keeps its feed, under its name.
     #[test]
     fn the_old_feed_moves_onto_the_projector_once() {
@@ -887,6 +948,9 @@ mod tests {
         assert_eq!(theme.font_scale, 1.2);
         assert_eq!(theme.background_path.as_deref(), Some("/pictures/dove.jpg"));
         assert_eq!(theme.texture, "none");
+        // A drawn background is the gentle one until somebody chooses another.
+        assert_eq!(theme.motion, "drift");
+        assert_eq!(theme.motion_speed, 1.0);
         assert_eq!(theme.gradient_angle, 160.0);
     }
 
