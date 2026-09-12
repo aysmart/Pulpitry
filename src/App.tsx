@@ -115,11 +115,19 @@ export default function App() {
    * which is the finer adjustment and still allowed.
    */
   const [workspace, setWorkspace] = useState<Workspace>(storedWorkspace);
-  const [tab, setTab] = useState<Tab>(WORKSPACES[storedWorkspace()].tab);
+  const [tab, setTab] = useState<Tab>(WORKSPACES[storedWorkspace()].tabs[0]);
   const shape = WORKSPACES[workspace];
+  /*
+   * The library in front, kept inside what this arrangement offers.
+   *
+   * Switching to Slides while the Scripture chapter was open would otherwise
+   * ask the panel for a tab it is no longer drawing, and it would show
+   * nothing at all.
+   */
+  const shownTab = shape.tabs.includes(tab) ? tab : shape.tabs[0];
   const chooseWorkspace = useCallback((next: Workspace) => {
     setWorkspace(next);
-    setTab(WORKSPACES[next].tab);
+    setTab(WORKSPACES[next].tabs[0]);
     rememberWorkspace(next);
   }, []);
   const {
@@ -849,7 +857,14 @@ export default function App() {
         now, permanently visible beside the transcript that produced them.
       */}
       <main className="flex min-h-0 flex-1 flex-col gap-2 p-2">
-        <div className="grid min-h-0 flex-1 gap-2 [grid-template-columns:minmax(200px,0.7fr)_minmax(240px,0.9fr)_minmax(360px,1.5fr)_minmax(180px,0.6fr)]">
+        <div
+          className="grid min-h-0 flex-1 gap-2"
+          style={{ gridTemplateColumns: shape.topColumns }}
+        >
+          {/* The transcript is the input to verse detection. During a worship
+              set or a notice slide it is a column of words nobody reads, and
+              its width is what the song library and a deck need. */}
+          {shape.transcript ? (
           <TranscriptPanel
             lines={lines}
             interim={interim}
@@ -859,6 +874,9 @@ export default function App() {
             onOpenHistory={() => setHistoryOpen(true)}
             exporting={exporting}
           />
+          ) : null}
+
+          {shape.detected ? (
           <Panel
             title="Detected"
             actions={
@@ -889,6 +907,7 @@ export default function App() {
               assistEnabled={settings?.assistEnabled ?? false}
             />
           </Panel>
+          ) : null}
 
           <StagePanel
             preview={preview}
@@ -919,6 +938,7 @@ export default function App() {
             media={media}
             ticker={ticker}
           />
+          {shape.queue ? (
           <Panel
             title="Queue"
             actions={
@@ -947,6 +967,7 @@ export default function App() {
               activeLabel={live?.caption || null}
             />
           </Panel>
+          ) : null}
         </div>
 
         {/*
@@ -972,7 +993,8 @@ export default function App() {
           style={{ flexBasis: shape.basis, gridTemplateColumns: shape.columns }}
         >
           <ScripturePanel
-            tab={tab}
+            tab={shownTab}
+            tabs={shape.tabs}
             onTab={setTab}
             translation={translation}
             translations={library.translations}

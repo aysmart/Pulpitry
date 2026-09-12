@@ -16,18 +16,16 @@ import { SlideLibrary } from "./SlideLibrary";
 import { TickerPanel } from "./TickerPanel";
 import { TemplateLibrary } from "./TemplateLibrary";
 import { SongLibrary } from "./SongLibrary";
+import type { LibraryTab } from "../lib/workspaces";
 import { EmptyState, Panel } from "./Panel";
 
-const TABS = [
-  "Scripture",
-  "Songs",
-  "Media",
-  "Slides",
-  "Schedule",
-  "History",
-  "Themes",
-] as const;
-export type Tab = (typeof TABS)[number];
+/**
+ * Which libraries are offered, and in what order, comes from the arrangement.
+ *
+ * All seven used to be on screen whatever the operator was doing. See
+ * lib/workspaces.ts, which owns both the list of names and the choice.
+ */
+export type Tab = LibraryTab;
 
 /**
  * The verse column. Everything here belongs to the scripture/detection system,
@@ -58,6 +56,7 @@ export function ScripturePanel({
   libraryImporting,
   libraryError,
   tab: chosenTab,
+  tabs,
   onTab,
 }: {
   translation: string;
@@ -86,6 +85,8 @@ export function ScripturePanel({
   libraryError: string | null;
   /** Which library is in front. Held by the desk, so a workspace can set it. */
   tab: Tab;
+  /** The ones this arrangement offers, in order. */
+  tabs: Tab[];
   onTab: (tab: Tab) => void;
 }) {
   /*
@@ -110,7 +111,7 @@ export function ScripturePanel({
       bodyClassName={tab === "History" ? "" : "overflow-hidden"}
       actions={
         <div className="flex flex-wrap justify-end gap-0">
-          {TABS.map((name) => (
+          {tabs.map((name) => (
             <button
               key={name}
               type="button"
