@@ -175,8 +175,8 @@ export const SHAPE_TEMPLATES: ShapeTemplate[] = [
     ],
   },
   {
-    id: "top-strip",
-    name: "Top strip",
+    id: "top-band",
+    name: "Top band",
     hint: "Across the top, for a frame whose lower half is busy: a platform, a band, a table.",
     elements: [
       block({ x: 0, y: 0, w: 1920, h: 180 }, INK),
@@ -186,8 +186,8 @@ export const SHAPE_TEMPLATES: ShapeTemplate[] = [
     ],
   },
   {
-    id: "side-panel",
-    name: "Side panel",
+    id: "side-panel-wide",
+    name: "Side panel, wide",
     hint: "A full-height panel down one side. Holds a long verse without covering the speaker.",
     elements: [
       block({ x: 1330, y: 0, w: 590, h: 1080 }, INK),
@@ -227,6 +227,76 @@ export const SHAPE_TEMPLATES: ShapeTemplate[] = [
       block({ x: 1180, y: 70, w: 660, h: 150 }, INK, 14),
       words({ x: 1220, y: 92, w: 580, h: 74 }, { size: 38, align: "left" }),
       citation({ x: 1220, y: 168, w: 580, h: 40 }, { size: 24, align: "left", color: GOLD }),
+    ],
+  },
+  /*
+   * The six Pulpitry drew in the renderer, as templates like everything else.
+   *
+   * They were a section of their own in the library -- "built in", drawn by the
+   * renderer, copyable but not editable. That distinction was real and it was
+   * not the church's problem: what they want is the shape, in the list with the
+   * others, in a form they can move. An output can still be pointed at the
+   * built-in form directly, which is what every installation already using one
+   * is doing; these are the same arrangements as something to start from.
+   */
+  {
+    id: "classic-lower-third",
+    name: "Lower third",
+    hint: "The original: a full-width band with the citation on a chip above it.",
+    elements: [
+      block({ x: 0, y: 745, w: 1920, h: 200 }, INK),
+      block({ x: 150, y: 690, w: 360, h: 55 }, PAPER, 4),
+      citation({ x: 170, y: 698, w: 320, h: 40 }, { size: 26, align: "left", color: "#141414" }),
+      words({ x: 150, y: 775, w: 1620, h: 140 }, { size: 60 }),
+    ],
+  },
+  {
+    id: "classic-ribbon",
+    name: "Ribbon",
+    hint: "A thin band with the citation ahead of the words on one line. The least vertical space of any of them.",
+    elements: [
+      block({ x: 0, y: 780, w: 1920, h: 130 }, INK),
+      citation({ x: 150, y: 805, w: 360, h: 80 }, { size: 30, align: "left", color: GOLD }),
+      words({ x: 540, y: 800, w: 1230, h: 90 }, { size: 44, align: "left" }),
+    ],
+  },
+  {
+    id: "classic-card",
+    name: "Card",
+    hint: "A block at the left with the citation on a chip above it. Leaves the right of the frame clear.",
+    elements: [
+      block({ x: 96, y: 615, w: 845, h: 275 }, INK, 12),
+      block({ x: 96, y: 560, w: 330, h: 55 }, PAPER, 4),
+      citation({ x: 116, y: 568, w: 290, h: 40 }, { size: 26, align: "left", color: "#141414" }),
+      words({ x: 150, y: 645, w: 740, h: 215 }, { size: 46, align: "left", vertical: "top" }),
+    ],
+  },
+  {
+    id: "classic-top-strip",
+    name: "Top strip",
+    hint: "A band across the top with the words centred in it. For a frame that is busy below.",
+    elements: [
+      block({ x: 0, y: 0, w: 1920, h: 150 }, INK),
+      words({ x: 150, y: 20, w: 1620, h: 110 }, { size: 42 }),
+    ],
+  },
+  {
+    id: "classic-side-panel",
+    name: "Side panel",
+    hint: "A panel down the right, words ranged left inside it. A long verse without covering the speaker.",
+    elements: [
+      block({ x: 1344, y: 0, w: 576, h: 1080 }, INK),
+      citation({ x: 1400, y: 380, w: 464, h: 60 }, { size: 26, align: "left", color: GOLD }),
+      words({ x: 1400, y: 450, w: 464, h: 300 }, { size: 40, align: "left", vertical: "top" }),
+    ],
+  },
+  {
+    id: "classic-caption",
+    name: "Caption",
+    hint: "No furniture at all: the words carry themselves. The one that works over a moving camera.",
+    elements: [
+      citation({ x: 300, y: 786, w: 1320, h: 50 }, { size: 28, color: GOLD }),
+      words({ x: 300, y: 842, w: 1320, h: 140 }, { size: 58 }),
     ],
   },
   {

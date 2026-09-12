@@ -1,18 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { catalogRemove, newItem, type Item } from "../lib/catalog";
-import { OVERLAY_FORMS, type OverlayForm } from "../lib/overlays";
-import {
-  filled,
-  listShapes,
-  SAMPLE,
-  shapeFromForm,
-  starterShape,
-} from "../lib/shapes";
+import { filled, listShapes, SAMPLE, starterShape } from "../lib/shapes";
 import { SHAPE_TEMPLATES } from "../lib/shapeTemplates";
 import type { ProjectorTheme } from "../lib/theme";
 import { DesignedView } from "./DesignedView";
-import { OverlayView } from "./OverlayView";
 import { ShapeStudio } from "./ShapeStudio";
 
 const BUTTON =
@@ -244,63 +236,6 @@ export function ShapeLibrary({
           ))}
         </div>
 
-        {/*
-          The six built into the renderer, which are not the same thing as the
-          templates above and are kept because of the difference.
-
-          A template is elements: a church copies one and owns it. These are
-          geometry, and an output can be pointed straight at one without
-          anything existing in this library at all -- which is what makes them
-          the answer for a church that wants a lower third and nothing to do
-          with a studio. They are drawn here by the renderer that draws them on
-          the wall, so what is shown is what that output would send.
-
-          Copying one gives a shape of your own at those proportions, for the
-          church that likes where it sits and wants their logo in it.
-        */}
-        <p className="mt-5 mb-2 text-[11px] tracking-wide text-pulpitry-muted uppercase">
-          Built in — usable as they are
-        </p>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
-          {OVERLAY_FORMS.filter(
-            (form) => form.id !== "none" && form.id !== "stage",
-          ).map((form) => (
-            <button
-              key={form.id}
-              type="button"
-              onClick={() =>
-                setDesigning(
-                  newItem(`${form.name} — ours`, {
-                    kind: "overlay",
-                    elements: shapeFromForm(form.id),
-                  }),
-                )
-              }
-              title={`${form.hint} Any output can use this as it is; copying gives you one of your own at these proportions.`}
-              className="group flex flex-col gap-1 text-left focus-visible:focus-ring"
-            >
-              <span
-                className="relative block w-full overflow-hidden rounded border border-pulpitry-line ring-pulpitry-teal group-hover:ring-2 [container-type:size]"
-                style={{ aspectRatio: 16 / 9, ...CHEQUER }}
-              >
-                <OverlayView
-                  form={form.id as OverlayForm}
-                  theme={theme}
-                  reference={SAMPLE.reference}
-                  text={SAMPLE.words}
-                  uppercase={false}
-                  captions
-                />
-              </span>
-              <span className="mt-1.5 block truncate text-[12.5px] text-pulpitry-text">
-                {form.name}
-              </span>
-              <span className="block truncate text-[11px] text-pulpitry-muted">
-                Copy to make it yours
-              </span>
-            </button>
-          ))}
-        </div>
       </div>
     </div>
   );
