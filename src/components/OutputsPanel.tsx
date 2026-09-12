@@ -11,7 +11,7 @@ import {
   type Ticker,
 } from "../lib/projector";
 import { OVERLAY_FORMS, type OverlayForm } from "../lib/overlays";
-import { formFor, listShapes, shapeIdOf, starterShape } from "../lib/shapes";
+import { formFor, listShapes, shapeFromForm, shapeIdOf } from "../lib/shapes";
 import { ShapeStudio } from "./ShapeStudio";
 import type { ProjectorTheme } from "../lib/theme";
 import { OutputPreview } from "./OutputPreview";
@@ -389,9 +389,15 @@ export function OutputsPanel({
                       setDesigningFor(output.id);
                       setDesigning(
                         existing ?? {
+                          /*
+                           * Started from whatever this output is drawing now,
+                           * rather than from the same band every time: an
+                           * operator pressing this on a side panel wants a side
+                           * panel to move, not a lower third to rebuild.
+                           */
                           ...newItem("", {
                             kind: "overlay",
-                            elements: starterShape(),
+                            elements: shapeFromForm(output.overlay || ""),
                           }),
                         },
                       );

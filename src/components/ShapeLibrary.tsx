@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { catalogRemove, newItem, type Item } from "../lib/catalog";
-import { OVERLAY_FORMS, type OverlayForm } from "../lib/overlays";
-import {
-  filled,
-  listShapes,
-  SAMPLE,
-  shapeFromForm,
-  starterShape,
-} from "../lib/shapes";
+import { filled, listShapes, SAMPLE, starterShape } from "../lib/shapes";
+import { SHAPE_TEMPLATES } from "../lib/shapeTemplates";
 import type { ProjectorTheme } from "../lib/theme";
 import { DesignedView } from "./DesignedView";
-import { OverlayView } from "./OverlayView";
 import { ShapeStudio } from "./ShapeStudio";
 
 const BUTTON =
@@ -191,61 +184,55 @@ export function ShapeLibrary({
         ) : null}
 
         {/*
-          The six that ship, drawn by the renderer that draws them.
+          The shipped ones, and they are shapes rather than a second kind of
+          thing.
 
-          They were named in a sentence in the empty state, which is not the
-          same as being here: a church looking for "the existing ones" means
-          these, and a library that hides what already exists reads as broken
-          rather than as empty.
-
-          They cannot be edited -- there is nothing stored to edit, and a
-          shipped form that could be changed is one that eventually cannot be
-          got back. Copying gives the church a shape of their own at those
-          proportions, which is the thing they actually wanted.
+          They were the six built-in forms drawn by the renderer, which meant
+          the library showed something a church could look at and not have. A
+          template is made of the same elements a shape drawn by hand is made
+          of, so the tile is exactly what a copy will be -- and the first thing
+          most churches do to any of them is move the band and drop a logo in
+          it, which is a drag rather than a request.
         */}
         <p className="mb-2 text-[11px] tracking-wide text-pulpitry-muted uppercase">
-          Shipped with Pulpitry
+          Templates
         </p>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
-          {OVERLAY_FORMS.filter(
-            (form) => form.id !== "none" && form.id !== "stage",
-          ).map((form) => (
-            <div key={form.id} className="group flex flex-col gap-1">
-              <button
-                type="button"
-                onClick={() =>
-                  setDesigning(
-                    newItem(`${form.name} — ours`, {
-                      kind: "overlay",
-                      elements: shapeFromForm(form.id),
-                    }),
-                  )
-                }
-                title={`${form.hint} Copying gives you one of your own at these proportions.`}
-                className="block text-left focus-visible:focus-ring"
+          {SHAPE_TEMPLATES.map((template) => (
+            <button
+              key={template.id}
+              type="button"
+              onClick={() =>
+                setDesigning(
+                  newItem(template.name, {
+                    kind: "overlay",
+                    elements: template.elements,
+                  }),
+                )
+              }
+              title={`${template.hint} Opens a copy of your own.`}
+              className="group flex flex-col gap-1 text-left focus-visible:focus-ring"
+            >
+              <span
+                className="relative block w-full overflow-hidden rounded border border-pulpitry-line ring-pulpitry-teal group-hover:ring-2 [container-type:size]"
+                style={{ aspectRatio: 16 / 9, ...CHEQUER }}
               >
-                <span
-                  className="relative block w-full overflow-hidden rounded border border-pulpitry-line [container-type:size]"
-                  style={{ aspectRatio: 16 / 9, ...CHEQUER }}
-                >
-                  {/* The real renderer, so a tile is what the output draws. */}
-                  <OverlayView
-                    form={form.id as OverlayForm}
-                    theme={theme}
-                    reference={SAMPLE.reference}
-                    text={SAMPLE.words}
-                    uppercase={false}
-                    captions
-                  />
-                </span>
-                <span className="mt-1.5 block truncate text-[12.5px] text-pulpitry-text">
-                  {form.name}
-                </span>
-                <span className="block truncate text-[11px] text-pulpitry-muted">
-                  Copy to make it yours
-                </span>
-              </button>
-            </div>
+                <DesignedView
+                  elements={filled(
+                    template.elements,
+                    SAMPLE.words,
+                    SAMPLE.reference,
+                  )}
+                  theme={theme}
+                />
+              </span>
+              <span className="mt-1.5 block truncate text-[12.5px] text-pulpitry-text">
+                {template.name}
+              </span>
+              <span className="block truncate text-[11px] text-pulpitry-muted">
+                {template.hint}
+              </span>
+            </button>
           ))}
         </div>
       </div>
