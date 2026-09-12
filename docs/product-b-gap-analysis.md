@@ -200,52 +200,136 @@ into a support thread.
 
 ## The plan
 
-### Now — a fortnight, no new architecture
+Ordered by what it wins us. Two things are settled and get no work at all:
+**outputs**, where we are already further ahead than they are, and
+**translations** — we ship the ones churches actually read, and chasing a
+number nobody can license is not a plan.
 
-1. **Tell the free engine properly.** Pricing page, download page, both
-   product pages, and the empty state on first run. Their countdown against
-   our "unlimited, offline, free for ever", with the hardware caveat beside it.
-2. **The support surface.** In Settings → Help: WhatsApp, a changelog view
-   (we already write release notes — render them), the keyboard shortcuts we
-   already have, and one-button log upload. A day or two each.
-3. **Operator affordances.** Live size slider, Hold beside Clear, Auto stated
-   as a switch, slide search that reads slide text.
-4. **EasyWorship and OpenLP import.** A weekend, and it removes the cost of
-   switching for a church with a library.
-5. **Detection log export, CSV.** Small, and it answers "what did we show last
-   Sunday".
+### 1. Songs: a library worth switching for
 
-### Next — four to six weeks, the two that matter
+The priority. Their library starts empty and their online search is locked
+behind premium; ours ships 266 English public-domain hymns and nothing in any
+Nigerian language. A church opening either app for the first time should find
+its own songs already there — and only one of us can make that true.
 
-6. **The phone remote.** Pulpitry serves a small page on the church's own
-   network; the desk shows a QR code; a phone gets next/previous, display and
-   clear, the translation, the slide deck, and the stage note. Pair once, like
-   the mirror does, and never through anybody's cloud — which is a claim they
-   cannot match if their remote goes through theirs. Verify that first.
-7. **Slides that look made before anybody edits them.** Two halves:
-   - **A dozen designed decks** shipped with the app — welcome, announcements,
-     sermon points, offering, prayer focus, scripture focus — in our themes.
-     This is design work, not engineering, and it is the cheaper half.
-   - **An element editor** for a slide page: text, scripture, shape, image,
-     with font, size, spacing and colour per element. We have the composed
-     slide model already; this is a canvas and a properties panel over it.
+**Track A — public domain, embedded.** Expand what we ship outright:
 
-### Then — the quarter
+- English: from the 266 we carry to the thousands that are genuinely public
+  domain (Hymnary, the Cyber Hymnal, Wikisource), with author, year and source
+  on every record.
+- **Local-language hymnals**, which is the part nobody else is doing:
+  *Ìwé Orin Mímọ́*, the Yoruba Anglican hymnal, is about 600 hymns and exists
+  as Bodleian/Google Books scans; there are Igbo, Hausa, Twi and Swahili
+  equivalents from the same mission era. Those translations are old enough to
+  be out of copyright, which is exactly why they are the right place to start.
+  Where only scans exist, that is an OCR and proofreading job — the text is
+  Yoruba with diacritics, so it needs a person to check it, not just a model.
+- Traditional choruses, credited as traditional where no author is known.
 
-8. **Two Bibles on one screen**: a shape, not an architecture. Outputs already
-   carry a translation each.
-9. **A first-run tour.** Theirs is a walkthrough; ours can be four steps to a
-   verse on a screen.
-10. **Motion backgrounds**, ours, free.
-11. **The translations story.** Make the African editions a headline, publish
-    what we ship and why, and look — carefully — at which licensed texts can
-    be served through an API on terms we can actually meet.
+**Track B — the contemporary catalogue.** The aim is that a church opens
+Pulpitry and finds the songs it actually sings — including Nigerian gospel.
+There are three routes to that and they are not equivalent:
+
+- **Licensed at source.** Lyric catalogues are licensed to software by
+  **LyricFind** and **Musixmatch**, and **CCLI** can be asked directly even
+  though its partner programme is closed to new partners. This is the only
+  route that lets the catalogue be a feature of the product — shipped or
+  fetched, credited, and defensible. It is a commercial conversation rather
+  than an engineering one, and it is the one worth starting this week, because
+  everything else about songs is ready before it lands.
+- **The church brings its own** — Track C. Immediate, legitimate, and it covers
+  every church that already runs EasyWorship or OpenLP.
+- **Scraped from lyrics sites and shipped by us.** Not a route. The words
+  belong to publishers, the sites license them from LyricFind or Musixmatch and
+  forbid harvesting in their terms, so this is our infringement distributed to
+  churches who would reasonably assume the licence they hold covers what we
+  gave them. Church media people know CCLI's rules better than most customers
+  know any rule; one publisher notice would cost more trust in this market than
+  the catalogue buys.
+
+Whichever route lands, two conditions hold, because they cost nothing:
+
+- **A versioned pack the app fetches**, not files inside the installer, so a
+  correction or a withdrawal takes a day rather than a release.
+- **Every record carries its credits** — title, author(s), copyright line, CCLI
+  song number where known — and the lyric output *renders* them.
+
+**Track C — the church's own songs.** Importers for **EasyWorship, OpenLP,
+OpenSong and ProPresenter**, plus paste-and-parse: paste a song, get verses,
+chorus and bridge split and labelled. A church with four hundred songs in
+EasyWorship can be running on Sunday without retyping anything, and what it
+imports is its own.
+
+**And the library itself**: search that reads the lyrics and not just the
+title, sections ordered the way the worship leader will actually call them, and
+language tagging, so a Yoruba service is offered Yoruba first.
+
+### 2. Themes, and motion in particular
+
+Their gallery has motion backgrounds and most of them are locked. Ours should
+be better and free, and there is a way to do that which needs no stock footage
+and no licence at all: **render the motion ourselves**.
+
+- **Procedural motion backgrounds** drawn in the output window — drifting
+  gradients, bokeh, particles, light rays, ink in water, a slow starfield.
+  Canvas or WebGL, a few hundred lines each, resolution-independent, so they
+  are sharp at 4K and cost no download and no video decoder. A church can
+  recolour them to its own palette, which a video loop can never do.
+- **A gallery, not only a designer.** Twenty designed presets with thumbnails,
+  so the first thing a church sees looks made. Our designer stays for the
+  church that wants its own.
+- **Theme files**: export and import one, so a church can carry its look
+  between machines and we can publish new looks between releases.
+- **Typography that goes further**: weight, line height and letter spacing per
+  role, and a safe-area guide for the overlay shapes.
+- **Lyrics get their own theme**, as scripture does.
+
+### 3. Workspaces
+
+They split the app into Scriptures, Slides and Lyrics, and it reads clearly
+because each screen shows only what that job needs. Ours puts everything on
+one desk, which is better in a hurry and worse to learn.
+
+So: **workspace presets in one window** — Scripture, Songs, Slides, Plan —
+switched at the top right, each arranging the panels that job needs, with the
+preview/live pair and the transcript constant. One window is our advantage;
+showing every panel at once is not.
+
+### 4. Slides that look made before anybody edits them
+
+- **A dozen designed decks** shipped with the app — welcome, announcements,
+  sermon points, offering, prayer focus, scripture focus — in our themes. This
+  is design work, not engineering, and it is the cheaper half.
+- **An element editor** for a page: text, scripture, shape, image, with font,
+  size, spacing and colour per element. The composed-slide model already
+  exists; this is a canvas and a properties panel over it.
+
+### 5. The fortnight's cheap wins
+
+1. **Tell the free engine properly** — pricing page, download page, both
+   product pages, first run: *free for ever, unlimited, on your own machine,
+   with the internet off*, with the hardware caveat in the same breath.
+2. **The support surface**: WhatsApp, a changelog rendered from the release
+   notes we already write, the keyboard shortcuts we already have written down
+   in the app, one-button log upload.
+3. **Operator affordances**: a live size slider, Hold beside Clear, Auto as a
+   plainly stated switch, search that reads slide text.
+4. **A detection log export**, CSV — what we showed, and when.
+
+### 6. Backlog, deliberately
+
+- **The phone remote.** Filed as an issue; it is the largest single piece of
+  work here and it needs the app to serve something on the church's network.
+  Worth doing on our terms — paired like the mirror, never through anybody's
+  cloud — rather than rushed.
+- Two Bibles on one screen.
+- A local REST/WebSocket API.
 
 ### Not on the list
 
-- Chasing 150 translations by any route that ignores a licence.
-- Matching their accuracy and latency numbers with numbers of our own. Measure
-  ours, publish what we measure, and let the honest number be the claim.
+- Chasing a translation count.
+- Matching their accuracy and latency claims with claims of our own. Measure
+  ours, publish what we measure.
 - A premium-locked theme gallery. Ours being free is a difference worth
   keeping.
 
