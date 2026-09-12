@@ -13,11 +13,10 @@
  * and costs the thing we are best at: their operator changes window to reach
  * the songs, and ours does not.
  *
- * So: one window, four arrangements. The decision row is constant, because that
- * is what a service is run from — the transcript, the detections, the staged
- * item and the live one side by side, and the queue. What changes is which
- * library has the width, and whether a panel that has nothing to say about this
- * job is on screen at all.
+ * So: one window, four arrangements. The decision row — transcript, detections,
+ * live, queue — is constant, because that is what a service is run from. What
+ * changes is which library has the width, and whether a panel that has nothing
+ * to say about this job is on screen at all.
  *
  * # What each one is for
  *
@@ -42,11 +41,9 @@ export interface WorkspaceShape {
   /**
    * Column widths for the working row, as a CSS grid template.
    *
-   * One column or two, matching what is rendered: a template with more columns
-   * than children leaves a gap, and one with fewer silently wraps a panel onto
-   * a second row underneath — which this layout has done before. The staged
-   * and live pair is not here; it lives in the decision row, beside each
-   * other, whichever arrangement is chosen.
+   * Two or three columns, matching what is rendered: a template with more
+   * columns than children leaves a gap, and one with fewer silently wraps a
+   * panel onto a second row underneath — which this layout has done before.
    */
   columns: string;
   /** How much of the height the working row takes from the decision row. */
@@ -60,7 +57,7 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     label: "Scripture",
     hint: "The chapter, the original languages, and the verse library",
     tab: "Scripture",
-    columns: "minmax(0,1fr) minmax(0,0.85fr)",
+    columns: "minmax(0,1fr) minmax(0,0.8fr) minmax(320px,0.95fr)",
     basis: "38%",
     original: true,
   },
@@ -68,24 +65,24 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     label: "Songs",
     hint: "The song library at the width a lyric needs",
     tab: "Songs",
-    columns: "minmax(0,1fr)",
-    basis: "44%",
+    columns: "minmax(0,1.7fr) minmax(320px,1fr)",
+    basis: "46%",
     original: false,
   },
   slides: {
     label: "Slides",
     hint: "Decks as thumbnails, which want more room than anything else here",
     tab: "Slides",
-    columns: "minmax(0,1fr)",
-    basis: "50%",
+    columns: "minmax(0,1.9fr) minmax(320px,1fr)",
+    basis: "52%",
     original: false,
   },
   plan: {
     label: "Plan",
     hint: "The service order, and what comes next",
     tab: "Schedule",
-    columns: "minmax(0,1fr)",
-    basis: "40%",
+    columns: "minmax(0,1.25fr) minmax(320px,1fr)",
+    basis: "42%",
     original: false,
   },
 };
