@@ -4,8 +4,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { catalogList, type Item } from "../lib/catalog";
 import type { Output } from "../lib/api";
 import { libraryStatus, type Translation } from "../lib/bible";
-import { listDisplays, type Display } from "../lib/projector";
-import { OVERLAY_FORMS } from "../lib/overlays";
+import {
+  listDisplays,
+  type Display,
+  type LiveContent,
+  type Ticker,
+} from "../lib/projector";
+import { OVERLAY_FORMS, type OverlayForm } from "../lib/overlays";
+import type { ProjectorTheme } from "../lib/theme";
+import { OutputPreview } from "./OutputPreview";
 
 /**
  * The formats a switcher actually expects.
@@ -86,14 +93,22 @@ function freshId(): string {
 export function OutputsPanel({
   outputs,
   onChange,
+  theme,
+  live,
+  ticker,
 }: {
   outputs: Output[];
   onChange: (outputs: Output[]) => void;
+  /** The shared look, for an output with no template of its own. */
+  theme: ProjectorTheme;
+  /** What is on the screens now, so each preview shows it. */
+  live: LiveContent | null;
+  ticker: Ticker;
 }) {
   const [displays, setDisplays] = useState<Display[]>([]);
   const [templates, setTemplates] = useState<Item[]>([]);
   const [translations, setTranslations] = useState<Translation[]>([]);
-  const [live, setLive] = useState<OutputState[]>([]);
+  const [states, setStates] = useState<OutputState[]>([]);
 
   /*
    * What the network can see, asked for rather than polled, per output.
@@ -108,7 +123,7 @@ export function OutputsPanel({
 
   const refreshLive = useCallback(() => {
     void invoke<OutputState[]>("outputs_state")
-      .then(setLive)
+      .then(setStates)
       .catch(() => undefined);
   }, []);
 
@@ -144,6 +159,21 @@ export function OutputsPanel({
       .catch(() => undefined);
     refreshLive();
   }, [refreshLive]);
+
+  /**
+   * The look one output draws with, resolved here rather than fetched.
+   *
+   * `theme_for_window` answers the same question in the backend, from the
+   * settings on disk -- which this dialog has not written yet, because it
+   * saves a moment after each change. A preview a beat behind the dropdown
+   * that changed it is worse than no preview, so the template's own theme is
+   * read from the catalog list the Look picker is already using.
+   */
+  const themeFor = (output: Output): ProjectorTheme => {
+    if (!output.template) return theme;
+    const item = templates.find((held) => String(held.id) === output.template);
+    return item?.body.kind === "template" ? item.body.theme : theme;
+  };
 
   const update = (id: string, change: Partial<Output>) =>
     onChange(
@@ -190,280 +220,298 @@ export function OutputsPanel({
   return (
     <div className="flex flex-col gap-4">
       {outputs.map((output) => {
-        const state = live.find((entry) => entry.id === output.id);
+        const state = states.find((entry) => entry.id === output.id);
         return (
           <div
             key={output.id}
-            className="flex flex-col gap-2.5 rounded border border-pulpitry-line p-3"
+            className="flex gap-3 rounded border border-pulpitry-line p-3"
           >
-            <div className="flex items-center gap-2">
-              <input
-                value={output.name}
-                onChange={(event) =>
-                  update(output.id, { name: event.target.value })
-                }
-                placeholder="Foyer"
-                className={`flex-1 ${FIELD}`}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  const command = state?.open ? "close_output" : "open_output";
-                  void invoke(command, { id: output.id })
-                    .then(refreshLive)
-                    .catch(() => undefined);
-                }}
-                className="rounded border border-pulpitry-line px-2 py-1.5 text-[12px] text-pulpitry-text transition-colors hover:border-pulpitry-gold focus-visible:focus-ring"
-              >
-                {state?.open ? "Close" : "Open"}
-              </button>
-              {RESERVED.includes(output.id) ? null : (
+            <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+              <div className="flex items-center gap-2">
+                <input
+                  value={output.name}
+                  onChange={(event) =>
+                    update(output.id, { name: event.target.value })
+                  }
+                  placeholder="Foyer"
+                  className={`flex-1 ${FIELD}`}
+                />
                 <button
                   type="button"
-                  onClick={() => remove(output.id)}
-                  className="rounded px-2 py-1.5 text-[12px] text-pulpitry-muted transition-colors hover:text-pulpitry-gold focus-visible:focus-ring"
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <label className="flex min-w-[9rem] flex-1 flex-col gap-1">
-                <span className="text-[11px] text-pulpitry-muted">Look</span>
-                <select
-                  value={output.template}
-                  onChange={(event) =>
-                    update(output.id, { template: event.target.value })
-                  }
-                  className={FIELD}
-                >
-                  <option value="">Same as the Display pane</option>
-                  {templates.map((template) => (
-                    <option key={template.id} value={String(template.id)}>
-                      {template.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex min-w-[9rem] flex-1 flex-col gap-1">
-                <span className="text-[11px] text-pulpitry-muted">
-                  Translation
-                </span>
-                <select
-                  value={output.translation}
-                  onChange={(event) =>
-                    update(output.id, { translation: event.target.value })
-                  }
-                  className={FIELD}
-                >
-                  <option value="">Same as the Scripture panel</option>
-                  {translations.map((translation) => (
-                    <option key={translation.id} value={translation.id}>
-                      {translation.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex min-w-[9rem] flex-1 flex-col gap-1">
-                <span className="text-[11px] text-pulpitry-muted">Screen</span>
-                <select
-                  value={output.display === null ? "" : String(output.display)}
-                  onChange={(event) =>
-                    update(output.id, {
-                      display:
-                        event.target.value === ""
-                          ? null
-                          : Number(event.target.value),
-                    })
-                  }
-                  className={FIELD}
-                >
-                  <option value="">None — on the network only</option>
-                  {displays.map((display) => (
-                    <option key={display.index} value={String(display.index)}>
-                      {display.name} ({display.width}×{display.height})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <label className="flex min-w-[11rem] flex-1 flex-col gap-1">
-                <span className="text-[11px] text-pulpitry-muted">Shape</span>
-                <select
-                  value={output.overlay || "none"}
-                  onChange={(event) =>
-                    update(output.id, { overlay: event.target.value })
-                  }
-                  className={FIELD}
-                >
-                  {OVERLAY_FORMS.map((form) => (
-                    <option key={form.id} value={form.id}>
-                      {form.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex min-w-[9rem] flex-1 flex-col gap-1">
-                <span className="text-[11px] text-pulpitry-muted">Format</span>
-                <select
-                  value={`${output.width}x${output.height}@${output.fps}`}
-                  onChange={(event) => {
-                    const chosen = FORMATS.find(
-                      (format) =>
-                        `${format.width}x${format.height}@${format.fps}` ===
-                        event.target.value,
-                    );
-                    if (chosen) {
-                      update(output.id, {
-                        width: chosen.width,
-                        height: chosen.height,
-                        fps: chosen.fps,
-                      });
-                    }
+                  onClick={() => {
+                    const command = state?.open ? "close_output" : "open_output";
+                    void invoke(command, { id: output.id })
+                      .then(refreshLive)
+                      .catch(() => undefined);
                   }}
-                  className={FIELD}
+                  className="rounded border border-pulpitry-line px-2 py-1.5 text-[12px] text-pulpitry-text transition-colors hover:border-pulpitry-gold focus-visible:focus-ring"
                 >
-                  {FORMATS.map((format) => (
-                    <option
-                      key={format.label}
-                      value={`${format.width}x${format.height}@${format.fps}`}
-                    >
-                      {format.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+                  {state?.open ? "Close" : "Open"}
+                </button>
+                {RESERVED.includes(output.id) ? null : (
+                  <button
+                    type="button"
+                    onClick={() => remove(output.id)}
+                    className="rounded px-2 py-1.5 text-[12px] text-pulpitry-muted transition-colors hover:text-pulpitry-gold focus-visible:focus-ring"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
 
-            {/* What the chosen shape actually does, said where it is chosen.
-                "Lower third" is not self-explanatory to a volunteer, and the
-                difference between a picture and something keyable is the whole
-                reason this pane exists. */}
-            <p className="text-[11px] leading-snug text-pulpitry-muted">
-              {OVERLAY_FORMS.find(
-                (form) => form.id === (output.overlay || "none"),
-              )?.hint ?? ""}
-              {output.overlay && output.overlay !== "none"
-                ? " Sent with a transparent background, so a switcher can lay it over a camera."
-                : ""}
-            </p>
-
-            {/* A stage display is the one shape whose content is its own, so
-                it is the one shape with its own switches. Shown only there:
-                two dead checkboxes on every other output would teach an
-                operator to stop reading this pane. */}
-            {output.overlay === "stage" ? (
-              <div className="flex flex-wrap gap-x-5 gap-y-2">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={output.stageLive}
+              <div className="flex flex-wrap gap-2">
+                <label className="flex min-w-[9rem] flex-1 flex-col gap-1">
+                  <span className="text-[11px] text-pulpitry-muted">Look</span>
+                  <select
+                    value={output.template}
                     onChange={(event) =>
-                      update(output.id, { stageLive: event.target.checked })
+                      update(output.id, { template: event.target.value })
                     }
-                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-                  />
-                  <span className="text-[12.5px] text-pulpitry-text">
-                    Show what is live
-                  </span>
+                    className={FIELD}
+                  >
+                    <option value="">Same as the Display pane</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={String(template.id)}>
+                        {template.title}
+                      </option>
+                    ))}
+                  </select>
                 </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={output.stageClock}
-                    onChange={(event) =>
-                      update(output.id, { stageClock: event.target.checked })
-                    }
-                    className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-                  />
-                  <span className="text-[12.5px] text-pulpitry-text">
-                    Show the time of day
+
+                <label className="flex min-w-[9rem] flex-1 flex-col gap-1">
+                  <span className="text-[11px] text-pulpitry-muted">
+                    Translation
                   </span>
+                  <select
+                    value={output.translation}
+                    onChange={(event) =>
+                      update(output.id, { translation: event.target.value })
+                    }
+                    className={FIELD}
+                  >
+                    <option value="">Same as the Scripture panel</option>
+                    {translations.map((translation) => (
+                      <option key={translation.id} value={translation.id}>
+                        {translation.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="flex min-w-[9rem] flex-1 flex-col gap-1">
+                  <span className="text-[11px] text-pulpitry-muted">Screen</span>
+                  <select
+                    value={output.display === null ? "" : String(output.display)}
+                    onChange={(event) =>
+                      update(output.id, {
+                        display:
+                          event.target.value === ""
+                            ? null
+                            : Number(event.target.value),
+                      })
+                    }
+                    className={FIELD}
+                  >
+                    <option value="">None — on the network only</option>
+                    {displays.map((display) => (
+                      <option key={display.index} value={String(display.index)}>
+                        {display.name} ({display.width}×{display.height})
+                      </option>
+                    ))}
+                  </select>
                 </label>
               </div>
-            ) : null}
 
-            {output.overlay === "stage" &&
-            !output.stageLive &&
-            !output.stageClock ? (
+              <div className="flex flex-wrap gap-2">
+                <label className="flex min-w-[11rem] flex-1 flex-col gap-1">
+                  <span className="text-[11px] text-pulpitry-muted">Shape</span>
+                  <select
+                    value={output.overlay || "none"}
+                    onChange={(event) =>
+                      update(output.id, { overlay: event.target.value })
+                    }
+                    className={FIELD}
+                  >
+                    {OVERLAY_FORMS.map((form) => (
+                      <option key={form.id} value={form.id}>
+                        {form.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="flex min-w-[9rem] flex-1 flex-col gap-1">
+                  <span className="text-[11px] text-pulpitry-muted">Format</span>
+                  <select
+                    value={`${output.width}x${output.height}@${output.fps}`}
+                    onChange={(event) => {
+                      const chosen = FORMATS.find(
+                        (format) =>
+                          `${format.width}x${format.height}@${format.fps}` ===
+                          event.target.value,
+                      );
+                      if (chosen) {
+                        update(output.id, {
+                          width: chosen.width,
+                          height: chosen.height,
+                          fps: chosen.fps,
+                        });
+                      }
+                    }}
+                    className={FIELD}
+                  >
+                    {FORMATS.map((format) => (
+                      <option
+                        key={format.label}
+                        value={`${format.width}x${format.height}@${format.fps}`}
+                      >
+                        {format.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {/* What the chosen shape actually does, said where it is chosen.
+                  "Lower third" is not self-explanatory to a volunteer, and the
+                  difference between a picture and something keyable is the whole
+                  reason this pane exists. */}
               <p className="text-[11px] leading-snug text-pulpitry-muted">
-                The timer alone, set as large as the screen allows — readable
-                from anywhere on the platform rather than only from the seat it
-                was aimed at.
+                {OVERLAY_FORMS.find(
+                  (form) => form.id === (output.overlay || "none"),
+                )?.hint ?? ""}
+                {output.overlay && output.overlay !== "none"
+                  ? " Sent with a transparent background, so a switcher can lay it over a camera."
+                  : ""}
               </p>
-            ) : null}
 
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={output.uppercase}
-                onChange={(event) =>
-                  update(output.id, { uppercase: event.target.checked })
-                }
-                className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-              />
-              <span className="text-[12.5px] text-pulpitry-text">
-                Set the words in capitals
-              </span>
-            </label>
+              {/* A stage display is the one shape whose content is its own, so
+                  it is the one shape with its own switches. Shown only there:
+                  two dead checkboxes on every other output would teach an
+                  operator to stop reading this pane. */}
+              {output.overlay === "stage" ? (
+                <div className="flex flex-wrap gap-x-5 gap-y-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={output.stageLive}
+                      onChange={(event) =>
+                        update(output.id, { stageLive: event.target.checked })
+                      }
+                      className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                    />
+                    <span className="text-[12.5px] text-pulpitry-text">
+                      Show what is live
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={output.stageClock}
+                      onChange={(event) =>
+                        update(output.id, { stageClock: event.target.checked })
+                      }
+                      className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                    />
+                    <span className="text-[12.5px] text-pulpitry-text">
+                      Show the time of day
+                    </span>
+                  </label>
+                </div>
+              ) : null}
 
-            {/* Said once, where the choice is: a volunteer should not have to
-                know why a band and a wall want different answers. */}
-            <p className="text-[11px] leading-snug text-pulpitry-muted">
-              {output.uppercase
-                ? "Right for a short band read in a glance — capitals hold their shape against a moving picture."
-                : "Right for a screen carrying more than a line: capitals are slower to read in a paragraph."}
-            </p>
+              {output.overlay === "stage" &&
+              !output.stageLive &&
+              !output.stageClock ? (
+                <p className="text-[11px] leading-snug text-pulpitry-muted">
+                  The timer alone, set as large as the screen allows — readable
+                  from anywhere on the platform rather than only from the seat it
+                  was aimed at.
+                </p>
+              ) : null}
 
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={output.ndiEnabled}
-                onChange={(event) =>
-                  update(output.id, { ndiEnabled: event.target.checked })
-                }
-                className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
-              />
-              <span className="text-[12.5px] text-pulpitry-text">
-                Send this on the network
-              </span>
-            </label>
-
-            {output.ndiEnabled ? (
-              <>
+              <label className="flex items-center gap-2">
                 <input
-                  value={output.ndiName}
+                  type="checkbox"
+                  checked={output.uppercase}
                   onChange={(event) =>
-                    update(output.id, { ndiName: event.target.value })
+                    update(output.id, { uppercase: event.target.checked })
                   }
-                  placeholder={`Pulpitry — ${output.name || "Output"}`}
-                  className={FIELD}
+                  className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
                 />
-                <FeedStatus
-                  name={feedName(output)}
-                  state={state}
-                  seen={seen[output.id]}
-                  onLook={() => lookFor(output.id)}
-                />
-              </>
-            ) : null}
+                <span className="text-[12.5px] text-pulpitry-text">
+                  Set the words in capitals
+                </span>
+              </label>
 
-            {/* Said where it is chosen. A church learning during a service that
-                three feeds do not fit down their wifi is the failure this
-                sentence exists to prevent. */}
-            {output.display === null ? (
+              {/* Said once, where the choice is: a volunteer should not have to
+                  know why a band and a wall want different answers. */}
               <p className="text-[11px] leading-snug text-pulpitry-muted">
-                Drawn at {output.width}×{output.height} and never shown on a
-                screen. Only useful with NDI switched on above — and each feed
-                is around 100 Mbit/s, so this is for a wired network.
+                {output.uppercase
+                  ? "Right for a short band read in a glance — capitals hold their shape against a moving picture."
+                  : "Right for a screen carrying more than a line: capitals are slower to read in a paragraph."}
               </p>
-            ) : null}
+
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={output.ndiEnabled}
+                  onChange={(event) =>
+                    update(output.id, { ndiEnabled: event.target.checked })
+                  }
+                  className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+                />
+                <span className="text-[12.5px] text-pulpitry-text">
+                  Send this on the network
+                </span>
+              </label>
+
+              {output.ndiEnabled ? (
+                <>
+                  <input
+                    value={output.ndiName}
+                    onChange={(event) =>
+                      update(output.id, { ndiName: event.target.value })
+                    }
+                    placeholder={`Pulpitry — ${output.name || "Output"}`}
+                    className={FIELD}
+                  />
+                  <FeedStatus
+                    name={feedName(output)}
+                    state={state}
+                    seen={seen[output.id]}
+                    onLook={() => lookFor(output.id)}
+                  />
+                </>
+              ) : null}
+
+              {/* Said where it is chosen. A church learning during a service that
+                  three feeds do not fit down their wifi is the failure this
+                  sentence exists to prevent. */}
+              {output.display === null ? (
+                <p className="text-[11px] leading-snug text-pulpitry-muted">
+                  Drawn at {output.width}×{output.height} and never shown on a
+                  screen. Only useful with NDI switched on above — and each feed
+                  is around 100 Mbit/s, so this is for a wired network.
+                </p>
+              ) : null}
+            </div>
+
+            {/* Beside the controls rather than under them: it is what the
+                controls are for, and an operator changing a shape should see
+                the shape change without scrolling. */}
+            <div className="hidden w-[190px] shrink-0 sm:block">
+              <OutputPreview
+                form={(output.overlay || "none") as OverlayForm}
+                theme={themeFor(output)}
+                translation={output.translation}
+                uppercase={output.uppercase}
+                stageClock={output.stageClock}
+                stageLive={output.stageLive}
+                live={live}
+                ticker={ticker}
+              />
+            </div>
           </div>
         );
       })}

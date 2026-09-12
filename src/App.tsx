@@ -797,20 +797,6 @@ export default function App() {
           </span>
         ) : null}
 
-        {/* Opens the pane rather than the projector. After the outputs list
-            took over, the projector has no screen until somebody says which --
-            and guessing one would put a congregation's display somewhere
-            nobody chose. */}
-        {!projector.open ? (
-          <button
-            type="button"
-            onClick={() => setOutputsOpen(true)}
-            className="rounded border border-pulpitry-gold-dim px-2 py-1 text-[11.5px] text-pulpitry-gold focus-visible:focus-ring"
-          >
-            No projector open — open one
-          </button>
-        ) : null}
-
         <span className="ml-2 min-w-0 truncate text-[11.5px] text-pulpitry-muted">
           {live ? (
             <>
@@ -1193,6 +1179,8 @@ export default function App() {
       {outputsOpen && settings ? (
         <OutputsDialog
           settings={settings}
+          live={live}
+          ticker={ticker}
           onClose={() => setOutputsOpen(false)}
           onSaved={setSettings}
         />

@@ -7,6 +7,8 @@ import {
   type Output,
   type SettingsView,
 } from "../lib/api";
+import { DEFAULT_THEME } from "../lib/theme";
+import type { LiveContent, Ticker } from "../lib/projector";
 import { OutputsPanel } from "./OutputsPanel";
 import { StageControls } from "./StageControls";
 
@@ -29,10 +31,15 @@ import { StageControls } from "./StageControls";
  */
 export function OutputsDialog({
   settings,
+  live,
+  ticker,
   onClose,
   onSaved,
 }: {
   settings: SettingsView;
+  /** What is on the screens now, so each output can be previewed drawing it. */
+  live: LiveContent | null;
+  ticker: Ticker;
   onClose: () => void;
   onSaved: (settings: SettingsView) => void;
 }) {
@@ -112,7 +119,13 @@ export function OutputsDialog({
             goes.
           </p>
 
-          <OutputsPanel outputs={outputs} onChange={setOutputs} />
+          <OutputsPanel
+            outputs={outputs}
+            onChange={setOutputs}
+            theme={settings.projector ?? DEFAULT_THEME}
+            live={live}
+            ticker={ticker}
+          />
 
           <div className="mt-6 border-t border-pulpitry-line pt-4">
             <h3 className="mb-1 text-[13px] text-pulpitry-text">
