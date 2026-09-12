@@ -34,6 +34,7 @@ import {
   rememberWorkspace,
   storedWorkspace,
   WORKSPACES,
+  WORKSPACE_ORDER,
   type Workspace,
 } from "./lib/workspaces";
 import {
@@ -102,6 +103,17 @@ interface VoiceCommand {
   /** An absolute slide, counted from one as a person counts. */
   to?: number | null;
 }
+
+/**
+ * The desks that have a look of their own.
+ *
+ * Everything but the slide desk, which draws each deck against the background
+ * it was laid out on. Derived rather than listed, so an arrangement added later
+ * is included by being added rather than by somebody remembering this.
+ */
+const LOOK_DESKS: Workspace[] = WORKSPACE_ORDER.filter(
+  (desk) => WORKSPACES[desk].frame !== "deck",
+);
 
 function ready(settings: SettingsView | null): boolean {
   if (!settings) return false;
@@ -613,18 +625,40 @@ export default function App() {
   const applyTheme = useCallback(
     (chosen: typeof DEFAULT_THEME) => {
       if (!settings) return;
+
       /*
-       * This desk's look, and the wall's too when this desk is the one on it.
+       * Choosing here must not move any other desk, and it did.
        *
-       * Changing the look of the desk you are working at while a verse from it
-       * is on the wall should change the wall -- that is what "apply" means to
-       * the person pressing it. Changing it while another desk owns the wall
+       * A desk with no look of its own falls back to the wall's, which is the
+       * right answer on a fresh installation -- all four start alike. But
+       * applying a look on the song desk also set the wall's, so the scripture
+       * desk, which had never chosen one, followed it. Two desks, one look,
+       * and no way to tell they were not separate.
+       *
+       * So the first time any desk is given a look, every other desk is written
+       * with the one it was already wearing. From then on each is explicit and
+       * none of them can drag another along. It happens once, invisibly, and
+       * the alternative -- seeding all four at startup -- would write settings
+       * on a machine where nobody has asked for anything.
+       */
+      const kept = { ...(settings.deskLooks ?? {}) };
+      for (const desk of LOOK_DESKS) {
+        if (!kept[desk]) kept[desk] = settings.projector;
+      }
+      kept[workspace] = chosen;
+
+      /*
+       * The wall follows too, but only when this desk is the one on it.
+       *
+       * Changing the look of the desk you are working at while its verse is on
+       * the wall should change the wall -- that is what "apply" means to the
+       * person pressing it. Changing it while another desk owns the wall
        * changes what you are preparing and leaves the congregation alone.
        */
       const owns = liveDesk === null || liveDesk === workspace;
       void saveSettings({
         ...settings,
-        deskLooks: { ...(settings.deskLooks ?? {}), [workspace]: chosen },
+        deskLooks: kept,
         projector: owns ? chosen : settings.projector,
       })
         .then(setSettings)
