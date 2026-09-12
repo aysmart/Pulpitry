@@ -239,13 +239,17 @@ There are three routes to that and they are not equivalent:
   everything else about songs is ready before it lands.
 - **The church brings its own** — Track C. Immediate, legitimate, and it covers
   every church that already runs EasyWorship or OpenLP.
-- **Scraped from lyrics sites and shipped by us.** Not a route. The words
-  belong to publishers, the sites license them from LyricFind or Musixmatch and
-  forbid harvesting in their terms, so this is our infringement distributed to
-  churches who would reasonably assume the licence they hold covers what we
-  gave them. Church media people know CCLI's rules better than most customers
-  know any rule; one publisher notice would cost more trust in this market than
-  the catalogue buys.
+- **Scraped from lyrics sites.** **The owner has decided to pursue this
+  route (2026-09-12).** It is recorded here rather than planned here, and the
+  rest of this document does not depend on it: the words belong to publishers,
+  the sites license them from LyricFind or Musixmatch and forbid harvesting in
+  their terms, so the exposure is ours and it reaches churches who would
+  reasonably assume the licence they hold covers what we gave them. Church
+  media people know CCLI's rules better than most customers know any rule.
+  Anyone building it should take legal advice on the position in the
+  territories we sell in first, and should not count on the licensed route
+  below staying open afterwards — publishers and aggregators are the same
+  people we would be asking.
 
 Whichever route lands, two conditions hold, because they cost nothing:
 
