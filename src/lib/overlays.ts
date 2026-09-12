@@ -332,22 +332,44 @@ export function plainText(
         return (body.lines as Array<{ text: string }>)
           .map((line) => line.text)
           .join(" ");
+      /*
+       * A lyric keeps its breaks, and a passage does not.
+       *
+       * These were both run together with spaces, so a two-line screenful
+       * reached a lower third as one long line that wrapped wherever the band
+       * happened to end -- and a congregation reading a stream saw a different
+       * shape from the one in the room. A song is broken where the writer broke
+       * it and again into screenfuls by the song desk, and both of those
+       * decisions are about how it is *sung*. A passage is prose: it has no
+       * line breaks to keep, and inventing some would be worse.
+       */
       case "lyric":
-        return (body.lines as string[]).join(" ");
+        return (body.lines as string[]).join("\n");
       case "richText":
         return (body.blocks as Array<{ text: string }>)
           .map((block) => block.text)
-          .join(" ");
+          .join("\n");
       case "composed":
         return (body.components as Array<Record<string, unknown>>)
           .filter((component) => component.kind === "text")
           .map((component) => String(component.text ?? ""))
-          .join(" ");
+          .join("\n");
       default:
         return "";
     }
   })();
 
-  const trimmed = said.replace(/\s+/g, " ").trim();
+  /*
+   * Runs of spaces collapse; line breaks survive.
+   *
+   * This collapsed every kind of whitespace, newlines included, which was the
+   * other half of the same fault: a lyric could keep its breaks all the way to
+   * here and still arrive as one line.
+   */
+  const trimmed = said
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
   return trimmed ? trimmed : null;
 }

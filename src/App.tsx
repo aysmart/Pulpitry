@@ -105,6 +105,25 @@ interface VoiceCommand {
 }
 
 /**
+ * What a desk looks like before anybody has chosen anything.
+ *
+ * The wall's look, with one change: a song desk does not caption its words.
+ *
+ * The line under the words is a reference under a verse and a *title* under a
+ * chorus, and only the first is information. Somebody reading a passage is
+ * finding it in their own Bible; nobody singing needs to be told which song
+ * they are singing, and on a wall it reads as a caption on a photograph. It is
+ * a switch rather than a rule -- a church that wants their set list on screen
+ * turns it on -- but the default should be the thing most churches want.
+ */
+function deskDefault(
+  desk: Workspace,
+  wall: typeof DEFAULT_THEME,
+): typeof DEFAULT_THEME {
+  return desk === "songs" ? { ...wall, showReference: false } : wall;
+}
+
+/**
  * The desks that have a look of their own.
  *
  * Everything but the slide desk, which draws each deck against the background
@@ -324,7 +343,8 @@ export default function App() {
    * would be a second answer to a question the deck has already answered.
    */
   const look =
-    settings?.deskLooks?.[workspace] ?? settings?.projector ?? DEFAULT_THEME;
+    settings?.deskLooks?.[workspace] ??
+    deskDefault(workspace, settings?.projector ?? DEFAULT_THEME);
 
   const [error, setError] = useState<string | null>(null);
   const [projector, setProjector] = useState<ProjectorState>({
@@ -643,7 +663,9 @@ export default function App() {
        */
       const kept = { ...(settings.deskLooks ?? {}) };
       for (const desk of LOOK_DESKS) {
-        if (!kept[desk]) kept[desk] = settings.projector;
+        // The same default each desk was already drawing with, so seeding
+        // changes nothing an operator can see.
+        if (!kept[desk]) kept[desk] = deskDefault(desk, settings.projector);
       }
       kept[workspace] = chosen;
 
@@ -677,8 +699,17 @@ export default function App() {
    */
   useEffect(() => {
     if (!settings || liveDesk === null) return;
-    const wanted = settings.deskLooks?.[liveDesk];
-    if (!wanted) return;
+    /*
+     * The desk's default counts as its look.
+     *
+     * Reading only the stored ones meant a song going live before anybody had
+     * opened the looks screen left the wall exactly as it was -- titles under
+     * the words included -- while the desk's own preview showed them gone. The
+     * two disagreed about the same song.
+     */
+    const wanted =
+      settings.deskLooks?.[liveDesk] ??
+      deskDefault(liveDesk, settings.projector);
 
     const stable = (theme: typeof DEFAULT_THEME) =>
       JSON.stringify(Object.entries(theme).sort(([a], [b]) => a.localeCompare(b)));

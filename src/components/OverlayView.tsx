@@ -54,7 +54,11 @@ export function OverlayView({
         {plan.inline && showReference ? (
           <span style={plan.reference}>{reference}</span>
         ) : null}
-        <span style={plan.body}>{text}</span>
+        {/* One line per line, because the breaks are meaning: the song desk
+            decides how many lines a screenful is, and a lower third showing
+            the same screenful as one wrapped run is showing a different
+            shape from the one the room is reading. */}
+        <span style={{ ...plan.body, whiteSpace: "pre-line" }}>{text}</span>
         {!plan.chip && !plan.inline && showReference ? (
           <span style={{ ...plan.reference, display: "block", opacity: 0.85 }}>
             {reference}
