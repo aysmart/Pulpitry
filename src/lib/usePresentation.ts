@@ -198,6 +198,19 @@ export function toLiveContent(item: Presentable): LiveContent {
   };
 }
 
+/**
+ * Something that went on the screen, and when.
+ *
+ * The time is carried rather than derived because it is the only thing that
+ * separates two showings of the same passage, and it is what an operator
+ * actually reads the list by: "we were on that about ten minutes ago".
+ */
+export interface Shown {
+  item: Presentable;
+  /** Epoch milliseconds, from the moment it went live. */
+  at: number;
+}
+
 /** Identity for dedup: same verses, or same section of the same song. */
 function keyOf(item: Presentable): string {
   switch (item.kind) {
@@ -223,7 +236,7 @@ function keyOf(item: Presentable): string {
 export function usePresentation() {
   const [preview, setPreview] = useState<Presentable | null>(null);
   const [live, setLiveState] = useState<LiveContent | null>(null);
-  const [history, setHistory] = useState<Presentable[]>([]);
+  const [history, setHistory] = useState<Shown[]>([]);
   // Verse ids identify live scripture, but a lyric has none, so remember what
   // this window last put up. Only this window displays, so it stays accurate.
   const [liveKey, setLiveKey] = useState<string | null>(null);
@@ -278,11 +291,24 @@ export function usePresentation() {
     const key = keyOf(item);
     setLiveKey(key);
     setHistory((current) => {
-      // Re-displaying a passage should move it, not duplicate it.
-      const withoutDuplicate = current.filter((entry) => keyOf(entry) !== key);
-      return [item, ...withoutDuplicate].slice(0, 50);
+      // Re-displaying a passage should move it, not duplicate it -- and it
+      // takes the newer time with it, which is the one that answers "when were
+      // we last on this".
+      const withoutDuplicate = current.filter(
+        (entry) => keyOf(entry.item) !== key,
+      );
+      return [{ item, at: Date.now() }, ...withoutDuplicate].slice(0, 50);
     });
   }, []);
+
+  /**
+   * Forgets what has been shown.
+   *
+   * Session-scoped and deliberately so: this is the record of *this* service,
+   * and a second service in the same sitting — an evening one, a rehearsal —
+   * should not have to read past the morning's. Nothing leaves the projector.
+   */
+  const clearHistory = useCallback(() => setHistory([]), []);
 
   /** Sends whatever is staged. The Enter key, and the Display button. */
   const display = useCallback(() => {
@@ -566,6 +592,7 @@ export function usePresentation() {
     live,
     liveKey,
     history,
+    clearHistory,
     keyOf,
     previewVerse,
     previewVerses,

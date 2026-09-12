@@ -25,8 +25,10 @@
  *
  * # What each one is for
  *
- * - **Scripture**: everything the detection system produces — the transcript,
- *   the detections, the chapter, and the original languages.
+ * - **Scripture**: the six panes the scripture desk is: what is being said,
+ *   what scripture was heard in it, the feed of verses shown and verses put
+ *   aside, the Bible itself searched by word or by meaning, the original
+ *   languages behind the staged verse, and what the screen will look like.
  * - **Songs**: the song library at the width a lyric needs, the queue beside
  *   what is live, and nothing about scripture detection.
  * - **Slides**: a deck read as thumbnails, which wants more room than anything
@@ -63,6 +65,10 @@ export interface WorkspaceShape {
    * the chapter navigator, and a deck has nothing to ask of the Greek. The
    * first is where the arrangement opens — a tuple with at least one, so that
    * "the first tab" is something the desk can rely on.
+   *
+   * One name means one pane and no tab strip. Scripture is that: the pane is
+   * the Bible, and a row of tabs above it with nothing to switch to would be a
+   * chooser offering one choice.
    */
   tabs: [LibraryTab, ...LibraryTab[]];
 
@@ -77,7 +83,18 @@ export interface WorkspaceShape {
   transcript: boolean;
   /** The verses, references and paraphrases heard. Scripture work only. */
   detected: boolean;
-  /** What is queued next. Everywhere except scripture-only work. */
+  /**
+   * The scripture feed: verses shown this session, and verses put aside.
+   *
+   * Two lists that answer two questions — what did we read, and what are we
+   * coming back to — in one pane, because on a scripture desk they are the
+   * same glance. See ScriptureFeed.
+   */
+  feed: boolean;
+  /**
+   * The running order on its own, for the jobs that do not keep a verse
+   * history worth reading. The feed's Queue tab shows the same list.
+   */
   queue: boolean;
   /**
    * Columns for that row, in the order the panels are written.
@@ -101,13 +118,18 @@ export interface WorkspaceShape {
 export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
   scripture: {
     label: "Scripture",
-    hint: "The transcript, what was heard, the chapter and the original languages",
-    tabs: ["Scripture", "History", "Themes"],
+    hint: "What is being said, what was heard, the Bible, the original languages",
+    // One name, so the pane is the Bible and carries no tab strip. Themes and
+    // the session's own history were tabs here and are neither of them
+    // scripture: a look is chosen once before a service, and the verses shown
+    // are a feed of their own in the row above.
+    tabs: ["Scripture"],
     transcript: true,
     detected: true,
-    queue: true,
+    feed: true,
+    queue: false,
     topColumns:
-      "minmax(200px,0.7fr) minmax(240px,0.9fr) minmax(360px,1.5fr) minmax(180px,0.6fr)",
+      "minmax(200px,0.7fr) minmax(240px,0.9fr) minmax(360px,1.5fr) minmax(220px,0.75fr)",
     original: true,
     columns: "minmax(0,1fr) minmax(0,0.8fr) minmax(320px,0.95fr)",
     basis: "38%",
@@ -121,6 +143,7 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     // library needs.
     transcript: false,
     detected: false,
+    feed: false,
     queue: true,
     topColumns: "minmax(360px,1.6fr) minmax(220px,0.6fr)",
     original: false,
@@ -133,6 +156,7 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     tabs: ["Slides", "Media", "Themes"],
     transcript: false,
     detected: false,
+    feed: false,
     queue: true,
     topColumns: "minmax(360px,1.6fr) minmax(220px,0.6fr)",
     original: false,
@@ -145,6 +169,7 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     tabs: ["Schedule", "History", "Songs", "Slides"],
     transcript: false,
     detected: false,
+    feed: false,
     queue: true,
     topColumns: "minmax(360px,1.6fr) minmax(220px,0.6fr)",
     original: false,

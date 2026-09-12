@@ -5,7 +5,9 @@ import {
   presentableLabel,
   presentableText,
   type Presentable,
+  type Shown,
 } from "../lib/usePresentation";
+import type { IndexStatus } from "../lib/useSemanticIndex";
 import { ChapterNavigator } from "./ChapterNavigator";
 import type { ProjectorTheme } from "../lib/theme";
 import type { Ticker } from "../lib/projector";
@@ -39,6 +41,7 @@ export function ScripturePanel({
   onPreviewRange,
   previewVerseIds,
   liveVerseIds,
+  index,
   follow,
   history,
   schedule,
@@ -66,9 +69,11 @@ export function ScripturePanel({
   onPreviewRange: (verses: Verse[], andShow?: boolean) => void;
   previewVerseIds: number[];
   liveVerseIds: number[];
+  /** The embedding index, which the Bible pane searches by meaning. */
+  index: IndexStatus;
   /** The staged verse the chapter list should follow. */
   follow: Verse | null;
-  history: Presentable[];
+  history: Shown[];
   schedule: ScheduleController;
   onStageEntry: (index: number) => Promise<Presentable | null>;
   onPreviewItem: (item: Presentable, andShow?: boolean) => void;
@@ -102,14 +107,26 @@ export function ScripturePanel({
   // screen and one runs along the edge of it.
   const [slidesMode, setSlidesMode] = useState<"slides" | "notice">("slides");
 
+  /*
+   * One library means no chooser.
+   *
+   * A strip of tabs with a single tab in it is a control that cannot do
+   * anything, and it takes the header width that the panel's own name should
+   * have. The Scripture arrangement is exactly that case: its pane is the
+   * Bible.
+   */
+  const choosing = tabs.length > 1;
+
   return (
     <Panel
       // The tabs say what this panel holds; a "LIBRARY" heading beside them
-      // would only take width the seventh tab needs.
-      title=""
+      // would only take width the seventh tab needs. With nothing to choose
+      // between, the one name becomes the heading instead.
+      title={choosing ? "" : tab}
       accent="teal"
       bodyClassName={tab === "History" ? "" : "overflow-hidden"}
       actions={
+        !choosing ? null : (
         <div className="flex flex-wrap justify-end gap-0">
           {tabs.map((name) => (
             <button
@@ -131,6 +148,7 @@ export function ScripturePanel({
             </button>
           ))}
         </div>
+        )
       }
     >
       {tab === "Scripture" ? (
@@ -151,6 +169,7 @@ export function ScripturePanel({
             onPreviewRange={onPreviewRange}
             previewVerseIds={previewVerseIds}
             liveVerseIds={liveVerseIds}
+            index={index}
             follow={follow}
           />
         )
@@ -260,19 +279,19 @@ export function ScripturePanel({
           </EmptyState>
         ) : (
           <div className="flex flex-col p-1">
-            {history.map((item) => (
+            {history.map((shown) => (
               <button
-                key={keyOf(item)}
+                key={keyOf(shown.item)}
                 type="button"
-                onClick={() => onPreviewItem(item)}
-                onDoubleClick={() => onPreviewItem(item, true)}
+                onClick={() => onPreviewItem(shown.item)}
+                onDoubleClick={() => onPreviewItem(shown.item, true)}
                 className="rounded px-2 py-1.5 text-left transition-colors hover:bg-pulpitry-raised focus-visible:focus-ring"
               >
                 <span className="block text-[11px] text-pulpitry-muted">
-                  {presentableLabel(item)}
+                  {presentableLabel(shown.item)}
                 </span>
                 <span className="line-clamp-2 text-[12.5px] text-pulpitry-text">
-                  {presentableText(item)}
+                  {presentableText(shown.item)}
                 </span>
               </button>
             ))}

@@ -424,6 +424,39 @@ fn semantic_status(semantic: State<'_, Arc<Semantic>>) -> IndexStatus {
     semantic.status()
 }
 
+/// A verse found by meaning, and how close it came.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Found {
+    pub verse: Verse,
+    /// Cosine similarity, 0 to 1. Shown, because "how sure is this" is the
+    /// question an operator asks of a search that matched no words.
+    pub score: f32,
+}
+
+/// Searching the Bible by what a passage says rather than by what it spells.
+///
+/// The index has been here since paraphrase matching shipped and only speech
+/// could reach it, which left an operator who *remembers* a passage without
+/// remembering its words — "the one about the widow's offering" — with nothing
+/// but a reference lookup that cannot help them.
+///
+/// An empty list is a real answer, not a failure: nothing came close enough.
+/// Whether the index exists at all is a separate question, and the panel asks
+/// it with `semantic_status` before searching.
+#[tauri::command]
+fn semantic_search(
+    semantic: State<'_, Arc<Semantic>>,
+    text: String,
+    limit: Option<usize>,
+) -> CommandResult<Vec<Found>> {
+    let found = semantic.search(&text, limit.unwrap_or(20)).map_err(to_message)?;
+    Ok(found
+        .into_iter()
+        .map(|(verse, score)| Found { verse, score })
+        .collect())
+}
+
 #[tauri::command]
 fn save_assist_key(
     app: tauri::AppHandle,
@@ -2454,6 +2487,7 @@ pub fn run() {
             generate_slides,
             export_summary,
             semantic_status,
+            semantic_search,
             get_live,
             set_live,
             get_audio,

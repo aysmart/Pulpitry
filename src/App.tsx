@@ -7,6 +7,7 @@ import { Detections } from "./components/Detections";
 import { OriginalPanel } from "./components/OriginalPanel";
 import { Panel, PanelCount } from "./components/Panel";
 import { QueueRail } from "./components/QueueRail";
+import { ScriptureFeed } from "./components/ScriptureFeed";
 import { ScripturePanel } from "./components/ScripturePanel";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { OutputsDialog } from "./components/OutputsDialog";
@@ -135,6 +136,7 @@ export default function App() {
     live,
     liveKey,
     history,
+    clearHistory,
     previewVerse,
     previewVerses,
     previewItem,
@@ -298,6 +300,25 @@ export default function App() {
       return staged;
     },
     [schedule, previewItem],
+  );
+
+  /**
+   * Taking an entry out of the running order, from wherever it is shown.
+   *
+   * The staged item is passed on rather than read back from `preview`: React
+   * has not re-rendered between the click that staged it and the one that sends
+   * it, so reading state here would put the *previous* item on screen — in
+   * front of a congregation, once, with no obvious cause. Written once because
+   * two lists now show the same queue, and two copies of this would be two
+   * chances to get that wrong.
+   */
+  const stageFromQueue = useCallback(
+    (index: number, andShow?: boolean) => {
+      void stageEntry(index).then((staged) => {
+        if (andShow && staged) showItem(staged);
+      });
+    },
+    [stageEntry, showItem],
   );
 
   useEffect(() => {
@@ -938,6 +959,31 @@ export default function App() {
             media={media}
             ticker={ticker}
           />
+          {/*
+            On the scripture desk the queue is half a pane: the other half is
+            what has already been read. Two lists, one glance, and the same
+            running order underneath -- putting a verse aside to come back to
+            and putting it in the plan are the same act.
+          */}
+          {shape.feed ? (
+            <ScriptureFeed
+              history={history}
+              onClearHistory={clearHistory}
+              entries={schedule.entries}
+              name={schedule.name}
+              onStage={stageFromQueue}
+              onRemove={schedule.removeAt}
+              onClearEntries={schedule.clearEntries}
+              onPreviewItem={(item, andShow) =>
+                andShow ? showItem(item) : previewItem(item)
+              }
+              keyOf={keyOf}
+              previewKey={preview ? keyOf(preview) : null}
+              liveKey={liveKey}
+              activeLabel={live?.caption || null}
+            />
+          ) : null}
+
           {shape.queue ? (
           <Panel
             title="Queue"
@@ -952,17 +998,7 @@ export default function App() {
             <QueueRail
               entries={schedule.entries}
               name={schedule.name}
-              onStage={(index, andShow) => {
-                /*
-                 * The staged item, not `preview`: React has not re-rendered
-                 * between the click that staged it and the one that sends it, so
-                 * reading state here would put the *previous* item on screen --
-                 * in front of a congregation, once, with no obvious cause.
-                 */
-                void stageEntry(index).then((staged) => {
-                  if (andShow && staged) showItem(staged);
-                });
-              }}
+              onStage={stageFromQueue}
               onRemove={schedule.removeAt}
               activeLabel={live?.caption || null}
             />
@@ -1013,6 +1049,9 @@ export default function App() {
             /* The same verse the Original panel follows, so the chapter list and
              the Greek beside it are never looking at different places. */
             liveVerseIds={live?.ids ?? []}
+            /* So the pane can search by meaning, and say why it cannot when
+               the index is still building or switched off. */
+            index={semanticIndex}
             follow={originalVerse}
             history={history}
             schedule={schedule}

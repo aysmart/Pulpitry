@@ -57,6 +57,26 @@ export const getChapter = (
 export const searchVerses = (translation: string, query: string, limit = 50) =>
   invoke<Verse[]>("search_verses", { translation, query, limit });
 
+/** A verse found by meaning, with how close it came. 0 to 1. */
+export interface Found {
+  verse: Verse;
+  score: number;
+}
+
+/**
+ * The Bible searched by what a passage says rather than by what it spells.
+ *
+ * Answers the question a word search cannot: "the one about the widow's
+ * offering". It reads the embedding index paraphrase matching builds, so it
+ * searches the *working* translation whatever the panel happens to be showing,
+ * and it needs that index to be ready — `semanticStatus` says whether it is.
+ *
+ * No translation argument for the same reason: there is one index, and it
+ * belongs to the translation detection runs against.
+ */
+export const semanticSearch = (text: string, limit = 20) =>
+  invoke<Found[]>("semantic_search", { text, limit });
+
 /**
  * The same passage, drawn from another translation.
  *

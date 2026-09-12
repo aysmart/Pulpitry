@@ -41,6 +41,14 @@ const REPORT_EVERY: usize = 512;
 const TOP_N: usize = 3;
 /// Below this many words there is not enough meaning to embed usefully.
 const MIN_WORDS: usize = 8;
+/// The floor for a search somebody asked for, rather than one that interrupts.
+///
+/// Low on purpose. The operator's threshold exists to keep unasked-for guesses
+/// off a panel mid-sermon; an operator who has typed a description wants the
+/// nearest verses to it, and a strict floor would answer a loosely phrased
+/// question with nothing at all. This only keeps out text with no scriptural
+/// neighbour whatsoever.
+const SEARCH_FLOOR: f32 = 0.25;
 /// A verse already suggested is not repeated for this long.
 const REPEAT_SUPPRESSION: std::time::Duration = std::time::Duration::from_secs(120);
 
@@ -464,6 +472,61 @@ impl Semantic {
                 hits.iter()
                     .find(|(id, _)| *id == verse.id)
                     .map(|(_, score)| (verse, *score))
+            })
+            .collect())
+    }
+
+    /// The same index, searched with text the operator typed.
+    ///
+    /// Separate from [`Self::matches_for`] because the threshold means two
+    /// different things. That one decides, unprompted, whether to put a passage
+    /// in front of somebody mid-service, so it has to be strict: a wrong guess
+    /// there spends attention nobody offered. This one was *asked* — somebody
+    /// typed "the widow who gave everything she had" — and answering that with
+    /// an empty panel because the phrasing was loose reads as a broken search
+    /// rather than as a careful one. So only [`SEARCH_FLOOR`] applies, and the
+    /// scores come back so the panel can show how close each verse came.
+    ///
+    /// Needs the index, which means paraphrase matching has to be on: the
+    /// vectors are dropped when it is turned off. Callers read [`Self::status`]
+    /// and say so, rather than reporting a search that found nothing.
+    pub fn search(&self, text: &str, limit: usize) -> Result<Vec<(Verse, f32)>> {
+        let text = text.trim();
+        if text.is_empty() || self.status.lock().state != "ready" {
+            return Ok(Vec::new());
+        }
+
+        let embedder = self.embedder()?;
+        let query = embedder.embed_one(text)?;
+
+        let hits = {
+            let vectors = self.vectors.read();
+            if vectors.len() == 0 {
+                return Ok(Vec::new());
+            }
+            vectors.nearest(&query, limit.clamp(1, 50))
+        };
+
+        let wanted: Vec<i64> = hits
+            .iter()
+            .filter(|(_, score)| *score >= SEARCH_FLOOR)
+            .map(|(id, _)| *id)
+            .collect();
+        if wanted.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Walked in score order rather than in the order the library hands the
+        // rows back: the closest verse is the answer, and a list that buries it
+        // third because of how SQLite found it is a worse answer.
+        let verses = self.library.verses_by_id(&wanted)?;
+        Ok(hits
+            .iter()
+            .filter_map(|(id, score)| {
+                verses
+                    .iter()
+                    .find(|verse| verse.id == *id)
+                    .map(|verse| (verse.clone(), *score))
             })
             .collect())
     }
