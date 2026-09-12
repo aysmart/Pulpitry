@@ -849,7 +849,7 @@ export default function App() {
         now, permanently visible beside the transcript that produced them.
       */}
       <main className="flex min-h-0 flex-1 flex-col gap-2 p-2">
-        <div className="grid min-h-0 flex-1 gap-2 [grid-template-columns:minmax(200px,0.7fr)_minmax(240px,0.9fr)_minmax(360px,1.5fr)_minmax(180px,0.6fr)]">
+        <div className="grid min-h-0 flex-1 gap-2 [grid-template-columns:minmax(170px,0.6fr)_minmax(200px,0.75fr)_minmax(300px,1.2fr)_minmax(300px,1.2fr)_minmax(170px,0.55fr)]">
           <TranscriptPanel
             lines={lines}
             interim={interim}
@@ -889,6 +889,21 @@ export default function App() {
               assistEnabled={settings?.assistEnabled ?? false}
             />
           </Panel>
+
+          {/*
+            Staged, then live, side by side.
+
+            These were a row apart -- live at the top of the window, the staged
+            preview down in the working row -- and the one act an operator
+            performs all service is moving a thing from one to the other. Two
+            panels a row apart made that a glance across the whole window, and
+            checking what is *about* to go up meant looking away from what is
+            up. Beside each other, the comparison is the layout.
+          */}
+          <PreviewPanel
+            preview={preview}
+            theme={settings?.projector ?? DEFAULT_THEME}
+          />
 
           <StagePanel
             preview={preview}
@@ -1162,10 +1177,6 @@ export default function App() {
           />
           ) : null}
 
-          <PreviewPanel
-            preview={preview}
-            theme={settings?.projector ?? DEFAULT_THEME}
-          />
         </div>
       </main>
 
