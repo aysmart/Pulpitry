@@ -28,6 +28,7 @@ import {
 } from "./lib/projector";
 import {
   DEFAULT_THEME,
+  getTheme,
   themeForWindow,
   onTheme,
   referenceStyle,
@@ -85,6 +86,16 @@ function Projector() {
   const [form, setForm] = useState<OverlayForm>("none");
   /** Empty follows the Scripture panel, which is what every window did. */
   const [translation, setTranslation] = useState("");
+  /*
+   * Whether the desk that owns the wall captions its words.
+   *
+   * Taken from the *shared* look rather than this window's, and only for this
+   * one question. An output that names a template of its own stops following
+   * the wall's look, which is right for its colours and its type and wrong for
+   * whether a caption exists at all: the song desk turns its titles off and a
+   * lower third with its own template went on printing them.
+   */
+  const [captions, setCaptions] = useState(true);
 
   /*
    * The page itself has to be see-through, not only the window around it.
@@ -164,6 +175,9 @@ function Projector() {
         setStageLive(look.stageLive);
       })
       .catch(() => undefined);
+    void getTheme()
+      .then((shared) => active && setCaptions(shared.showReference))
+      .catch(() => undefined);
     void getAudio()
       .then((current) => active && setAudio(current))
       .catch(() => undefined);
@@ -187,7 +201,10 @@ function Projector() {
       // The payload is the shared theme, which is right only for a window
       // following it. Re-asking costs one call on a settings save and is the
       // only version that stays correct for a window with its own template.
-      onTheme(() => {
+      onTheme((shared) => {
+        // The payload is the wall's look, which is the desk's; this window's
+        // own is re-asked for below because it may name a template.
+        if (active) setCaptions(shared.showReference);
         void themeForWindow(mine)
           .then((look) => {
             if (!active) return;
@@ -322,6 +339,7 @@ function Projector() {
           reference={drawn?.caption ?? null}
           text={plainText(drawn)}
           uppercase={uppercase}
+          captions={captions}
         />
       </div>
     );
@@ -390,9 +408,7 @@ function Projector() {
                   command={command}
                   progress={drawn.progress}
                 />
-                {theme.showReference &&
-                drawn.caption &&
-                !titledItself(drawn.body) ? (
+                {captions && drawn.caption && !titledItself(drawn.body) ? (
                   /* Its own typeface, size and colour, set by the theme. The
                      margin is in cqh like everything else in this frame, so it
                      holds its proportion whatever the screen is. */

@@ -19,6 +19,7 @@ export function OverlayView({
   reference,
   text,
   uppercase,
+  captions,
 }: {
   form: OverlayForm;
   theme: ProjectorTheme;
@@ -26,11 +27,26 @@ export function OverlayView({
   text: string | null;
   /** Whether this output sets its words in capitals. */
   uppercase: boolean;
+  /**
+   * Whether a title or reference is shown at all, where the desk has an
+   * opinion that differs from this output's own look.
+   *
+   * An output may name a template of its own -- a church's brand colours for
+   * the stream, say -- and then it stops following the wall's look entirely.
+   * That is right for *how* it is drawn and wrong for *whether a caption
+   * exists*, which is a decision about the words: the song desk says its
+   * titles are not shown and the lower third went on showing them.
+   *
+   * Absent falls back to this output's own theme, which is what a preview and
+   * anything without a desk behind it should use.
+   */
+  captions?: boolean;
 }) {
   if (!text || !text.trim()) return null;
 
   const plan = overlayPlan(form, theme, uppercase);
-  const showReference = theme.showReference && Boolean(reference);
+  const showReference =
+    (captions ?? theme.showReference) && Boolean(reference);
 
   return (
     <div
@@ -58,7 +74,22 @@ export function OverlayView({
             decides how many lines a screenful is, and a lower third showing
             the same screenful as one wrapped run is showing a different
             shape from the one the room is reading. */}
-        <span style={{ ...plan.body, whiteSpace: "pre-line" }}>{text}</span>
+        {/*
+          A block, and that is the whole of why these were ranged left.
+
+          Every form sets `textAlign` on the body, and this was a `span` --
+          inline, so the box hugs its words and the alignment applies to
+          nothing. The band is the block, and it never had an alignment of its
+          own, so a centred lower third was centred in name only.
+
+          `pre-line` because the breaks are meaning: the song desk decides how
+          many lines a screenful is, and the lower third shows the same one.
+        */}
+        <span
+          style={{ ...plan.body, display: "block", whiteSpace: "pre-line" }}
+        >
+          {text}
+        </span>
         {!plan.chip && !plan.inline && showReference ? (
           <span style={{ ...plan.reference, display: "block", opacity: 0.85 }}>
             {reference}

@@ -174,9 +174,13 @@ export function overlayPlan(
           padding: "1.1cqw 3cqw",
           display: "flex",
           alignItems: "baseline",
+          // The citation and the words centre together as a pair. A band the
+          // width of the screen with its text at the left edge reads as
+          // something that failed to load.
+          justifyContent: "center",
           gap: "1.6cqw",
         },
-        body: { ...banded, fontSize: `${2.0 * scale}cqw` },
+        body: { ...banded, fontSize: `${2.0 * scale}cqw`, textAlign: "center" },
         reference: {
           ...banded,
           fontSize: `${1.5 * scale}cqw`,
