@@ -27,6 +27,7 @@ import {
   withAlpha,
   type ProjectorTheme,
 } from "../lib/theme";
+import { DesignedView } from "./DesignedView";
 import { VideoSurface } from "./VideoSurface";
 
 /**
@@ -869,6 +870,16 @@ export function LiveBodyView({
   switch (body.kind) {
     case "composed":
       return <Composed body={body} style={style} theme={theme} />;
+
+    /*
+     * Laid out by hand, so nothing here decides anything.
+     *
+     * It ignores `style` deliberately: every other kind is sized by how much
+     * text there is, and on a designed slide the size is the design. The box
+     * it draws into is the whole frame, which `fillsFrame` is what arranges.
+     */
+    case "designed":
+      return <DesignedView elements={body.elements} theme={theme} />;
 
     case "scripture":
       return (

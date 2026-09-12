@@ -1,4 +1,10 @@
-import { fillsFrame, type LiveBody, type TextBlock } from "../lib/projector";
+import {
+  backgroundOf,
+  fillsFrame,
+  type LiveBody,
+  type TextBlock,
+} from "../lib/projector";
+import { withBackground } from "../lib/design";
 import type { ProjectorTheme } from "../lib/theme";
 import { Backdrop } from "./Backdrop";
 import { LiveBodyView, type Extent } from "./LiveBodyView";
@@ -14,7 +20,7 @@ import { LiveBodyView, type Extent } from "./LiveBodyView";
 export function SlideCanvas({
   blocks,
   body,
-  theme,
+  theme: churchTheme,
   progress = 0,
   onExtent,
 }: {
@@ -35,6 +41,16 @@ export function SlideCanvas({
    *  frame, so what it measures here is what the wall would. */
   onExtent?: (extent: Extent) => void;
 }) {
+  /*
+   * A designed deck brings its own background, and it wins here.
+   *
+   * The church's look is still underneath everything else -- the reference's
+   * typeface, the shadow, the texture -- but a deck built against a gradient
+   * has to be drawn against that gradient on every surface, or the library card
+   * and the wall show two different slides.
+   */
+  const theme = withBackground(churchTheme, backgroundOf(body));
+
   return (
     <div
       /*

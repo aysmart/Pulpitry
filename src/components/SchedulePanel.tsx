@@ -55,7 +55,11 @@ export function SchedulePanel({
   onRemoveAt: (index: number) => void;
   onMove: (index: number, delta: number) => void;
   onRelabel: (index: number, label: string) => void;
-  onStage: (index: number) => Promise<Presentable | null>;
+  /** Stages the entry. `andShow` puts it on screen in the same gesture. */
+  onStage: (
+    index: number,
+    andShow?: boolean,
+  ) => Promise<Presentable | null>;
 }) {
   // Where the operator is in the plan. Local because it means "what I last
   // put up from this list", which no other part of the app can know.
@@ -70,9 +74,9 @@ export function SchedulePanel({
     return running;
   }, []);
 
-  const stage = async (index: number) => {
+  const stage = async (index: number, andShow?: boolean) => {
     setActive(index);
-    const staged = await onStage(index);
+    const staged = await onStage(index, andShow);
     setMissing((current) =>
       staged
         ? current.filter((at) => at !== index)
@@ -164,6 +168,8 @@ export function SchedulePanel({
                     <button
                       type="button"
                       onClick={() => void stage(index)}
+                      onDoubleClick={() => void stage(index, true)}
+                      title="Click to stage, double-click to put it on screen"
                       className={`flex min-w-0 flex-1 items-baseline gap-2 rounded px-2 py-1.5 text-left transition-colors focus-visible:focus-ring ${
                         isActive
                           ? "bg-pulpitry-teal-dim text-pulpitry-text"

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { adjacentVerse, getChapter, listBooks, type Verse } from "./bible";
 import type { SongSection } from "./catalog";
+import type { Background } from "./design";
 import {
   componentText,
   getLive,
@@ -28,6 +29,8 @@ export type Presentable =
       title: string;
       index: number;
       sections: SongSection[];
+      /** A designed deck's background, carried so what goes live has it. */
+      background?: Background | null;
     }
   | {
       kind: "image";
@@ -144,6 +147,28 @@ export function toLiveContent(item: Presentable): LiveContent {
   }
   if (item.kind === "lyric") {
     const section = currentSection(item);
+
+    /*
+     * Laid out by hand, and therefore the whole slide.
+     *
+     * Checked before components on purpose: the editor grows elements out of
+     * components the first time a generated deck is opened in it, and from
+     * that moment the operator's arrangement is the one that was chosen. The
+     * background travels with it, because what is live crosses to four other
+     * surfaces and none of them can read the library.
+     */
+    if (section?.elements && section.elements.length > 0) {
+      return {
+        body: {
+          kind: "designed",
+          elements: section.elements,
+          background: item.background ?? null,
+        },
+        caption: section.label || item.title,
+        ids: [],
+        progress: 0,
+      };
+    }
     /*
      * A deck's section is a slide, and is drawn as one.
      *

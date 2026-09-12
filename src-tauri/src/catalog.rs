@@ -122,6 +122,16 @@ pub struct SongSection {
     pub components: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layout: Option<String>,
+    /*
+     * The slide as the operator laid it out, carried through the same way.
+     *
+     * Positions, type and colour for every element on a hand-designed slide.
+     * This side neither reads nor validates one -- see the note on
+     * `components` above, and the four features that were lost to this exact
+     * hole before it carried anything at all.
+     */
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub elements: Option<serde_json::Value>,
 }
 
 /// Whether a song's words may lawfully be put on a screen.
@@ -264,7 +274,19 @@ pub enum ItemBody {
      * and some lines -- and inventing a second one would mean two things to
      * keep in step every time either changed.
      */
-    Deck { sections: Vec<SongSection> },
+    Deck {
+        sections: Vec<SongSection>,
+        /*
+         * What every slide in a designed deck is drawn against.
+         *
+         * A background in the same fields a theme uses, so the window that
+         * draws it needs no new code. Absent on every deck made before the
+         * editor, which reads as "the church's own look" -- and that is exactly
+         * how those decks are drawn today.
+         */
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        background: Option<serde_json::Value>,
+    },
     /// A service plan: the running order for one gathering.
     Service { entries: Vec<PlanEntry> },
 }
@@ -302,7 +324,7 @@ impl ItemBody {
             // Searched by what is on the slides, like a song is searched by its
             // words: an operator looking for last month's sermon remembers a
             // phrase from it long before they remember what it was called.
-            ItemBody::Deck { sections } => sections
+            ItemBody::Deck { sections, .. } => sections
                 .iter()
                 .flat_map(|section| {
                     std::iter::once(section.label.clone()).chain(section.lines.iter().cloned())
@@ -361,11 +383,14 @@ impl Catalog {
         // What arrived, for a deck. Components have gone missing between the
         // frontend and the disk once already, and every layer looked correct
         // while they did.
-        if let ItemBody::Deck { sections } = &item.body {
+        if let ItemBody::Deck { sections, background } = &item.body {
             let carrying = sections.iter().filter(|s| s.components.is_some()).count();
+            let designed = sections.iter().filter(|s| s.elements.is_some()).count();
             crate::log_line!(
-                "[catalog] saving a deck: {} sections, {carrying} carrying components",
-                sections.len()
+                "[catalog] saving a deck: {} sections, {carrying} carrying components, \
+                 {designed} laid out by hand, background {}",
+                sections.len(),
+                if background.is_some() { "set" } else { "from the theme" }
             );
         }
         let body = serde_json::to_string(&item.body)?;
@@ -684,6 +709,7 @@ mod tests {
                     lines: lines.iter().map(|line| line.to_string()).collect(),
                     components: None,
                     layout: None,
+                    elements: None,
                 }],
                 rights: SongRights::default(),
             },
@@ -794,6 +820,7 @@ mod tests {
             lines: vec!["a line".into()],
             components: None,
             layout: None,
+            elements: None,
         };
         let back = serde_json::to_value(&section).unwrap();
         assert!(back.get("components").is_none(), "a null was written for a song");
@@ -829,7 +856,13 @@ mod tests {
         let catalog = Catalog::in_memory().expect("catalog");
         let bodies = vec![
             ItemBody::Song {
-                sections: vec![SongSection { label: "Chorus".into(), lines: vec!["x".into()], components: None, layout: None }],
+                sections: vec![SongSection {
+                    label: "Chorus".into(),
+                    lines: vec!["x".into()],
+                    components: None,
+                    layout: None,
+                    elements: None,
+                }],
                 rights: SongRights::default(),
             },
             ItemBody::Image { fill: true },
@@ -891,6 +924,7 @@ mod tests {
                 lines: vec!["Amazing grace! How sweet the sound".into()],
                 components: None,
                 layout: None,
+                elements: None,
             }],
             scripture: vec!["Eph 2:4-9".into()],
         }
@@ -940,6 +974,7 @@ mod tests {
                 lines: vec!["the operator's own wording".into()],
                 components: None,
                 layout: None,
+                elements: None,
             }],
             rights: SongRights::default(),
         };

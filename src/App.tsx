@@ -299,31 +299,31 @@ export default function App() {
   const { ticker, change: changeTicker } = useTicker();
 
   const stageEntry = useCallback(
-    async (index: number) => {
+    async (index: number, andShow?: boolean) => {
       const staged = await schedule.stage(index);
-      if (staged) previewItem(staged);
+      if (!staged) return staged;
+      previewItem(staged);
+      // The same rule as every list: one click stages, two puts it up. The
+      // item is passed on rather than read back from `preview`, which has not
+      // re-rendered yet.
+      if (andShow) showItem(staged);
       return staged;
     },
-    [schedule, previewItem],
+    [schedule, previewItem, showItem],
   );
 
   /**
    * Taking an entry out of the running order, from wherever it is shown.
    *
-   * The staged item is passed on rather than read back from `preview`: React
-   * has not re-rendered between the click that staged it and the one that sends
-   * it, so reading state here would put the *previous* item on screen — in
-   * front of a congregation, once, with no obvious cause. Written once because
-   * two lists now show the same queue, and two copies of this would be two
-   * chances to get that wrong.
+   * Written once because three lists now show the same queue — the rail, the
+   * scripture feed and the plan — and three copies of the staging rule would be
+   * three chances to get it wrong.
    */
   const stageFromQueue = useCallback(
     (index: number, andShow?: boolean) => {
-      void stageEntry(index).then((staged) => {
-        if (andShow && staged) showItem(staged);
-      });
+      void stageEntry(index, andShow);
     },
-    [stageEntry, showItem],
+    [stageEntry],
   );
 
   useEffect(() => {
@@ -906,7 +906,16 @@ export default function App() {
                 liveKey={liveKey}
                 keyOf={keyOf}
                 theme={settings?.projector ?? DEFAULT_THEME}
-                onGoToSlide={goToSlide}
+                /* One click stages, two puts it up -- the same rule as every
+                   other list in the window. Built from the staged deck rather
+                   than through goToSlide, which keeps whatever was live live:
+                   right for a spoken instruction, wrong for a click. */
+                onSelect={(index, andShow) => {
+                  if (preview?.kind !== "lyric") return;
+                  const slide = { ...preview, index };
+                  if (andShow) showItem(slide);
+                  else previewItem(slide);
+                }}
               />
 
               <ScripturePanel

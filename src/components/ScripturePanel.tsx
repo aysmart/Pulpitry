@@ -75,7 +75,10 @@ export function ScripturePanel({
   follow: Verse | null;
   history: Shown[];
   schedule: ScheduleController;
-  onStageEntry: (index: number) => Promise<Presentable | null>;
+  onStageEntry: (
+    index: number,
+    andShow?: boolean,
+  ) => Promise<Presentable | null>;
   onPreviewItem: (item: Presentable, andShow?: boolean) => void;
   keyOf: (item: Presentable) => string;
   previewKey: string | null;
@@ -225,6 +228,7 @@ export function ScripturePanel({
             {slidesMode === "slides" ? (
               <SlideLibrary
                 theme={theme}
+                translation={translation}
                 onPreview={onPreviewItem}
                 previewKey={previewKey}
                 liveKey={liveKey}

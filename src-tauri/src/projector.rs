@@ -301,6 +301,21 @@ pub enum LiveBody {
      * drew the table perfectly, because Preview never crosses this bridge.
      */
     Composed { components: Vec<serde_json::Value>, layout: String },
+    /**
+     * A slide laid out by hand, with the deck's background travelling with it.
+     *
+     * Carried, not understood, for the same reason `Composed` is: this side
+     * hands what is live to the windows that draw it and never draws one
+     * itself. The background is here rather than read from settings because
+     * four surfaces render this -- the projector, the second display, the
+     * mirror and a paired Castavox -- and a deck whose gradient stayed in the
+     * library would be drawn against whatever theme each of them held.
+     */
+    Designed {
+        elements: Vec<serde_json::Value>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        background: Option<serde_json::Value>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

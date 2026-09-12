@@ -82,6 +82,10 @@ export function presentableFor(item: Item): Presentable | null {
         title: item.title,
         index: 0,
         sections: item.body.sections,
+        // What a designed deck is drawn against. Carried here because this is
+        // the only place that has the item in hand; by the time a slide is
+        // live, nothing downstream can read the library.
+        background: item.body.background ?? null,
       };
     case "image":
       // The file is the item. Without a path there is nothing to show, which

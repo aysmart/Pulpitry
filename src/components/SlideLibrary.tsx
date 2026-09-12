@@ -7,6 +7,7 @@ import {
   type DeckTemplate,
 } from "../lib/deckTemplates";
 import { componentText, type LiveBody, type TextBlock } from "../lib/projector";
+import { blankDeck, DeckEditor } from "./DeckEditor";
 import { presentableFor } from "../lib/schedule";
 import type { ProjectorTheme } from "../lib/theme";
 import type { Presentable } from "../lib/usePresentation";
@@ -116,6 +117,7 @@ function templateText(template: DeckTemplate): string {
  */
 export function SlideLibrary({
   theme,
+  translation,
   onPreview,
   previewKey,
   liveKey,
@@ -123,6 +125,8 @@ export function SlideLibrary({
   onError,
 }: {
   theme: ProjectorTheme;
+  /** Which Bible a verse placed on a designed slide is read from. */
+  translation: string;
   /**
    * Stages an item. `andShow` puts it on screen in the same gesture — a
    * double-click, for when the operator already knows what they want there.
@@ -136,6 +140,10 @@ export function SlideLibrary({
   const [slides, setSlides] = useState<Item[]>([]);
   const [shelf, setShelf] = useState<Shelf>("all");
   const [query, setQuery] = useState("");
+  /** The deck open in the designer, if any. */
+  const [designing, setDesigning] = useState<Item | null>(null);
+  /** The template being copied, so one press cannot make two decks. */
+  const [using, setUsing] = useState<string | null>(null);
   const [editing, setEditing] = useState<{
     id: number | null;
     title: string;
@@ -208,6 +216,17 @@ export function SlideLibrary({
    * order not to use it.
    */
   const use = async (template: DeckTemplate) => {
+    /*
+     * One copy per press, whatever the hand did.
+     *
+     * Every other card in this window answers a double-click by going live, so
+     * hands arrive here already double-clicking -- and without this guard the
+     * second click starts a second save before the first has returned, both see
+     * the same set of titles, and the church ends up with two decks of the same
+     * name from one gesture.
+     */
+    if (using) return;
+    setUsing(template.id);
     try {
       // A second "Sunday service" would be two cards the operator cannot tell
       // apart on the Sunday they need one of them.
@@ -226,8 +245,39 @@ export function SlideLibrary({
       if (staged) onPreview(staged);
     } catch (err) {
       fail(err);
+    } finally {
+      setUsing(null);
     }
   };
+
+  /*
+   * Laying a deck out, in a screen of its own.
+   *
+   * Full-screen rather than inside this panel: positioning elements needs the
+   * window, and it is the one job in Pulpitry that is not done during a service
+   * -- so it is the one place where taking the whole window costs nothing. The
+   * fixed strip's Go live and Clear stay reachable by closing it, which is one
+   * press.
+   */
+  if (designing) {
+    return (
+      <DeckEditor
+        item={designing}
+        theme={theme}
+        translation={translation}
+        onClose={() => setDesigning(null)}
+        onSaved={(saved) => {
+          setDesigning(null);
+          void refresh();
+          // Staged, not sent: saving a deck is finishing it, and the operator
+          // decides when a congregation sees it.
+          const staged = presentableFor(saved);
+          if (staged) onPreview(staged);
+        }}
+        onError={onError}
+      />
+    );
+  }
 
   const needle = query.trim().toLowerCase();
   const mine = slides.filter(
@@ -456,10 +506,8 @@ export function SlideLibrary({
                 {!needle ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      setFocused(0);
-                      setEditing({ id: null, title: "", blocks: [blankBlock()] });
-                    }}
+                    onClick={() => setDesigning(blankDeck())}
+                    title="Lay a deck out yourself: words, verses, shapes and pictures"
                     className="group flex flex-col gap-1 text-left focus-visible:focus-ring"
                   >
                     <span
@@ -469,10 +517,10 @@ export function SlideLibrary({
                       +
                     </span>
                     <span className="block truncate text-[11px] text-pulpitry-text">
-                      Blank slide
+                      Blank deck
                     </span>
                     <span className="block truncate text-[10.5px] text-pulpitry-muted">
-                      Write one page yourself
+                      Start with one page
                     </span>
                   </button>
                 ) : null}
@@ -526,12 +574,20 @@ export function SlideLibrary({
                       </button>
 
                       <span className="absolute top-1 right-1 hidden gap-0.5 group-hover:flex">
-                        {item.body.kind === "slide" ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              item.body.kind === "slide" &&
-                              (setFocused(0),
+                        {/* Two editors, because there are two kinds of thing
+                            here. A deck opens in the designer; a single slide
+                            written before the designer existed keeps the
+                            line-by-line editor it was made in, which is still
+                            the quickest way to type a notice. */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (item.body.kind === "deck") {
+                              setDesigning(item);
+                              return;
+                            }
+                            if (item.body.kind === "slide") {
+                              setFocused(0);
                               setEditing({
                                 id: item.id,
                                 title: item.title,
@@ -539,13 +595,13 @@ export function SlideLibrary({
                                   item.body.blocks.length > 0
                                     ? item.body.blocks
                                     : [blankBlock()],
-                              }))
+                              });
                             }
-                            className="rounded bg-pulpitry-ink/80 px-1.5 py-0.5 text-[11px] text-pulpitry-muted hover:text-pulpitry-text focus-visible:focus-ring"
-                          >
-                            Edit
-                          </button>
-                        ) : null}
+                          }}
+                          className="rounded bg-pulpitry-ink/80 px-1.5 py-0.5 text-[11px] text-pulpitry-muted hover:text-pulpitry-text focus-visible:focus-ring"
+                        >
+                          Edit
+                        </button>
                         <button
                           type="button"
                           onClick={() => item.id !== null && void remove(item.id)}
@@ -584,8 +640,9 @@ export function SlideLibrary({
                       key={template.id}
                       type="button"
                       onClick={() => void use(template)}
+                      disabled={using !== null}
                       title={`${template.hint}. Adds a copy to your decks.`}
-                      className="group flex flex-col gap-1 text-left focus-visible:focus-ring"
+                      className="group flex flex-col gap-1 text-left disabled:opacity-60 focus-visible:focus-ring"
                     >
                       <span className="block rounded ring-pulpitry-teal group-hover:ring-2">
                         <SlideCanvas

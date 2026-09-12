@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import type { Background, SlideElement } from "./design";
 import type { TextBlock } from "./projector";
 import type { ProjectorTheme } from "./theme";
 import type { SlideComponent, SlideLayout } from "./projector";
@@ -23,6 +24,17 @@ export interface SongSection {
    */
   components?: SlideComponent[];
   layout?: SlideLayout;
+  /**
+   * The slide as the operator laid it out, where they did.
+   *
+   * Beside `components` rather than replacing them, on the same terms `blocks`
+   * and `components` already coexist: a generated sermon deck has components
+   * and no elements, and it goes on drawing exactly as it did. Where elements
+   * are present they *are* the slide — see lib/design.ts — and the editor
+   * clears the components it grew from, so nothing ends up with two layouts
+   * that disagree.
+   */
+  elements?: SlideElement[];
 }
 
 /** Whether a song's words may lawfully be put on a screen. */
@@ -132,7 +144,20 @@ export type ItemBody =
    * It borrows a song's section shape because it *is* that shape — a label and
    * some lines — so everything that already steps a song steps this too.
    */
-  | { kind: "deck"; sections: SongSection[] }
+  | {
+      kind: "deck";
+      sections: SongSection[];
+      /**
+       * What every slide in it is drawn against.
+       *
+       * On the deck rather than on each slide because a church makes a deck to
+       * look like one thing, and per-slide backgrounds are mostly a way to end
+       * up with a deck that does not match itself. Absent on every deck made
+       * before the editor existed, which reads as "use the church's theme" —
+       * exactly how those decks look today.
+       */
+      background?: Background | null;
+    }
   /** A service plan: the running order for one gathering. */
   | { kind: "service"; entries: PlanEntry[] };
 

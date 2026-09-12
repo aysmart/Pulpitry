@@ -35,15 +35,16 @@ function wordsIn(section: SongSection): number {
  * found by pressing Next until it appeared, in front of everybody.
  *
  * So the whole deck is on screen, drawn by the real renderer on the church's
- * own look, numbered as an operator counts. Clicking one goes to it.
+ * own look, numbered as an operator counts.
  *
- * # Clicking moves the wall, when the wall is already showing this deck
+ * # One click stages, two puts it up
  *
- * Deliberately, and it is the rule the whole desk follows rather than a
- * decision taken here: if what a click replaces was live, the new one is live.
- * An operator running a deck and clicking slide four means slide four, and
- * making them click and then press Display is two acts for one intention. A
- * deck that is only staged stays staged.
+ * The same rule as every other list in the window — the chapter, the
+ * detections, the queue, the library — and the reason it has to be the same
+ * everywhere: an operator learns it once, under pressure, and a panel that
+ * broke the rule would put a slide in front of a congregation on a click
+ * somebody meant as a look. Staging is always safe here, and that is what
+ * makes the double-click worth having.
  *
  * # Word counts
  *
@@ -56,7 +57,7 @@ export function DeckStrip({
   liveKey,
   keyOf,
   theme,
-  onGoToSlide,
+  onSelect,
 }: {
   /** The staged deck or song, or null when what is staged is neither. */
   deck: Presentable | null;
@@ -64,8 +65,8 @@ export function DeckStrip({
   liveKey: string | null;
   keyOf: (item: Presentable) => string;
   theme: ProjectorTheme;
-  /** Counted from one, as the numbers on the slides are. */
-  onGoToSlide: (number: number) => void;
+  /** Stages that slide. `andShow` sends it in the same gesture. */
+  onSelect: (index: number, andShow?: boolean) => void;
 }) {
   const sections = deck?.kind === "lyric" ? deck.sections : [];
 
@@ -107,10 +108,11 @@ export function DeckStrip({
               <button
                 key={`${section.label}-${index}`}
                 type="button"
-                onClick={() => onGoToSlide(index + 1)}
+                onClick={() => onSelect(index)}
+                onDoubleClick={() => onSelect(index, true)}
                 title={`${section.label || `Slide ${index + 1}`} — ${words} ${
                   words === 1 ? "word" : "words"
-                }`}
+                }. Click to stage, double-click to put it on screen.`}
                 className={`group flex w-[15rem] shrink-0 flex-col gap-1 rounded border p-1.5 text-left transition-colors focus-visible:focus-ring ${
                   isLive
                     ? "border-pulpitry-gold-dim bg-pulpitry-gold/10"

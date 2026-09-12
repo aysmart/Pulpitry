@@ -53,9 +53,9 @@ pub struct Imported {
     pub rights: SongRights,
 }
 
-/// A block of a song. `components` and `layout` belong to slides, not songs.
+/// A block of a song. Components, layout and elements belong to slides.
 fn section(label: impl Into<String>, lines: Vec<String>) -> SongSection {
-    SongSection { label: label.into(), lines, components: None, layout: None }
+    SongSection { label: label.into(), lines, components: None, layout: None, elements: None }
 }
 
 /**

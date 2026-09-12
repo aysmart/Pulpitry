@@ -1,6 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+import {
+  elementsText,
+  type Background,
+  type SlideElement,
+} from "./design";
+
 export const EVENT_LIVE = "live:changed";
 
 export interface ScriptureLine {
@@ -297,6 +303,21 @@ export type LiveBody =
    * existed is a `richText` and still renders exactly as it did.
    */
   | { kind: "composed"; components: SlideComponent[]; layout: SlideLayout }
+  /**
+   * A slide laid out by hand: elements with positions, and the deck's own
+   * background.
+   *
+   * The background travels with the body rather than being read from settings,
+   * and it has to: what is live reaches the projector window, the second
+   * display, the mirror and a paired Castavox as one message, and a deck whose
+   * gradient lived only in the library would be drawn on four surfaces against
+   * whatever theme each of them happened to hold.
+   */
+  | {
+      kind: "designed";
+      elements: SlideElement[];
+      background?: Background | null;
+    }
   | { kind: "image"; path: string; fill: boolean }
   | { kind: "media"; path: string; looping: boolean; fill: boolean };
 
@@ -312,7 +333,22 @@ export type LiveBody =
  * that draw one cannot disagree about where its edges are.
  */
 export function fillsFrame(body: LiveBody): boolean {
+  // A designed slide is positioned against the whole frame: its coordinates
+  // are the frame's, so an inset would move every element on it inwards and
+  // the editor's canvas would stop being the truth.
+  if (body.kind === "designed") return true;
   return (body.kind === "image" || body.kind === "media") && body.fill;
+}
+
+/**
+ * The background a body brings with it, if any.
+ *
+ * Only a designed deck does. Every surface that paints a backdrop asks this
+ * and merges the answer over the church's theme, so the deck looks like itself
+ * wherever it is drawn.
+ */
+export function backgroundOf(body: LiveBody | undefined): Background | null {
+  return body?.kind === "designed" ? (body.background ?? null) : null;
 }
 
 export interface LiveContent {
@@ -360,6 +396,8 @@ export function bodyText(body: LiveBody): string {
       return body.blocks.map((block) => block.text).join("\n");
     case "composed":
       return body.components.map(componentText).join("\n");
+    case "designed":
+      return elementsText(body.elements);
     default:
       return "";
   }

@@ -566,6 +566,61 @@ pub fn shown_of(live: &LiveContent) -> Shown {
                 points,
             }
         }
+        /*
+         * A hand-designed slide, as the words that are on it.
+         *
+         * The design is deliberately not mirrored. The positions are against a
+         * 16:9 frame and the far screen is a card beside a camera, so honouring
+         * them would put a title halfway up a lower third and a gold rule
+         * across somebody's face. What travels is what was written, in the
+         * order it was placed, which is what reads in a strip.
+         *
+         * `elements` is JSON here for the same reason `components` is: this side
+         * carries a slide and never draws one.
+         */
+        LiveBody::Designed { elements, .. } => Shown::Words {
+            title: live.caption.clone(),
+            lines: elements
+                .iter()
+                .filter_map(|element| {
+                    let kind = element.get("kind")?.as_str()?;
+                    match kind {
+                        "text" => {
+                            let text = element.get("text")?.as_str()?.trim();
+                            (!text.is_empty()).then(|| text.to_string())
+                        }
+                        // The verse as the library gave it, not the reference:
+                        // a lower third showing "John 3:16" and nothing else is
+                        // a citation of something the viewer cannot read.
+                        "scripture" => {
+                            let lines = element.get("lines")?.as_array()?;
+                            let joined = lines
+                                .iter()
+                                .filter_map(|line| line.as_str())
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            let joined = joined.trim().to_string();
+                            (!joined.is_empty()).then_some(joined)
+                        }
+                        // A shape or a picture asserts nothing a strip of text
+                        // could carry.
+                        _ => None,
+                    }
+                })
+                .collect(),
+            table: None,
+            reference: elements
+                .iter()
+                .filter(|element| {
+                    element.get("kind").and_then(|k| k.as_str()) == Some("scripture")
+                })
+                .find_map(|element| {
+                    let reference = element.get("reference")?.as_str()?.trim();
+                    (!reference.is_empty()).then(|| reference.to_string())
+                })
+                .unwrap_or_default(),
+            points: Vec::new(),
+        },
         // Nothing a text overlay can honestly show.
         /*
          * A picture or a clip: showing, and unmirrorable.

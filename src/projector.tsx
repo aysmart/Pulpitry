@@ -8,6 +8,7 @@ import { listen } from "@tauri-apps/api/event";
 
 import {
   EVENT_STAGE,
+  backgroundOf,
   getStage,
   type StageState,
   closeProjector,
@@ -32,6 +33,7 @@ import {
   referenceStyle,
   type ProjectorTheme,
 } from "./lib/theme";
+import { withBackground } from "./lib/design";
 import { Backdrop } from "./components/Backdrop";
 import { OverlayView } from "./components/OverlayView";
 import { StageView } from "./components/StageView";
@@ -57,6 +59,9 @@ import "./styles.css";
  * under it.
  */
 function titledItself(body: LiveBody): boolean {
+  // A designed slide always has: whatever it says, it says where the operator
+  // put it, and a caption bolted underneath would land on top of their layout.
+  if (body.kind === "designed") return true;
   return (
     body.kind === "composed" &&
     body.components.some(
@@ -330,7 +335,9 @@ function Projector() {
       // draws agrees -- verse, lyric and slide alike.
       style={uppercase ? { textTransform: "uppercase" } : undefined}
     >
-      <Backdrop theme={theme} />
+      {/* A designed deck carries its own background, and the wall is the one
+          surface where getting that wrong is visible to everybody. */}
+      <Backdrop theme={withBackground(theme, backgroundOf(drawn?.body))} />
 
       <TickerBand ticker={ticker} theme={theme} />
 
