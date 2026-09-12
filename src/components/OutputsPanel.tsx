@@ -351,15 +351,27 @@ export function OutputsPanel({
                     }
                     className={FIELD}
                   >
-                    {OVERLAY_FORMS.map((form) => (
+                    {/*
+                      Three kinds of answer, and the first two are not shapes
+                      at all.
+
+                      "Whole screen" is a projector: a background and the words
+                      on it. "Stage display" is the platform's own screen, which
+                      a congregation never sees. Everything below them is
+                      furniture drawn on transparency for a switcher to key --
+                      and the church's own comes first, because once they have
+                      drawn one it is the one they mean.
+                    */}
+                    {OVERLAY_FORMS.filter((form) =>
+                      ["none", "stage"].includes(form.id),
+                    ).map((form) => (
                       <option key={form.id} value={form.id}>
                         {form.name}
                       </option>
                     ))}
-                    {/* The church's own, after the six that ship. An output
-                        pointed at one draws that and nothing else. */}
+
                     {shapes.length > 0 ? (
-                      <optgroup label="Yours">
+                      <optgroup label="Your shapes">
                         {shapes.map((drawn) => (
                           <option key={drawn.id} value={formFor(drawn.id ?? 0)}>
                             {drawn.title}
@@ -367,6 +379,28 @@ export function OutputsPanel({
                         ))}
                       </optgroup>
                     ) : null}
+
+                    {/*
+                      Kept, and last.
+
+                      Every one of these is now also a template in the shape
+                      library, where it can be copied and moved -- but an output
+                      can be pointed at the original with nothing drawn and
+                      nothing saved, which is the right answer for a church that
+                      wants a lower third and nothing to do with a studio. They
+                      are also what every installation already using one is
+                      pointed at, and a list that dropped them would show those
+                      outputs as having no shape at all.
+                    */}
+                    <optgroup label="Without drawing one">
+                      {OVERLAY_FORMS.filter(
+                        (form) => !["none", "stage"].includes(form.id),
+                      ).map((form) => (
+                        <option key={form.id} value={form.id}>
+                          {form.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </label>
 
@@ -452,9 +486,21 @@ export function OutputsPanel({
                   difference between a picture and something keyable is the whole
                   reason this pane exists. */}
               <p className="text-[11px] leading-snug text-pulpitry-muted">
-                {OVERLAY_FORMS.find(
-                  (form) => form.id === (output.overlay || "none"),
-                )?.hint ?? ""}
+                {/* A shape the church drew has no hint of ours to give: it is
+                    theirs, and saying anything about how it looks would be
+                    guessing at furniture we have never seen. Its name and the
+                    preview underneath are the description. */}
+                {shapeIdOf(output.overlay || "") !== null
+                  ? `Your own shape${
+                      shapes.find(
+                        (drawn) => drawn.id === shapeIdOf(output.overlay || ""),
+                      )
+                        ? `, ${shapes.find((drawn) => drawn.id === shapeIdOf(output.overlay || ""))!.title}`
+                        : " — which is no longer in the library, so this output draws nothing"
+                    }.`
+                  : (OVERLAY_FORMS.find(
+                      (form) => form.id === (output.overlay || "none"),
+                    )?.hint ?? "")}
                 {output.overlay && output.overlay !== "none"
                   ? " Sent with a transparent background, so a switcher can lay it over a camera."
                   : ""}
