@@ -296,7 +296,12 @@ export function TemplateLibrary({
                   <Tile
                     key={item.id}
                     name={item.title}
-                    hint={`Apply ${item.title}`}
+                    /* The shipped looks carry what they are for as their
+                       subtitle — "built for a camera", "for a hall with sun in
+                       it" — which is what an operator chooses by. A theme the
+                       church made itself has none, so it keeps the plain
+                       wording. */
+                    hint={item.subtitle.trim() || `Apply ${item.title}`}
                     theme={item.body.theme}
                     current={isCurrent(item.body.theme)}
                     onApply={() =>

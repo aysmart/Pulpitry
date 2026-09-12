@@ -1886,6 +1886,26 @@ fn second_state(projector: State<'_, Arc<Projector>>) -> projector::SecondState 
 }
 
 /// Reads the bundled hymn library and hands it to the catalog.
+/// Reads the looks that ship with the application and hands them to the catalogue.
+///
+/// Plain JSON rather than gzipped: twenty themes is twenty kilobytes, and a
+/// file somebody can open and read is worth more than the saving.
+fn seed_looks(app: &AppHandle, catalog: &Catalog) -> anyhow::Result<()> {
+    let path = app
+        .path()
+        .resolve("resources/looks.json", tauri::path::BaseDirectory::Resource)
+        .context("could not locate the bundled looks")?;
+    let manifest: catalog::LookManifest =
+        serde_json::from_str(&std::fs::read_to_string(&path)?)
+            .context("the bundled looks are malformed")?;
+
+    let added = catalog.import_looks(&manifest, &manifest.looks)?;
+    if added > 0 {
+        log_line!("[looks] added {added} of {}", manifest.looks.len());
+    }
+    Ok(())
+}
+
 fn seed_hymns(app: &AppHandle, catalog: &Catalog) -> anyhow::Result<()> {
     use std::io::Read;
 
@@ -2203,6 +2223,12 @@ pub fn run() {
                 let handle = app.handle().clone();
                 let catalog = Arc::clone(&catalog);
                 std::thread::spawn(move || {
+                    // The looks first: they are twenty rows and a church that
+                    // opens the theme list in the first minute should find
+                    // them there.
+                    if let Err(error) = seed_looks(&handle, &catalog) {
+                        crate::log_line!("[looks] {error:#}");
+                    }
                     if let Err(error) = seed_hymns(&handle, &catalog) {
                         // Not fatal, and deliberately not shown: the operator
                         // still has an app, just an empty song list, and an

@@ -64,6 +64,24 @@ pub struct HymnManifest {
     pub checksum: String,
 }
 
+/// The looks Pulpitry ships, as scripts/build-looks.mjs writes them.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LookManifest {
+    pub source: String,
+    pub checksum: String,
+    pub looks: Vec<BundledLook>,
+}
+
+/// One shipped look: a theme, and the sentence that says what it is for.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundledLook {
+    pub name: String,
+    pub hint: String,
+    pub theme: ProjectorTheme,
+}
+
 /// One hymn as the build script writes it.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -449,6 +467,59 @@ impl Catalog {
         Ok(imported)
     }
 
+    /**
+     * Seeds the looks that ship with the application.
+     *
+     * The same contract as the hymns: nothing happens once they are in, and a
+     * look whose name is already in the library is skipped whole rather than
+     * overwritten. A church that took "Midnight" and made it its own must not
+     * find that undone by an update -- and a church that deleted one it did
+     * not want must not find it back.
+     *
+     * Templates rather than a picker of its own, because an output is already
+     * pointed at a template: the foyer screen can be Paper while the stream's
+     * lower third is Stream, without anything new being invented for it.
+     */
+    pub fn import_looks(&self, manifest: &LookManifest, looks: &[BundledLook]) -> Result<usize> {
+        if self.meta("looks")?.as_deref() == Some(manifest.checksum.as_str()) {
+            return Ok(0);
+        }
+
+        let mut imported = 0;
+        for look in looks {
+            if self.titled("template", &look.name)? {
+                continue;
+            }
+            let item = Item {
+                id: None,
+                title: look.name.clone(),
+                // What it is for, which is what an operator chooses by.
+                subtitle: look.hint.clone(),
+                body: ItemBody::Template { theme: Box::new(look.theme.clone()) },
+                path: None,
+                updated_at: 0,
+            };
+            self.save(&item)?;
+            imported += 1;
+        }
+
+        self.set_meta("looks", &manifest.checksum)?;
+        Ok(imported)
+    }
+
+    /// Whether an item of this kind and title is already in the library.
+    pub(crate) fn titled(&self, kind: &str, title: &str) -> Result<bool> {
+        let connection = self.connection.lock();
+        let found: Option<i64> = connection
+            .query_row(
+                "SELECT id FROM catalog_items WHERE kind = ?1 AND title = ?2 LIMIT 1",
+                params![kind, title],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(found.is_some())
+    }
+
     /// Whether a song of this title is already in the library.
     pub(crate) fn song_titled(&self, title: &str) -> Result<bool> {
         let connection = self.connection.lock();
@@ -619,6 +690,77 @@ mod tests {
             path: None,
             updated_at: 0,
         }
+    }
+
+    fn look(name: &str) -> BundledLook {
+        BundledLook {
+            name: name.into(),
+            hint: "What it is for".into(),
+            theme: ProjectorTheme::default(),
+        }
+    }
+
+    fn look_manifest(checksum: &str) -> LookManifest {
+        LookManifest {
+            source: "test".into(),
+            checksum: checksum.into(),
+            looks: Vec::new(),
+        }
+    }
+
+    /// Seeded once, and not again on the next launch.
+    #[test]
+    fn the_looks_are_seeded_once() {
+        let catalog = Catalog::in_memory().expect("a library");
+        let looks = vec![look("Paper"), look("Ink")];
+
+        assert_eq!(catalog.import_looks(&look_manifest("abc"), &looks).unwrap(), 2);
+        // Same checksum: nothing to do, and no duplicate rows.
+        assert_eq!(catalog.import_looks(&look_manifest("abc"), &looks).unwrap(), 0);
+        assert_eq!(catalog.list("template", 50).unwrap().len(), 2);
+    }
+
+    /// A look the church has made its own is never overwritten.
+    ///
+    /// The whole point of seeding by name: an update that replaced "Midnight"
+    /// with ours would undo an evening of somebody's work, silently, and they
+    /// would have no way to tell what had happened.
+    #[test]
+    fn a_look_the_church_has_edited_is_left_alone() {
+        let catalog = Catalog::in_memory().expect("a library");
+        let mine = Item {
+            id: None,
+            title: "Midnight".into(),
+            subtitle: "Ours, with our blue".into(),
+            body: ItemBody::Template { theme: Box::new(ProjectorTheme::default()) },
+            path: None,
+            updated_at: 0,
+        };
+        catalog.save(&mine).expect("saved");
+
+        let added = catalog
+            .import_looks(&look_manifest("abc"), &[look("Midnight"), look("Paper")])
+            .expect("seeded");
+
+        assert_eq!(added, 1, "only the one they do not have");
+        let templates = catalog.list("template", 50).expect("templates");
+        assert_eq!(templates.len(), 2);
+        let kept = templates.iter().find(|item| item.title == "Midnight").expect("theirs");
+        assert_eq!(kept.subtitle, "Ours, with our blue", "their wording survived");
+    }
+
+    /// A new edition seeds again, and still adds only what is missing.
+    #[test]
+    fn a_changed_checksum_seeds_the_new_ones() {
+        let catalog = Catalog::in_memory().expect("a library");
+        assert_eq!(catalog.import_looks(&look_manifest("one"), &[look("Paper")]).unwrap(), 1);
+        assert_eq!(
+            catalog
+                .import_looks(&look_manifest("two"), &[look("Paper"), look("Slate")])
+                .unwrap(),
+            1,
+        );
+        assert_eq!(catalog.list("template", 50).unwrap().len(), 2);
     }
 
     #[test]
