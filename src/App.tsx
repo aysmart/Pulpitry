@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { AboutDialog } from "./components/AboutDialog";
 import { HistoryDialog } from "./components/HistoryDialog";
+import { DeckStrip } from "./components/DeckStrip";
 import { Detections } from "./components/Detections";
 import { OriginalPanel } from "./components/OriginalPanel";
 import { Panel, PanelCount } from "./components/Panel";
@@ -13,7 +14,11 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { OutputsDialog } from "./components/OutputsDialog";
 import { useFollow } from "./lib/useFollow";
 import { SlidesFromSermon } from "./components/SlidesFromSermon";
-import { PreviewPanel, StagePanel } from "./components/StagePanel";
+import {
+  MainOutput,
+  PreviewPanel,
+  StagePanel,
+} from "./components/StagePanel";
 import { TopBar } from "./components/TopBar";
 import { TranscriptPanel } from "./components/TranscriptPanel";
 import type { Tab } from "./components/ScripturePanel";
@@ -878,6 +883,106 @@ export default function App() {
         now, permanently visible beside the transcript that produced them.
       */}
       <main className="flex min-h-0 flex-1 flex-col gap-2 p-2">
+        {/*
+          The deck frame: work on the left, output on the right.
+
+          Running a deck is three questions in one glance — what is up, what is
+          next, what moves between them — so they share one column, and the
+          width that frees goes to the slides, which are read as pictures.
+        */}
+        {shape.frame === "deck" ? (
+          <div
+            className="grid min-h-0 flex-1 gap-2"
+            style={{ gridTemplateColumns: shape.columns }}
+          >
+            {/* Rows rather than a flex column: a grid child stretches to its
+                track, so the library fills whatever the deck strip leaves. */}
+            <div
+              className="grid min-h-0 gap-2"
+              style={{ gridTemplateRows: `${shape.basis} minmax(0,1fr)` }}
+            >
+              <DeckStrip
+                deck={preview}
+                liveKey={liveKey}
+                keyOf={keyOf}
+                theme={settings?.projector ?? DEFAULT_THEME}
+                onGoToSlide={goToSlide}
+              />
+
+              <ScripturePanel
+                tab={shownTab}
+                tabs={shape.tabs}
+                onTab={setTab}
+                translation={translation}
+                translations={library.translations}
+                onSelectTranslation={selectTranslation}
+                onPreview={(verse, andShow) =>
+                  andShow ? showVerse(verse) : previewVerse(verse)
+                }
+                onPreviewRange={(verses, andShow) =>
+                  andShow ? showVerses(verses) : previewVerses(verses)
+                }
+                previewVerseIds={
+                  preview?.kind === "scripture"
+                    ? preview.verses.map((verse) => verse.id)
+                    : []
+                }
+                liveVerseIds={live?.ids ?? []}
+                index={semanticIndex}
+                follow={originalVerse}
+                history={history}
+                schedule={schedule}
+                onStageEntry={stageEntry}
+                onPreviewItem={(item, andShow) =>
+                  andShow ? showItem(item) : previewItem(item)
+                }
+                keyOf={keyOf}
+                previewKey={preview ? keyOf(preview) : null}
+                liveKey={liveKey}
+                theme={settings?.projector ?? DEFAULT_THEME}
+                onApplyTheme={applyTheme}
+                ticker={ticker}
+                onTickerChange={changeTicker}
+                onError={setError}
+                libraryReady={library.ready && Boolean(translation)}
+                libraryImporting={library.importing}
+                libraryError={library.error}
+              />
+            </div>
+
+            <MainOutput
+              preview={preview}
+              live={live}
+              onDisplay={display}
+              onClear={clearLive}
+              onStep={(forward) => void step(forward)}
+              canFollow={follow.canFollow}
+              following={follow.following}
+              onFollowChange={(on) =>
+                on ? follow.setFollowing(true) : follow.stop()
+              }
+              advance={follow.advance}
+              onAdvanceChange={follow.setAdvance}
+              suggestion={follow.suggestion}
+              onTakeSuggestion={(index) => {
+                goToSlide(index + 1);
+                follow.clearSuggestion();
+              }}
+              onWind={wind}
+              onAdd={() => preview && schedule.add(preview)}
+              theme={settings?.projector ?? DEFAULT_THEME}
+              canStepBack={canStepBack}
+              canStepForward={canStepForward}
+              projectorOpen={projector.open}
+              audio={audio}
+              onAudioChange={changeAudio}
+              media={media}
+              ticker={ticker}
+            />
+          </div>
+        ) : null}
+
+        {shape.frame === "desk" ? (
         <div
           className="grid min-h-0 flex-1 gap-2"
           style={{ gridTemplateColumns: shape.topColumns }}
@@ -1005,6 +1110,7 @@ export default function App() {
           </Panel>
           ) : null}
         </div>
+        ) : null}
 
         {/*
           Fixed share of the height rather than a third of the width: a chapter
@@ -1024,6 +1130,7 @@ export default function App() {
           panels for one build, and the third silently wrapped onto a second row
           underneath the library rather than sitting beside it.
         */}
+        {shape.frame === "desk" ? (
         <div
           className="grid min-h-0 gap-2"
           style={{ flexBasis: shape.basis, gridTemplateColumns: shape.columns }}
@@ -1228,6 +1335,7 @@ export default function App() {
             theme={settings?.projector ?? DEFAULT_THEME}
           />
         </div>
+        ) : null}
       </main>
 
       <footer className="flex h-7 shrink-0 items-center gap-2 border-t border-pulpitry-line bg-pulpitry-surface px-3 text-[11.5px]">

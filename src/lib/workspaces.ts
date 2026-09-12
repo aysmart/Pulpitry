@@ -53,10 +53,24 @@ export type LibraryTab =
   | "History"
   | "Themes";
 
+/**
+ * How the window itself is divided.
+ *
+ * - **desk**: a decision row over a working row. What was said, what was heard
+ *   and what is live across the top; where the operator looks things up
+ *   underneath. Right for work driven by something arriving — speech, a plan.
+ * - **deck**: a work column beside an output column. The deck in hand over the
+ *   library that stages it, and one tall column holding what is on the wall,
+ *   what is staged behind it and the transport between them. Right for work
+ *   driven by the operator: a deck is stepped, and stepping is the job.
+ */
+export type Frame = "desk" | "deck";
+
 export interface WorkspaceShape {
   label: string;
   /** Said on hover, because four one-word buttons deserve an explanation once. */
   hint: string;
+  frame: Frame;
   /**
    * The libraries this job can reach, in the order they are offered.
    *
@@ -97,21 +111,27 @@ export interface WorkspaceShape {
    */
   queue: boolean;
   /**
-   * Columns for that row, in the order the panels are written.
+   * Columns for that row, in the order the panels are written. Desk frame only.
    *
    * It has to match what is rendered: a template with more columns than
    * children leaves a gap at the end, and one with fewer silently wraps a
    * panel onto a second row — which this layout has done before.
    */
-  topColumns: string;
+  topColumns?: string;
 
   /* -- the working row: where the operator looks things up -- */
 
   /** The Greek and Hebrew behind the verse. Scripture work only. */
   original: boolean;
-  /** Columns for the working row, in render order. */
+  /**
+   * Columns, in render order: the working row in the desk frame, and the whole
+   * window — work beside output — in the deck frame.
+   */
   columns: string;
-  /** How much of the height the working row takes from the decision row. */
+  /**
+   * A height share. The working row's, in the desk frame; the deck strip's, in
+   * the deck frame.
+   */
   basis: string;
 }
 
@@ -119,6 +139,7 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
   scripture: {
     label: "Scripture",
     hint: "What is being said, what was heard, the Bible, the original languages",
+    frame: "desk",
     // One name, so the pane is the Bible and carries no tab strip. Themes and
     // the session's own history were tabs here and are neither of them
     // scripture: a look is chosen once before a service, and the verses shown
@@ -137,6 +158,7 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
   songs: {
     label: "Songs",
     hint: "The song library at the width a lyric needs, and what comes next",
+    frame: "desk",
     tabs: ["Songs", "Media", "Themes"],
     // Nothing about scripture detection: a worship set is not where a
     // paraphrase match is read, and those two panels are the width the
@@ -152,20 +174,38 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
   },
   slides: {
     label: "Slides",
-    hint: "A deck as thumbnails, which wants more room than anything else here",
+    hint: "The deck in hand, the library that stages it, and the output beside both",
+    /*
+     * The one arrangement that is not a desk.
+     *
+     * A deck is not looked up, it is *run*: the operator has the slides in
+     * order and their whole job is knowing which one is up, which one is next,
+     * and pressing the thing that moves between them. Two rows across the
+     * window put those three in three different places. One column holds them
+     * in the order the hand uses them, and the width that frees goes to the
+     * deck and the library, which are read as pictures rather than as text.
+     */
+    frame: "deck",
     tabs: ["Slides", "Media", "Themes"],
     transcript: false,
     detected: false,
     feed: false,
-    queue: true,
-    topColumns: "minmax(360px,1.6fr) minmax(220px,0.6fr)",
+    // The plan lives on the far side of the deck strip in this frame: the
+    // library and the output are what a deck is run from, and a third list
+    // would take the width the slides are read at.
+    queue: false,
     original: false,
-    columns: "minmax(0,1.8fr) minmax(320px,1fr)",
-    basis: "52%",
+    // Work, then output. The output column is given a floor rather than a
+    // share: below about 340px a 16:9 pane stops being a preview of anything.
+    columns: "minmax(0,1fr) minmax(340px,0.42fr)",
+    // The deck strip's height. Enough for one row of slides and their
+    // numbers, and the rest belongs to the library.
+    basis: "38%",
   },
   plan: {
     label: "Plan",
     hint: "The running order, and what comes next",
+    frame: "desk",
     tabs: ["Schedule", "History", "Songs", "Slides"],
     transcript: false,
     detected: false,

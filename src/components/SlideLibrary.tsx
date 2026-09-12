@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { catalogList, catalogRemove, catalogSave, newItem, type Item } from "../lib/catalog";
-import type { TextBlock } from "../lib/projector";
+import {
+  DECK_TEMPLATES,
+  describeTemplate,
+  type DeckTemplate,
+} from "../lib/deckTemplates";
+import { componentText, type LiveBody, type TextBlock } from "../lib/projector";
 import { presentableFor } from "../lib/schedule";
 import type { ProjectorTheme } from "../lib/theme";
 import type { Presentable } from "../lib/usePresentation";
@@ -20,6 +25,86 @@ const ALIGNMENTS = ["left", "center", "right"] as const;
 
 function blankBlock(): TextBlock {
   return { text: "", level: "body", align: "center", bold: false, italic: false };
+}
+
+/** Which shelf of the library is showing. */
+type Shelf = "all" | "mine" | "templates";
+
+/**
+ * What a card draws, which is the real slide and not an impression of one.
+ *
+ * A composed slide -- anything with components, which is every generated deck
+ * and every shipped template -- has to be drawn as one: from `blocks` alone a
+ * table arrives as a run of words, so the card would misrepresent the slide it
+ * is offering.
+ */
+function thumbnailOf(item: Item): { blocks: TextBlock[]; body?: LiveBody } {
+  if (item.body.kind === "slide") {
+    return item.body.components && item.body.components.length > 0
+      ? {
+          blocks: [],
+          body: {
+            kind: "composed",
+            components: item.body.components,
+            layout: item.body.layout ?? "stacked",
+          },
+        }
+      : { blocks: item.body.blocks };
+  }
+
+  if (item.body.kind === "deck") {
+    // The first slide, because that is what a deck looks like from outside.
+    const first = item.body.sections[0];
+    if (first?.components && first.components.length > 0) {
+      return {
+        blocks: [],
+        body: {
+          kind: "composed",
+          components: first.components,
+          layout: first.layout ?? "stacked",
+        },
+      };
+    }
+    return { blocks: [], body: { kind: "lyric", lines: first?.lines ?? [] } };
+  }
+
+  return { blocks: [] };
+}
+
+/** "3 slides · Service", or "1 slide" where nothing has said what kind. */
+function describeItem(item: Item): string {
+  const count = item.body.kind === "deck" ? item.body.sections.length : 1;
+  const slides = `${count} ${count === 1 ? "slide" : "slides"}`;
+  return item.subtitle.trim() ? `${slides} · ${item.subtitle.trim()}` : slides;
+}
+
+/** Everything written on a deck or slide, for the search to look through. */
+function textOf(item: Item): string {
+  const parts = [item.title, item.subtitle];
+  if (item.body.kind === "slide") {
+    parts.push(...item.body.blocks.map((block) => block.text));
+    parts.push(...(item.body.components ?? []).map(componentText));
+  }
+  if (item.body.kind === "deck") {
+    for (const section of item.body.sections) {
+      parts.push(section.label, ...section.lines);
+      parts.push(...(section.components ?? []).map(componentText));
+    }
+  }
+  return parts.join(" ").toLowerCase();
+}
+
+function templateText(template: DeckTemplate): string {
+  return [
+    template.title,
+    template.category,
+    ...template.sections.flatMap((section) => [
+      section.label,
+      ...section.lines,
+    ]),
+  ]
+    .join(" ")
+    .toLowerCase();
 }
 
 /**
@@ -49,6 +134,8 @@ export function SlideLibrary({
   onError: (message: string) => void;
 }) {
   const [slides, setSlides] = useState<Item[]>([]);
+  const [shelf, setShelf] = useState<Shelf>("all");
+  const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<{
     id: number | null;
     title: string;
@@ -107,6 +194,52 @@ export function SlideLibrary({
       fail(err);
     }
   };
+
+  /**
+   * Takes a shipped template and makes it the church's own deck.
+   *
+   * Copied rather than staged where it stands, which is the whole design of
+   * these templates: ours are read-only and always present, and the act of
+   * using one is the act of acquiring it. From here it is an ordinary deck —
+   * it appears under Mine, it can be edited, and it can be deleted without
+   * costing anybody the template.
+   *
+   * It is staged in the same gesture, because nobody chooses a template in
+   * order not to use it.
+   */
+  const use = async (template: DeckTemplate) => {
+    try {
+      // A second "Sunday service" would be two cards the operator cannot tell
+      // apart on the Sunday they need one of them.
+      const taken = new Set(slides.map((item) => item.title.toLowerCase()));
+      let title = template.title;
+      for (let n = 2; taken.has(title.toLowerCase()); n += 1) {
+        title = `${template.title} ${n}`;
+      }
+
+      const saved = await catalogSave({
+        ...newItem(title, { kind: "deck", sections: template.sections }),
+        subtitle: template.category,
+      });
+      await refresh();
+      const staged = presentableFor(saved);
+      if (staged) onPreview(staged);
+    } catch (err) {
+      fail(err);
+    }
+  };
+
+  const needle = query.trim().toLowerCase();
+  const mine = slides.filter(
+    (item) => !needle || textOf(item).includes(needle),
+  );
+  const templates = DECK_TEMPLATES.filter(
+    (template) => !needle || templateText(template).includes(needle),
+  );
+  const showMine = shelf !== "templates";
+  const showTemplates = shelf !== "mine";
+  const found =
+    (showMine ? mine.length : 0) + (showTemplates ? templates.length : 0);
 
   if (editing) {
     const update = (index: number, change: Partial<TextBlock>) =>
@@ -246,107 +379,241 @@ export function SlideLibrary({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 justify-end border-b border-pulpitry-line px-2.5 py-2">
-        <button
-          type="button"
-          onClick={() => {
-            setFocused(0);
-            setEditing({ id: null, title: "", blocks: [blankBlock()] });
-          }}
-          title="Write a slide"
-          className="rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1.5 text-[12.5px] text-pulpitry-text hover:border-pulpitry-gold-dim hover:text-pulpitry-gold focus-visible:focus-ring"
+      {/*
+        Search first, then which shelf.
+
+        A church with forty decks finds one by typing a word off it -- the
+        search reads titles and the words on the slides, because "the one with
+        the bank details on it" is how somebody remembers a deck they made in
+        March. The shelves answer a different question: whether they are looking
+        at their own work or at something we shipped.
+      */}
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-pulpitry-line px-2.5 py-2">
+        <input
+          value={query}
+          spellCheck={false}
+          placeholder="Search decks, templates and slide text…"
+          aria-label="Search the slide library"
+          onChange={(event) => setQuery(event.target.value)}
+          className={`min-w-[8rem] flex-1 ${FIELD}`}
+        />
+
+        <div
+          role="group"
+          aria-label="Which decks to show"
+          className="flex items-center gap-0.5 rounded border border-pulpitry-line bg-pulpitry-raised p-0.5"
         >
-          New
-        </button>
+          {(
+            [
+              ["all", "All", "Everything in the library"],
+              ["mine", "Mine", "Decks and slides this church has made"],
+              ["templates", "Templates", "Decks that ship with Pulpitry"],
+            ] as const
+          ).map(([id, label, hint]) => (
+            <button
+              key={id}
+              type="button"
+              title={hint}
+              aria-pressed={shelf === id}
+              onClick={() => setShelf(id)}
+              className={`rounded px-2 py-1 text-[11.5px] transition-colors focus-visible:focus-ring ${
+                shelf === id
+                  ? "bg-pulpitry-teal-dim text-pulpitry-text"
+                  : "text-pulpitry-muted hover:text-pulpitry-text"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <span className="text-[11px] text-pulpitry-muted tabular-nums">
+          {found}
+        </span>
       </div>
 
-      {slides.length === 0 ? (
-        <EmptyState>
-          No slides yet. Press New to write one — a welcome, a notice, a title card.
-        </EmptyState>
+      {found === 0 && needle ? (
+        <EmptyState>Nothing in the library matches “{query}”.</EmptyState>
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] content-start gap-2 overflow-auto p-2">
-          {slides.map((item) => {
-            const staged = presentableFor(item);
-            const key = staged ? keyOf(staged) : "";
-            const state = key === liveKey ? "live" : key === previewKey ? "preview" : "idle";
-            /*
-             * A set is drawn as its first slide.
-             *
-             * Its sections are label-and-lines rather than styled blocks, so
-             * they are turned into blocks here only to be *shown* in the grid.
-             * Nothing is saved from this: clicking stages the set and steps
-             * through it, exactly as a song does.
-             */
-            const blocks =
-              item.body.kind === "slide"
-                ? item.body.blocks
-                : item.body.kind === "deck"
-                  ? (item.body.sections[0]?.lines ?? []).map((text) => ({
-                      text,
-                      level: "body" as const,
-                      align: "center" as const,
-                      bold: false,
-                      italic: false,
-                    }))
-                  : [];
-            const isSet = item.body.kind === "deck";
+        <div className="min-h-0 flex-1 overflow-auto p-2">
+          {showMine ? (
+            <>
+              {shelf === "all" && templates.length > 0 ? (
+                <p className="mb-1.5 text-[11px] tracking-wide text-pulpitry-muted uppercase">
+                  Yours
+                </p>
+              ) : null}
+              <div className="mb-3 grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] content-start gap-2">
+                {/*
+                  A blank page, first and always.
 
-            return (
-              <div key={item.id} className="group relative flex flex-col gap-1">
-                <button
-                  type="button"
-                  onClick={() => staged && onPreview(staged)}
-                  onDoubleClick={() => staged && onPreview(staged, true)}
-                  title={item.title}
-                  className="block text-left focus-visible:focus-ring"
-                >
-                  <span
-                    className={`block rounded ${
-                      state === "live"
-                        ? "ring-2 ring-pulpitry-gold"
-                        : state === "preview"
-                          ? "ring-2 ring-pulpitry-teal"
-                          : ""
-                    }`}
+                  It was a New button in the corner, which is the same act
+                  described rather than offered. As a tile it sits where the eye
+                  already is -- among the things it would become -- and an empty
+                  library reads as a library with one thing in it rather than as
+                  a wall with a button beside it.
+                */}
+                {!needle ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFocused(0);
+                      setEditing({ id: null, title: "", blocks: [blankBlock()] });
+                    }}
+                    className="group flex flex-col gap-1 text-left focus-visible:focus-ring"
                   >
-                    <SlideCanvas blocks={blocks} theme={theme} />
-                  </span>
-                  <span className="mt-1 block truncate text-[11px] text-pulpitry-muted">
-                    {item.title}
-                  </span>
-                </button>
-
-                {isSet ? (
-                  <span className="pointer-events-none absolute top-1 left-1 rounded bg-pulpitry-ink/80 px-1.5 py-0.5 text-[10px] text-pulpitry-muted">
-                    {item.body.kind === "deck" ? `${item.body.sections.length} slides` : ""}
-                  </span>
+                    <span
+                      className="flex items-center justify-center rounded border border-dashed border-pulpitry-line text-[20px] leading-none text-pulpitry-muted transition-colors group-hover:border-pulpitry-gold-dim group-hover:text-pulpitry-gold"
+                      style={{ aspectRatio: 16 / 9 }}
+                    >
+                      +
+                    </span>
+                    <span className="block truncate text-[11px] text-pulpitry-text">
+                      Blank slide
+                    </span>
+                    <span className="block truncate text-[10.5px] text-pulpitry-muted">
+                      Write one page yourself
+                    </span>
+                  </button>
                 ) : null}
 
-                <span className="absolute top-1 right-1 hidden gap-0.5 group-hover:flex">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      item.body.kind === "slide" &&
-                      (setFocused(0),
-                      setEditing({ id: item.id, title: item.title, blocks: item.body.blocks.length > 0 ? item.body.blocks : [blankBlock()] }))
-                    }
-                    className="rounded bg-pulpitry-ink/80 px-1.5 py-0.5 text-[11px] text-pulpitry-muted hover:text-pulpitry-text focus-visible:focus-ring"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => item.id !== null && void remove(item.id)}
-                    aria-label={`Remove ${item.title}`}
-                    className="rounded bg-pulpitry-ink/80 px-1.5 py-0.5 text-[12px] leading-none text-pulpitry-muted hover:text-pulpitry-text focus-visible:focus-ring"
-                  >
-                    ×
-                  </button>
-                </span>
+                {mine.map((item) => {
+                  const staged = presentableFor(item);
+                  const key = staged ? keyOf(staged) : "";
+                  const state =
+                    key === liveKey
+                      ? "live"
+                      : key === previewKey
+                        ? "preview"
+                        : "idle";
+                  const thumbnail = thumbnailOf(item);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="group relative flex flex-col gap-1"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => staged && onPreview(staged)}
+                        onDoubleClick={() => staged && onPreview(staged, true)}
+                        title={`${item.title} — click to stage, double-click to put it on screen`}
+                        className="block text-left focus-visible:focus-ring"
+                      >
+                        <span
+                          className={`block rounded ${
+                            state === "live"
+                              ? "ring-2 ring-pulpitry-gold"
+                              : state === "preview"
+                                ? "ring-2 ring-pulpitry-teal"
+                                : ""
+                          }`}
+                        >
+                          <SlideCanvas
+                            blocks={thumbnail.blocks}
+                            body={thumbnail.body}
+                            theme={theme}
+                          />
+                        </span>
+                        <span className="mt-1 block truncate text-[11px] text-pulpitry-text">
+                          {item.title}
+                        </span>
+                        {/* What it is, under what it is called: how many
+                            slides, and what kind of thing it is for. */}
+                        <span className="block truncate text-[10.5px] text-pulpitry-muted">
+                          {describeItem(item)}
+                        </span>
+                      </button>
+
+                      <span className="absolute top-1 right-1 hidden gap-0.5 group-hover:flex">
+                        {item.body.kind === "slide" ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              item.body.kind === "slide" &&
+                              (setFocused(0),
+                              setEditing({
+                                id: item.id,
+                                title: item.title,
+                                blocks:
+                                  item.body.blocks.length > 0
+                                    ? item.body.blocks
+                                    : [blankBlock()],
+                              }))
+                            }
+                            className="rounded bg-pulpitry-ink/80 px-1.5 py-0.5 text-[11px] text-pulpitry-muted hover:text-pulpitry-text focus-visible:focus-ring"
+                          >
+                            Edit
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => item.id !== null && void remove(item.id)}
+                          aria-label={`Remove ${item.title}`}
+                          className="rounded bg-pulpitry-ink/80 px-1.5 py-0.5 text-[12px] leading-none text-pulpitry-muted hover:text-pulpitry-text focus-visible:focus-ring"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+
+              {mine.length === 0 && !needle ? (
+                <p className="mb-3 px-1 text-[11.5px] leading-relaxed text-pulpitry-muted">
+                  Nothing of your own yet. Start from a template below, or write
+                  a page on the blank tile.
+                </p>
+              ) : null}
+            </>
+          ) : null}
+
+          {showTemplates ? (
+            <>
+              {shelf === "all" ? (
+                <p className="mb-1.5 text-[11px] tracking-wide text-pulpitry-muted uppercase">
+                  Templates
+                </p>
+              ) : null}
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] content-start gap-2">
+                {templates.map((template) => {
+                  const first = template.sections[0];
+                  return (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => void use(template)}
+                      title={`${template.hint}. Adds a copy to your decks.`}
+                      className="group flex flex-col gap-1 text-left focus-visible:focus-ring"
+                    >
+                      <span className="block rounded ring-pulpitry-teal group-hover:ring-2">
+                        <SlideCanvas
+                          blocks={[]}
+                          body={
+                            first?.components && first.components.length > 0
+                              ? {
+                                  kind: "composed",
+                                  components: first.components,
+                                  layout: first.layout ?? "stacked",
+                                }
+                              : { kind: "lyric", lines: first?.lines ?? [] }
+                          }
+                          theme={theme}
+                        />
+                      </span>
+                      <span className="block truncate text-[11px] text-pulpitry-text">
+                        {template.title}
+                      </span>
+                      <span className="block truncate text-[10.5px] text-pulpitry-muted">
+                        {describeTemplate(template)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
         </div>
       )}
     </div>

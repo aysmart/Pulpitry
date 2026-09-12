@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { convertFileSrc } from "@tauri-apps/api/core";
 
@@ -12,8 +12,8 @@ import {
   type TextBlock,
   type Ticker,
 } from "../lib/projector";
-import { handsAreBusy } from "../lib/shortcuts";
 import { fontStack, type ProjectorTheme } from "../lib/theme";
+import { useTransport } from "../lib/useTransport";
 import { Backdrop } from "./Backdrop";
 import {
   presentableLabel,
@@ -285,36 +285,18 @@ function liveAsset(body: LiveBody | undefined) {
 const CONTROL =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-2 text-[13px] text-pulpitry-text transition-opacity hover:border-pulpitry-muted disabled:opacity-35 focus-visible:focus-ring";
 
+/** The same, for a row that should not compete with the transport above it. */
+const QUIET =
+  "rounded border border-pulpitry-line px-2 py-1 text-[11.5px] text-pulpitry-muted transition-colors hover:border-pulpitry-muted hover:text-pulpitry-text disabled:opacity-35 focus-visible:focus-ring";
+
 /**
- * Preview and Live, with the transport between them.
+ * Everything the output panes need, whichever way they are arranged.
  *
- * Live is read from the shared state rather than this window's own, so what is
- * shown here is by construction what the projector is showing.
+ * One interface for two arrangements: the desk's stage column and the slide
+ * desk's output column show the same things in different shapes, and two prop
+ * lists would drift the first time either gained a control.
  */
-export function StagePanel({
-  preview,
-  live,
-  onDisplay,
-  onClear,
-  onStep,
-  canFollow,
-  following,
-  onFollowChange,
-  advance,
-  onAdvanceChange,
-  suggestion,
-  onTakeSuggestion,
-  onWind,
-  onAdd,
-  theme,
-  canStepBack,
-  canStepForward,
-  projectorOpen,
-  audio,
-  onAudioChange,
-  media,
-  ticker,
-}: {
+interface Output {
   preview: Presentable | null;
   live: LiveContent | null;
   onDisplay: () => void;
@@ -349,7 +331,38 @@ export function StagePanel({
     toggleLoop: () => void;
   };
   ticker: Ticker;
-}) {
+}
+
+/**
+ * Preview and Live, with the transport between them.
+ *
+ * Live is read from the shared state rather than this window's own, so what is
+ * shown here is by construction what the projector is showing.
+ */
+export function StagePanel({
+  preview,
+  live,
+  onDisplay,
+  onClear,
+  onStep,
+  canFollow,
+  following,
+  onFollowChange,
+  advance,
+  onAdvanceChange,
+  suggestion,
+  onTakeSuggestion,
+  onWind,
+  onAdd,
+  theme,
+  canStepBack,
+  canStepForward,
+  projectorOpen,
+  audio,
+  onAudioChange,
+  media,
+  ticker,
+}: Output) {
   /*
    * How many screenfuls what is live takes, as the Live pane measured it.
    *
@@ -363,71 +376,14 @@ export function StagePanel({
     step: 1,
   });
 
-  /*
-   * The stored position is a point in the text; the operator thinks in screens.
-   *
-   * The point is what every surface agrees on -- this preview, the projector,
-   * the second display, a paired Castavox -- because each of them shows a
-   * different amount of text and a screen number would mean a different place
-   * on each. But "2 of 6" is what an operator can act on, so the two are
-   * converted here, using what *this* surface measured.
-   *
-   * `step` is how much of the whole text one press moves on this surface, so
-   * the conversion is a division rather than a fraction of the press count. It
-   * has to be: the same press moves a different distance on a screen showing
-   * more text at once.
-   */
-  const lastScreen = Math.max(1, liveExtent.screenfuls - 1);
-  const liveScreen = Math.min(
-    lastScreen,
-    Math.round((live?.progress ?? 0) / (liveExtent.step || 1)),
-  );
-
-  /*
-   * The arrow keys, which are where an operator's hand already is.
-   *
-   * Left and right step through what is staged; up and down wind a body taller
-   * than the screen. The same four things the buttons below do, and they call
-   * the same expressions rather than their own -- a shortcut that winds by a
-   * different amount than the button beside it is two behaviours wearing one
-   * name.
-   *
-   * `handsAreBusy` is what keeps this from being a hazard: an operator typing
-   * in a search box means "move the caret" by Left, and one with a dialogue
-   * open means the dialogue.
-   */
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (handsAreBusy(event)) return;
-
-      switch (event.key) {
-        case "ArrowLeft":
-          event.preventDefault();
-          onStep(false);
-          return;
-        case "ArrowRight":
-          event.preventDefault();
-          onStep(true);
-          return;
-        case "ArrowUp":
-          if (liveExtent.screenfuls <= 1 || liveScreen === 0) return;
-          event.preventDefault();
-          onWind((liveScreen - 1) * liveExtent.step);
-          return;
-        case "ArrowDown":
-          if (liveExtent.screenfuls <= 1 || liveScreen >= lastScreen) return;
-          event.preventDefault();
-          onWind(
-            liveScreen + 1 >= lastScreen ? 1 : (liveScreen + 1) / lastScreen,
-          );
-          return;
-        default:
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onStep, onWind, liveExtent, liveScreen, lastScreen]);
+  // Stepping, winding and the arrow keys, shared with the slide desk's output
+  // column so the two cannot come to disagree about what a press does.
+  const transport = useTransport({
+    progress: live?.progress ?? 0,
+    extent: liveExtent,
+    onStep,
+    onWind,
+  });
 
   return (
     <div className="flex min-h-0 flex-col gap-2">
@@ -546,19 +502,19 @@ export function StagePanel({
         The count is what the Live pane measured. It renders the same content in
         the same proportions as the wall, so its answer is the wall's answer.
       */}
-      {liveExtent.screenfuls > 1 ? (
+      {transport.screenfuls > 1 ? (
         <div className="flex shrink-0 items-center gap-2">
           <span className="text-[11px] text-pulpitry-muted">
             This is taller than the screen — wind it as you read.
           </span>
           <span className="flex-1" />
           <span className="text-[11px] text-pulpitry-muted tabular-nums">
-            {liveScreen + 1} of {liveExtent.screenfuls}
+            {transport.screen + 1} of {transport.screenfuls}
           </span>
           <button
             type="button"
-            onClick={() => onWind((liveScreen - 1) * liveExtent.step)}
-            disabled={liveScreen === 0}
+            onClick={transport.up}
+            disabled={!transport.canUp}
             title="Back up a screenful"
             className={CONTROL}
           >
@@ -566,14 +522,8 @@ export function StagePanel({
           </button>
           <button
             type="button"
-            onClick={() =>
-              onWind(
-                liveScreen + 1 >= lastScreen
-                  ? 1
-                  : (liveScreen + 1) / lastScreen,
-              )
-            }
-            disabled={liveScreen >= lastScreen}
+            onClick={transport.down}
+            disabled={!transport.canDown}
             title="Down a screenful"
             className={CONTROL}
           >
@@ -649,6 +599,290 @@ export function StagePanel({
  * backdrop they will actually get. A preview that looks nothing like the output
  * is a preview of nothing.
  */
+/** Which slide of a deck or song something is, where it is one. */
+function slideCount(item: Presentable | null): string {
+  if (item?.kind !== "lyric") return "";
+  return `Slide ${item.index + 1} of ${item.sections.length}`;
+}
+
+/**
+ * One column: what the congregation is seeing, what is staged behind it, and
+ * the transport under both.
+ *
+ * The slide desk's output, and a different claim from the desk's stage column.
+ * There, Live is given the whole height because the operator's attention is on
+ * a transcript and a chapter — the wall is being watched out of the corner of
+ * an eye. Here the wall *is* the work: an operator running a deck is looking at
+ * what is up, what is next, and the button that moves between them, and those
+ * three belong in one column in that order.
+ *
+ * Both panes draw the real theme and the real backdrop at the wall's own
+ * proportions, so the difference between them is only which one has been sent.
+ */
+export function MainOutput({
+  preview,
+  live,
+  onDisplay,
+  onClear,
+  onStep,
+  onWind,
+  onAdd,
+  canFollow,
+  following,
+  onFollowChange,
+  advance,
+  onAdvanceChange,
+  suggestion,
+  onTakeSuggestion,
+  theme,
+  canStepBack,
+  canStepForward,
+  projectorOpen,
+  audio,
+  onAudioChange,
+  media,
+  ticker,
+}: Output) {
+  const [liveExtent, setLiveExtent] = useState<Extent>({
+    screenfuls: 1,
+    step: 1,
+  });
+  const transport = useTransport({
+    progress: live?.progress ?? 0,
+    extent: liveExtent,
+    onStep,
+    onWind,
+  });
+
+  return (
+    <Panel
+      title="Main output"
+      accent="gold"
+      className="min-h-0"
+      bodyClassName="flex flex-col gap-1.5 p-2"
+      actions={
+        /* What state the output is in, in one word. An operator glancing at
+           this column needs to know whether what they are looking at is on the
+           wall or only on their desk, and the two panes below look alike by
+           design. */
+        <span
+          className={`rounded border px-1.5 py-0.5 text-[10px] tracking-[0.12em] uppercase ${
+            live
+              ? "border-pulpitry-gold-dim bg-pulpitry-gold/10 text-pulpitry-gold"
+              : preview
+                ? "border-pulpitry-teal-dim text-pulpitry-teal"
+                : "border-pulpitry-line text-pulpitry-muted"
+          }`}
+        >
+          {live ? "Live" : preview ? "Staged" : "Empty"}
+        </span>
+      }
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-1">
+        <div className="flex shrink-0 items-baseline justify-between gap-2">
+          <span className="text-[10.5px] tracking-[0.12em] text-pulpitry-gold uppercase">
+            Live display
+          </span>
+          <span className="truncate text-[11px] text-pulpitry-muted">
+            {live?.caption ||
+              (transport.screenfuls > 1
+                ? `Screen ${transport.screen + 1} of ${transport.screenfuls}`
+                : "")}
+          </span>
+        </div>
+        <div className="relative min-h-0 flex-1 overflow-hidden rounded border border-pulpitry-gold-dim/40 [container-type:size]">
+          <Stage
+            body={live ? bodyText(live.body) : null}
+            asset={liveAsset(live?.body)}
+            slide={liveSlide(live?.body, theme)}
+            reference={live?.caption ?? null}
+            tone="live"
+            empty="Nothing is on the projector."
+            theme={theme}
+            projectorOpen={projectorOpen}
+            audio={audio}
+            command={media.command}
+            progress={live?.progress ?? 0}
+            onExtent={setLiveExtent}
+          />
+          <TickerBand ticker={ticker} theme={theme} />
+        </div>
+      </div>
+
+      {live?.body.kind === "media" ? (
+        <MediaTransport
+          command={media.command}
+          progress={media.progress}
+          audio={audio}
+          onPlay={media.play}
+          onPause={media.pause}
+          onSeek={media.seek}
+          onRestart={media.restart}
+          onToggleLoop={media.toggleLoop}
+          onAudioChange={onAudioChange}
+        />
+      ) : null}
+
+      {/* Winding, and only when there is something to wind: a table of figures
+          or a lexicon entry taller than the wall. */}
+      {transport.screenfuls > 1 ? (
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="min-w-0 flex-1 truncate text-[11px] text-pulpitry-muted">
+            Taller than the screen — wind it as you read.
+          </span>
+          <button
+            type="button"
+            onClick={transport.up}
+            disabled={!transport.canUp}
+            title="Back up a screenful"
+            className={CONTROL}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            onClick={transport.down}
+            disabled={!transport.canDown}
+            title="Down a screenful"
+            className={CONTROL}
+          >
+            ↓
+          </button>
+        </div>
+      ) : null}
+
+      <div className="flex min-h-0 flex-1 flex-col gap-1">
+        <div className="flex shrink-0 items-baseline justify-between gap-2">
+          <span className="text-[10.5px] tracking-[0.12em] text-pulpitry-muted uppercase">
+            Preview
+          </span>
+          <span className="truncate text-[11px] text-pulpitry-muted">
+            {slideCount(preview) ||
+              (preview ? presentableLabel(preview) : "Nothing staged")}
+          </span>
+        </div>
+        <div className="relative min-h-0 flex-1 overflow-hidden rounded border border-pulpitry-line [container-type:size]">
+          <Stage
+            body={preview ? presentableText(preview) : null}
+            asset={assetOf(preview)}
+            slide={slideOf(preview, theme)}
+            reference={preview ? presentableLabel(preview) : null}
+            tone="preview"
+            empty="Pick a deck below to stage it."
+            theme={theme}
+          />
+        </div>
+      </div>
+
+      {/*
+        The transport, in the order a hand uses it.
+
+        Display is the middle and the loudest: on a slide desk it is pressed
+        once per slide, which is more often than anything else in the window.
+      */}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => onStep(false)}
+          disabled={!canStepBack}
+          title="The slide before this one"
+          className={`${CONTROL} flex-1`}
+        >
+          Prev
+        </button>
+        <button
+          type="button"
+          onClick={onDisplay}
+          disabled={!preview}
+          className="flex-[1.6] rounded bg-pulpitry-gold px-3 py-2 text-[13px] text-pulpitry-ink transition-opacity hover:bg-pulpitry-gold/90 disabled:opacity-35 focus-visible:focus-ring"
+        >
+          Display
+        </button>
+        <button
+          type="button"
+          onClick={() => onStep(true)}
+          disabled={!canStepForward}
+          title="The next slide"
+          className={`${CONTROL} flex-1`}
+        >
+          Next
+        </button>
+      </div>
+
+      {/*
+        The quieter row.
+
+        Following a sermon belongs on the slide desk more than anywhere else --
+        it is the one arrangement where the deck on screen and the words being
+        spoken are the same argument -- so it stays, kept small, rather than
+        being dropped for a tidier column.
+      */}
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={!preview}
+          title="Add what is staged to the service plan"
+          className={QUIET}
+        >
+          Add to plan
+        </button>
+        <button
+          type="button"
+          onClick={onClear}
+          disabled={!live}
+          title="Take it off the screen"
+          className={QUIET}
+        >
+          Clear
+        </button>
+        {canFollow ? (
+          <button
+            type="button"
+            onClick={() => onFollowChange(!following)}
+            title={
+              following
+                ? "Stop watching for the slide being spoken about"
+                : "Watch the sermon and say which slide it has reached"
+            }
+            className={
+              following
+                ? "rounded border border-pulpitry-gold-dim bg-pulpitry-gold/10 px-2 py-1 text-[11.5px] text-pulpitry-gold focus-visible:focus-ring"
+                : QUIET
+            }
+          >
+            {following ? "Following" : "Follow"}
+          </button>
+        ) : null}
+        {canFollow && following ? (
+          <label
+            className="flex items-center gap-1.5 text-[11px] text-pulpitry-muted"
+            title="Move the screen on a match instead of offering it. A wrong match then shows in front of the congregation."
+          >
+            <input
+              type="checkbox"
+              checked={advance}
+              onChange={(event) => onAdvanceChange(event.target.checked)}
+              className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+            />
+            Move by itself
+          </label>
+        ) : null}
+        {following && suggestion ? (
+          <button
+            type="button"
+            onClick={() => onTakeSuggestion(suggestion.index)}
+            title={`${Math.round(suggestion.score * 100)}% alike`}
+            className="rounded border border-pulpitry-teal bg-pulpitry-teal/15 px-2 py-1 text-[11.5px] text-pulpitry-text hover:border-pulpitry-gold focus-visible:focus-ring"
+          >
+            Go to slide {suggestion.index + 1}
+          </button>
+        ) : null}
+      </div>
+    </Panel>
+  );
+}
+
 export function PreviewPanel({
   preview,
   theme,
