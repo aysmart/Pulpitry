@@ -244,12 +244,32 @@ export function TemplateLibrary({
           </button>
         </div>
 
-        <div className="mx-auto min-h-0 w-full max-w-[64rem] flex-1 overflow-auto p-4">
-          {/* The whole point of an editor here rather than in a dialog: every
-              change lands on a full-size render of the real thing. */}
-          <SlideCanvas blocks={sample} theme={editing.theme} />
+        {/*
+          Side by side, and the preview does not scroll.
 
-          <div className="mt-3">
+          Stacked, the controls were under the canvas: an operator changing the
+          typeface scrolled down to reach it and the thing they were changing
+          left the screen. They were adjusting a look they could not see, which
+          is the one thing this editor exists to prevent.
+
+          So the preview holds the left-hand side, sized to fit its own column
+          whatever the window is, and the controls scroll beside it. Every
+          change lands on a full-size render of the real thing, still in view.
+        */}
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]">
+          <div className="flex min-h-0 flex-col items-center justify-center gap-3 overflow-hidden p-4">
+            {/* Bounded by the column's height as well as its width: a 16:9 box
+                given only a width grows past the bottom of a short window, and
+                the operator is back to scrolling. */}
+            <div className="w-full max-w-[min(100%,calc((100vh-12rem)*1.777))]">
+              <SlideCanvas blocks={sample} theme={editing.theme} />
+            </div>
+            <p className="text-[11px] text-pulpitry-muted">
+              Sample words, at the proportions of the wall.
+            </p>
+          </div>
+
+          <div className="min-h-0 overflow-auto border-l border-pulpitry-line p-3">
             <DisplaySettings
               theme={editing.theme}
               onChange={(next) => setEditing({ ...editing, theme: next })}
@@ -325,8 +345,17 @@ export function TemplateLibrary({
       <div className="min-h-0 flex-1 overflow-auto p-4">
         {saved.length > 0 ? (
           <>
+            {/*
+              "In your library", not "Yours".
+
+              This section is whatever is saved as a template, and most of it
+              was put there by us: the looks Pulpitry ships are seeded into the
+              library so an output can be pointed at one. Calling them the
+              church's own made twenty-odd looks they had never seen read as
+              things they had made and forgotten.
+            */}
             <p className="mb-2 text-[11px] tracking-wide text-pulpitry-muted uppercase">
-              Yours
+              In your library
             </p>
             <div className="mb-5 grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
               {saved.map((item) =>

@@ -310,9 +310,15 @@ export const GRADIENT_PRESETS: Array<{
 /** The drawn motions, named as an operator would choose between them. */
 export const MOTIONS: Array<{ key: string; label: string }> = [
   { key: "drift", label: "Drifting washes" },
+  { key: "orbs", label: "Crossing spheres" },
+  { key: "aurora", label: "Curtains of light" },
   { key: "bokeh", label: "Rising lights" },
+  { key: "embers", label: "Rising embers" },
   { key: "rays", label: "Turning rays" },
+  { key: "waves", label: "Slow swells" },
+  { key: "ripple", label: "Spreading rings" },
   { key: "stars", label: "Slow starfield" },
+  { key: "dust", label: "Drifting motes" },
 ];
 
 let made = 0;

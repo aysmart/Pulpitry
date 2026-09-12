@@ -27,7 +27,17 @@ import { withAlpha, type ProjectorTheme } from "../lib/theme";
  * animating panels in a dialog is noise, and the operator is looking at the
  * colours and the shape, not the movement.
  */
-export type MotionKind = "drift" | "bokeh" | "rays" | "stars";
+export type MotionKind =
+  | "drift"
+  | "bokeh"
+  | "rays"
+  | "stars"
+  | "aurora"
+  | "waves"
+  | "embers"
+  | "ripple"
+  | "orbs"
+  | "dust";
 
 const CAP = 1600;
 
@@ -129,6 +139,18 @@ function paint(
       return rays(context, width, height, look, t);
     case "stars":
       return stars(context, width, height, look, t);
+    case "aurora":
+      return aurora(context, width, height, look, t);
+    case "waves":
+      return waves(context, width, height, look, t);
+    case "embers":
+      return embers(context, width, height, look, t);
+    case "ripple":
+      return ripple(context, width, height, look, t);
+    case "orbs":
+      return orbs(context, width, height, look, t);
+    case "dust":
+      return dust(context, width, height, look, t);
     default:
       return drift(context, width, height, look, t);
   }
@@ -252,6 +274,200 @@ function stars(
     context.arc(x, y, size, 0, Math.PI * 2);
     context.fill();
   }
+}
+
+/**
+ * Curtains of light, leaning and folding.
+ *
+ * The one motion with a direction to it: bands that lean, thin and thicken as
+ * they cross. Drawn as soft vertical gradients rather than shapes, because an
+ * aurora has no edges and anything with one reads as a graphic.
+ */
+function aurora(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  look: Look,
+  t: number,
+) {
+  const curtains = 5;
+  context.globalCompositeOperation = "lighter";
+  for (let i = 0; i < curtains; i += 1) {
+    const phase = t * (0.05 + i * 0.011) + i * 1.7;
+    const centre = width * (0.5 + 0.42 * Math.sin(phase));
+    const spread = width * (0.1 + 0.07 * (1 + Math.sin(phase * 0.7)));
+    const lean = height * 0.22 * Math.sin(phase * 0.5);
+
+    const band = context.createLinearGradient(
+      centre - spread,
+      0,
+      centre + spread + lean,
+      height,
+    );
+    const hue = i % 2 === 0 ? look.from : look.to;
+    band.addColorStop(0, withAlpha(hue, 0));
+    band.addColorStop(0.5, withAlpha(hue, 0.3));
+    band.addColorStop(1, withAlpha(hue, 0));
+    context.fillStyle = band;
+    context.fillRect(0, 0, width, height);
+  }
+  context.globalCompositeOperation = "source-over";
+}
+
+/**
+ * Long swells crossing the bottom of the frame.
+ *
+ * Kept low and slow: the words sit in the middle, and a wave that reached them
+ * would be something to watch rather than something to read over.
+ */
+function waves(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  look: Look,
+  t: number,
+) {
+  const lines = 4;
+  context.globalCompositeOperation = "lighter";
+  for (let i = 0; i < lines; i += 1) {
+    const base = height * (0.62 + i * 0.1);
+    const amplitude = height * (0.035 + i * 0.012);
+    const speed = t * (0.18 + i * 0.05);
+
+    context.beginPath();
+    context.moveTo(0, height);
+    for (let x = 0; x <= width; x += Math.max(6, width / 160)) {
+      const across = x / width;
+      const y =
+        base +
+        Math.sin(across * Math.PI * 2 + speed) * amplitude +
+        Math.sin(across * Math.PI * 5.3 - speed * 0.6) * amplitude * 0.35;
+      context.lineTo(x, y);
+    }
+    context.lineTo(width, height);
+    context.closePath();
+    context.fillStyle = withAlpha(i % 2 === 0 ? look.from : look.to, 0.16);
+    context.fill();
+  }
+  context.globalCompositeOperation = "source-over";
+}
+
+/**
+ * Sparks rising and going out, the way they do over a fire.
+ *
+ * Each keeps its own speed and its own life, so nothing pulses together -- a
+ * field that breathes in step reads as an animation rather than as air.
+ */
+function embers(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  look: Look,
+  t: number,
+) {
+  const count = 90;
+  context.globalCompositeOperation = "lighter";
+  for (let i = 0; i < count; i += 1) {
+    const seed = ((i * 2246822519) % 10_000) / 10_000;
+    const other = ((i * 3266489917) % 10_000) / 10_000;
+    const life = (t * (0.05 + seed * 0.07) + other) % 1;
+
+    const x = width * (other + Math.sin(t * 0.3 + i) * 0.02);
+    const y = height * (1.05 - life * 1.1);
+    const size = Math.max(width, height) * (0.0012 + seed * 0.0022);
+    // Brightest in the middle of the climb, out by the top.
+    const glow = Math.sin(life * Math.PI) * 0.7;
+
+    context.fillStyle = withAlpha(look.from, glow);
+    context.beginPath();
+    context.arc(x, y, size, 0, Math.PI * 2);
+    context.fill();
+  }
+  context.globalCompositeOperation = "source-over";
+}
+
+/** Rings opening outwards, as slow as rain on still water. */
+function ripple(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  look: Look,
+  t: number,
+) {
+  const rings = 6;
+  const reach = Math.hypot(width, height) * 0.55;
+  context.globalCompositeOperation = "lighter";
+  context.lineWidth = Math.max(1, Math.max(width, height) * 0.004);
+
+  for (let i = 0; i < rings; i += 1) {
+    const seed = ((i * 2654435761) % 10_000) / 10_000;
+    const grown = (t * 0.09 + i / rings) % 1;
+    const x = width * (0.2 + seed * 0.6);
+    const y = height * (0.25 + ((seed * 7) % 1) * 0.5);
+
+    context.beginPath();
+    context.arc(x, y, grown * reach, 0, Math.PI * 2);
+    // Fading as it widens: a ring that stayed bright would be a circle drawn
+    // on the wall rather than something spreading across it.
+    context.strokeStyle = withAlpha(look.from, 0.28 * (1 - grown));
+    context.stroke();
+  }
+  context.globalCompositeOperation = "source-over";
+}
+
+/** Large soft spheres, crossing each other slowly. */
+function orbs(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  look: Look,
+  t: number,
+) {
+  const count = 5;
+  context.globalCompositeOperation = "lighter";
+  for (let i = 0; i < count; i += 1) {
+    const seed = ((i * 2246822519) % 10_000) / 10_000;
+    const x = width * (0.5 + 0.4 * Math.sin(t * (0.03 + seed * 0.02) + i * 1.9));
+    const y = height * (0.5 + 0.36 * Math.cos(t * (0.024 + seed * 0.017) + i));
+    const radius = Math.max(width, height) * (0.16 + seed * 0.18);
+
+    const sphere = context.createRadialGradient(x, y, 0, x, y, radius);
+    const hue = i % 2 === 0 ? look.from : look.to;
+    sphere.addColorStop(0, withAlpha(hue, 0.34));
+    sphere.addColorStop(0.6, withAlpha(hue, 0.12));
+    sphere.addColorStop(1, withAlpha(hue, 0));
+    context.fillStyle = sphere;
+    context.fillRect(0, 0, width, height);
+  }
+  context.globalCompositeOperation = "source-over";
+}
+
+/** Motes drifting sideways, the way dust moves through a shaft of light. */
+function dust(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  look: Look,
+  t: number,
+) {
+  const count = 120;
+  context.globalCompositeOperation = "lighter";
+  for (let i = 0; i < count; i += 1) {
+    const seed = ((i * 2246822519) % 10_000) / 10_000;
+    const other = ((i * 3266489917) % 10_000) / 10_000;
+    // Sideways rather than up, and at three different speeds, so the field has
+    // depth rather than being one sheet sliding past.
+    const speed = 0.01 + (i % 3) * 0.012;
+    const x = ((seed + t * speed) % 1.1 - 0.05) * width;
+    const y = height * (other + Math.sin(t * 0.2 + i) * 0.01);
+    const size = Math.max(width, height) * (0.0006 + seed * 0.0018);
+
+    context.fillStyle = withAlpha(look.from, 0.18 + other * 0.3);
+    context.beginPath();
+    context.arc(x, y, size, 0, Math.PI * 2);
+    context.fill();
+  }
+  context.globalCompositeOperation = "source-over";
 }
 
 /**

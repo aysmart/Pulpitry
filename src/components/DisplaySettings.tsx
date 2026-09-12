@@ -37,6 +37,36 @@ const MOTIONS: Array<{ id: string; name: string; hint: string }> = [
     hint: "Faint beams turning slowly about a point above the screen.",
   },
   {
+    id: "orbs",
+    name: "Spheres",
+    hint: "Large soft spheres crossing each other. The quietest of the moving ones after Drift.",
+  },
+  {
+    id: "aurora",
+    name: "Aurora",
+    hint: "Curtains of light leaning and folding. Colour with a direction to it.",
+  },
+  {
+    id: "embers",
+    name: "Embers",
+    hint: "Sparks rising and going out. Warm palettes; a hall before an evening service.",
+  },
+  {
+    id: "waves",
+    name: "Swells",
+    hint: "Long slow swells across the bottom of the screen, well clear of the words.",
+  },
+  {
+    id: "ripple",
+    name: "Ripples",
+    hint: "Rings opening outwards, as slow as rain on still water.",
+  },
+  {
+    id: "dust",
+    name: "Motes",
+    hint: "Dust drifting sideways through a shaft of light. Barely there, which is the point.",
+  },
+  {
     id: "stars",
     name: "Stars",
     hint: "A slow field of points, brightening and fading out of step.",

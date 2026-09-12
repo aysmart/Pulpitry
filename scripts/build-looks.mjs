@@ -225,6 +225,33 @@ const LOOKS = [
       textureStrength: 0.28,
     },
   },
+  /*
+   * The moving ones.
+   *
+   * A church asking for "motion backgrounds" is asking for the thing other
+   * software ships as gigabytes of licensed stock footage. These are drawn
+   * instead -- see MotionBackground -- which is why there can be this many of
+   * them for no download, why they are sharp on a 4K panel, and why each one
+   * takes its colours from the theme rather than from somebody else's grade.
+   *
+   * Ordered by how quiet they are. The first several are safe under a reading:
+   * nothing in them has an edge, so nothing competes with a letterform. The
+   * last few are for the screen between items -- before a service, under a
+   * countdown, through a song where the room is already looking at the band.
+   */
+  {
+    name: "Deep drift",
+    hint: "Blue and violet washes, moving slowly. The safest thing to put behind a reading.",
+    theme: {
+      textColor: "#F0F4FF",
+      backgroundKind: "motion",
+      motion: "drift",
+      motionSpeed: 0.6,
+      gradientFrom: "#2B4C9B",
+      gradientTo: "#070B1A",
+      shadow: true,
+    },
+  },
   {
     name: "Sunrise drift",
     hint: "Amber and rose, moving slowly. Drawn rather than filmed, so it is sharp on any screen.",
@@ -239,15 +266,93 @@ const LOOKS = [
     },
   },
   {
-    name: "Deep drift",
-    hint: "Blue and violet washes. The one to use when a service wants movement without anything to watch.",
+    name: "Forest drift",
+    hint: "Green on near-black. Quiet enough for a long passage.",
     theme: {
-      textColor: "#F0F4FF",
+      textColor: "#EFF6EE",
       backgroundKind: "motion",
       motion: "drift",
+      motionSpeed: 0.55,
+      gradientFrom: "#2E7D5B",
+      gradientTo: "#06120D",
+      shadow: true,
+    },
+  },
+  {
+    name: "Harmattan drift",
+    hint: "Dust and warm light in motion, for a hall with sun in it rather than a dark auditorium.",
+    theme: {
+      textColor: "#2A1C0E",
+      backgroundKind: "motion",
+      motion: "drift",
+      motionSpeed: 0.5,
+      gradientFrom: "#F3D9A8",
+      gradientTo: "#C98B4B",
+      referenceColor: "#7A4A15",
+    },
+  },
+  {
+    name: "Indigo spheres",
+    hint: "Large soft spheres crossing each other. The quietest of the moving ones after Drift.",
+    theme: {
+      textColor: "#EEF1FF",
+      backgroundKind: "motion",
+      motion: "orbs",
       motionSpeed: 0.6,
-      gradientFrom: "#2B4C9B",
-      gradientTo: "#070B1A",
+      gradientFrom: "#4C5BD4",
+      gradientTo: "#080B1E",
+      shadow: true,
+    },
+  },
+  {
+    name: "Rose spheres",
+    hint: "Warm spheres on a deep plum ground. Communion, Advent, anything with weight to it.",
+    theme: {
+      textColor: "#FFF0F3",
+      backgroundKind: "motion",
+      motion: "orbs",
+      motionSpeed: 0.5,
+      gradientFrom: "#C2567A",
+      gradientTo: "#1B0812",
+      shadow: true,
+    },
+  },
+  {
+    name: "Teal spheres",
+    hint: "Cool and slow. Sits under a lower third without fighting it.",
+    theme: {
+      textColor: "#EAFBF8",
+      backgroundKind: "motion",
+      motion: "orbs",
+      motionSpeed: 0.55,
+      gradientFrom: "#1E8F86",
+      gradientTo: "#04161A",
+      shadow: true,
+    },
+  },
+  {
+    name: "Aurora",
+    hint: "Curtains of green light leaning and folding. Colour with a direction to it.",
+    theme: {
+      textColor: "#EDFFF4",
+      backgroundKind: "motion",
+      motion: "aurora",
+      motionSpeed: 0.6,
+      gradientFrom: "#3FD9A0",
+      gradientTo: "#04140F",
+      shadow: true,
+    },
+  },
+  {
+    name: "Violet aurora",
+    hint: "The same curtains in violet and blue. An evening service, a carol night.",
+    theme: {
+      textColor: "#F3EEFF",
+      backgroundKind: "motion",
+      motion: "aurora",
+      motionSpeed: 0.55,
+      gradientFrom: "#8A5BE2",
+      gradientTo: "#0B0718",
       shadow: true,
     },
   },
@@ -266,6 +371,33 @@ const LOOKS = [
     },
   },
   {
+    name: "Bokeh blue",
+    hint: "The same rising lights, cooler. Reads well on a stream.",
+    theme: {
+      textColor: "#EFF5FF",
+      backgroundKind: "motion",
+      motion: "bokeh",
+      motionSpeed: 0.7,
+      gradientFrom: "#6FA8F5",
+      gradientTo: "#070C1A",
+      shadow: true,
+    },
+  },
+  {
+    name: "Embers",
+    hint: "Sparks rising and going out. Warm, and quiet enough to leave up between items.",
+    theme: {
+      textColor: "#FFF1E4",
+      backgroundKind: "motion",
+      motion: "embers",
+      motionSpeed: 0.7,
+      gradientFrom: "#FF8A3D",
+      gradientTo: "#140704",
+      shadow: true,
+      referenceColor: "#E9A06A",
+    },
+  },
+  {
     name: "Light rays",
     hint: "Beams turning above the words. Slow enough to sit behind a reading.",
     theme: {
@@ -275,6 +407,58 @@ const LOOKS = [
       motionSpeed: 0.5,
       gradientFrom: "#9FC4F0",
       gradientTo: "#0A1424",
+      shadow: true,
+    },
+  },
+  {
+    name: "Gold rays",
+    hint: "The same beams, warm. A Sunday morning rather than an evening.",
+    theme: {
+      textColor: "#FFF7E9",
+      backgroundKind: "motion",
+      motion: "rays",
+      motionSpeed: 0.45,
+      gradientFrom: "#F0C879",
+      gradientTo: "#1A1206",
+      shadow: true,
+    },
+  },
+  {
+    name: "Deep swells",
+    hint: "Long slow swells across the bottom of the screen, well clear of the words.",
+    theme: {
+      textColor: "#EAF4FF",
+      backgroundKind: "motion",
+      motion: "waves",
+      motionSpeed: 0.6,
+      gradientFrom: "#2E6FB7",
+      gradientTo: "#04101F",
+      shadow: true,
+    },
+  },
+  {
+    name: "Still waters",
+    hint: "Teal swells, slower still. Psalm 23, and anything that wants calm.",
+    theme: {
+      textColor: "#EDFBFA",
+      backgroundKind: "motion",
+      motion: "waves",
+      motionSpeed: 0.4,
+      gradientFrom: "#1F8C8C",
+      gradientTo: "#031416",
+      shadow: true,
+    },
+  },
+  {
+    name: "Ripples",
+    hint: "Rings opening outwards, as slow as rain on still water. Baptisms.",
+    theme: {
+      textColor: "#EFF8FF",
+      backgroundKind: "motion",
+      motion: "ripple",
+      motionSpeed: 0.55,
+      gradientFrom: "#7FC4E8",
+      gradientTo: "#05121C",
       shadow: true,
     },
   },
@@ -290,6 +474,32 @@ const LOOKS = [
       gradientTo: "#04070F",
       shadow: true,
       referenceColor: "#9FB0D8",
+    },
+  },
+  {
+    name: "Motes",
+    hint: "Dust drifting through a shaft of light. Barely there, which is the point.",
+    theme: {
+      textColor: "#FFF8EE",
+      backgroundKind: "motion",
+      motion: "dust",
+      motionSpeed: 0.5,
+      gradientFrom: "#F2D9B0",
+      gradientTo: "#100C08",
+      shadow: true,
+    },
+  },
+  {
+    name: "Night motes",
+    hint: "The same drift, cold and dark. A vigil, or a quiet close to an evening.",
+    theme: {
+      textColor: "#E9EEF8",
+      backgroundKind: "motion",
+      motion: "dust",
+      motionSpeed: 0.45,
+      gradientFrom: "#A9BEDC",
+      gradientTo: "#05070C",
+      shadow: true,
     },
   },
   {
