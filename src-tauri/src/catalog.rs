@@ -450,7 +450,7 @@ impl Catalog {
     }
 
     /// Whether a song of this title is already in the library.
-    fn song_titled(&self, title: &str) -> Result<bool> {
+    pub(crate) fn song_titled(&self, title: &str) -> Result<bool> {
         let connection = self.connection.lock();
         let found: Option<i64> = connection
             .query_row(

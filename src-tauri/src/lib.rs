@@ -32,6 +32,7 @@ mod projector;
 mod semantic;
 mod settings;
 mod slides;
+mod songs_import;
 mod speech;
 mod log;
 mod summarise;
@@ -1928,6 +1929,153 @@ fn seed_hymns(app: &AppHandle, catalog: &Catalog) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// What an import did, in numbers an operator can act on.
+#[derive(Debug, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportReport {
+    added: usize,
+    /// Songs already in the library under the same title, left untouched.
+    duplicates: usize,
+    /// Files that could not be read. Named in the log, counted here.
+    failed: usize,
+}
+
+/**
+ * Songs from wherever the church already keeps them.
+ *
+ * A folder of OpenSong or OpenLyrics files, an OpenLP library, or text pasted
+ * into the dialog. Nothing is fetched from the internet: every song comes from
+ * something the operator pointed at.
+ *
+ * A song whose title is already in the library is left alone rather than
+ * duplicated -- importing the same folder twice is a thing people do, and it
+ * should be uneventful.
+ *
+ * Async because a library can be four hundred songs and several thousand
+ * files, and the window must stay answerable while it reads them.
+ */
+#[tauri::command]
+async fn import_songs(
+    catalog: State<'_, Arc<Catalog>>,
+    kind: String,
+    path: Option<String>,
+    text: Option<String>,
+    title: Option<String>,
+) -> CommandResult<ImportReport> {
+    let mut report = ImportReport::default();
+    let mut songs = Vec::new();
+
+    match kind.as_str() {
+        "text" => {
+            let words = text.unwrap_or_default();
+            // No title given: the first line is what somebody pasted as one.
+            let named = match title.as_deref().map(str::trim).filter(|given| !given.is_empty()) {
+                Some(given) => given.to_string(),
+                None => words
+                    .lines()
+                    .map(str::trim)
+                    .find(|line| !line.is_empty())
+                    .unwrap_or("Untitled song")
+                    .to_string(),
+            };
+            songs.push(songs_import::from_plain(&named, &words).map_err(to_message)?);
+        }
+        "openlp" => {
+            let file = path.clone().ok_or_else(|| "no file was chosen".to_string())?;
+            songs.extend(songs_import::from_openlp(std::path::Path::new(&file)).map_err(to_message)?);
+        }
+        "opensong" | "openlyrics" => {
+            let chosen = path.clone().ok_or_else(|| "no file was chosen".to_string())?;
+            for file in song_files(std::path::Path::new(&chosen)) {
+                let Ok(raw) = std::fs::read_to_string(&file) else {
+                    report.failed += 1;
+                    continue;
+                };
+                let parsed = if kind == "opensong" {
+                    songs_import::from_opensong(&raw)
+                } else {
+                    songs_import::from_openlyrics(&raw)
+                };
+                match parsed {
+                    Ok(song) => songs.push(song),
+                    Err(why) => {
+                        // Named here and counted for the operator: one bad file
+                        // in four hundred should not stop the other 399.
+                        log_line!("[songs] {} could not be read: {why}", file.display());
+                        report.failed += 1;
+                    }
+                }
+            }
+        }
+        other => return Err(format!("{other} is not a kind of song file this can read")),
+    }
+
+    for song in songs {
+        if catalog.song_titled(&song.title).map_err(to_message)? {
+            report.duplicates += 1;
+            continue;
+        }
+        let item = Item {
+            id: None,
+            title: song.title.clone(),
+            subtitle: String::new(),
+            body: catalog::ItemBody::Song { sections: song.sections, rights: song.rights },
+            path: None,
+            updated_at: 0,
+        };
+        match catalog.save(&item) {
+            Ok(_) => report.added += 1,
+            Err(why) => {
+                log_line!("[songs] {} could not be saved: {why}", song.title);
+                report.failed += 1;
+            }
+        }
+    }
+
+    log_line!(
+        "[songs] imported from {kind}: {} added, {} already there, {} unreadable",
+        report.added,
+        report.duplicates,
+        report.failed,
+    );
+    Ok(report)
+}
+
+/// Every song file under what the operator chose, folder or single file.
+///
+/// Churches keep these in a folder, sometimes with subfolders per year or per
+/// service. Capped, because a mis-click on a home directory should stop rather
+/// than read a hundred thousand files.
+fn song_files(chosen: &std::path::Path) -> Vec<std::path::PathBuf> {
+    const CAP: usize = 20_000;
+    if chosen.is_file() {
+        return vec![chosen.to_path_buf()];
+    }
+
+    let mut found = Vec::new();
+    let mut pending = vec![chosen.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&directory) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if found.len() < CAP {
+                // OpenSong's own files have no extension at all, so anything
+                // that is not obviously something else is worth trying.
+                let skip = matches!(
+                    path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref(),
+                    Some("jpg" | "jpeg" | "png" | "gif" | "mp3" | "mp4" | "mov" | "pdf" | "zip" | "db" | "sqlite")
+                );
+                if !skip {
+                    found.push(path);
+                }
+            }
+        }
+    }
+    found
+}
+
 #[tauri::command]
 fn catalog_save(
     app: tauri::AppHandle,
@@ -2304,6 +2452,7 @@ pub fn run() {
             get_theme,
             theme_for_window,
             catalog_save,
+            import_songs,
             catalog_get,
             catalog_remove,
             catalog_list,
