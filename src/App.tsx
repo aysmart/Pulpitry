@@ -8,11 +8,16 @@ import { Detections } from "./components/Detections";
 import { OriginalPanel } from "./components/OriginalPanel";
 import { Panel, PanelCount } from "./components/Panel";
 import { QueueRail } from "./components/QueueRail";
+import { ImportPreview } from "./components/ImportPreview";
 import { ScriptureFeed } from "./components/ScriptureFeed";
+import { SectionsPanel } from "./components/SectionsPanel";
+import { SongbookPanel } from "./components/SongbookPanel";
 import { ScripturePanel } from "./components/ScripturePanel";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { OutputsDialog } from "./components/OutputsDialog";
 import { useFollow } from "./lib/useFollow";
+import { presentableFor } from "./lib/schedule";
+import type { SongbookHit } from "./lib/songbook";
 import { SlidesFromSermon } from "./components/SlidesFromSermon";
 import {
   MainOutput,
@@ -325,6 +330,27 @@ export default function App() {
     },
     [stageEntry],
   );
+
+  /**
+   * A part of what is staged: a slide of a deck, a verse or chorus of a song.
+   *
+   * One click stages, two puts it up -- the rule every list in this window
+   * follows. Built from the staged item rather than through `goToSlide`, which
+   * keeps whatever was live live: right for a spoken instruction, wrong for a
+   * click somebody may have meant as a look.
+   */
+  const chooseSection = useCallback(
+    (index: number, andShow?: boolean) => {
+      if (preview?.kind !== "lyric") return;
+      const part = { ...preview, index };
+      if (andShow) showItem(part);
+      else previewItem(part);
+    },
+    [preview, showItem, previewItem],
+  );
+
+  /** The Songbook entry being looked at, before it is added to the library. */
+  const [songbookHit, setSongbookHit] = useState<SongbookHit | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -890,6 +916,150 @@ export default function App() {
           next, what moves between them — so they share one column, and the
           width that frees goes to the slides, which are read as pictures.
         */}
+        {/*
+          The song frame: two rows of three.
+
+          A worship set is two jobs at once -- running the song that is up, and
+          having the next one ready -- so the top row is the running one (the
+          plan, the output, the song's own parts) and the bottom row is the
+          finding one (this church's library, the Songbook, and what would be
+          added from it).
+        */}
+        {shape.frame === "song" ? (
+          <>
+            <div
+              className="grid min-h-0 flex-1 gap-2"
+              style={{ gridTemplateColumns: shape.topColumns }}
+            >
+              <Panel
+                title="Service"
+                actions={
+                  <PanelCount
+                    count={schedule.entries.length}
+                    onClear={schedule.clearEntries}
+                    title="Empty the running order"
+                  />
+                }
+              >
+                <QueueRail
+                  entries={schedule.entries}
+                  name={schedule.name}
+                  onStage={stageFromQueue}
+                  onRemove={schedule.removeAt}
+                  activeLabel={live?.caption || null}
+                />
+              </Panel>
+
+              <MainOutput
+                side="row"
+                preview={preview}
+                live={live}
+                onDisplay={display}
+                onClear={clearLive}
+                onStep={(forward) => void step(forward)}
+                canFollow={follow.canFollow}
+                following={follow.following}
+                onFollowChange={(on) =>
+                  on ? follow.setFollowing(true) : follow.stop()
+                }
+                advance={follow.advance}
+                onAdvanceChange={follow.setAdvance}
+                suggestion={follow.suggestion}
+                onTakeSuggestion={(index) => {
+                  goToSlide(index + 1);
+                  follow.clearSuggestion();
+                }}
+                onWind={wind}
+                onAdd={() => preview && schedule.add(preview)}
+                theme={settings?.projector ?? DEFAULT_THEME}
+                canStepBack={canStepBack}
+                canStepForward={canStepForward}
+                projectorOpen={projector.open}
+                audio={audio}
+                onAudioChange={changeAudio}
+                media={media}
+                ticker={ticker}
+              />
+
+              <SectionsPanel
+                song={preview}
+                liveKey={liveKey}
+                keyOf={keyOf}
+                onSelect={chooseSection}
+              />
+            </div>
+
+            <div
+              className="grid min-h-0 gap-2"
+              style={{
+                flexBasis: shape.basis,
+                gridTemplateColumns: shape.columns,
+              }}
+            >
+              <ScripturePanel
+                tab={shownTab}
+                tabs={shape.tabs}
+                onTab={setTab}
+                translation={translation}
+                translations={library.translations}
+                onSelectTranslation={selectTranslation}
+                onPreview={(verse, andShow) =>
+                  andShow ? showVerse(verse) : previewVerse(verse)
+                }
+                onPreviewRange={(verses, andShow) =>
+                  andShow ? showVerses(verses) : previewVerses(verses)
+                }
+                previewVerseIds={
+                  preview?.kind === "scripture"
+                    ? preview.verses.map((verse) => verse.id)
+                    : []
+                }
+                liveVerseIds={live?.ids ?? []}
+                index={semanticIndex}
+                follow={originalVerse}
+                history={history}
+                schedule={schedule}
+                onStageEntry={stageEntry}
+                onPreviewItem={(item, andShow) =>
+                  andShow ? showItem(item) : previewItem(item)
+                }
+                keyOf={keyOf}
+                previewKey={preview ? keyOf(preview) : null}
+                liveKey={liveKey}
+                theme={settings?.projector ?? DEFAULT_THEME}
+                onApplyTheme={applyTheme}
+                ticker={ticker}
+                onTickerChange={changeTicker}
+                onError={setError}
+                libraryReady={library.ready && Boolean(translation)}
+                libraryImporting={library.importing}
+                libraryError={library.error}
+              />
+
+              <SongbookPanel
+                /* The courtesy gate. The real one is the broker's: the
+                   endpoint refuses a machine that is not activated. */
+                subscribed={settings?.hasHostedSubscription ?? false}
+                chosen={songbookHit?.id ?? null}
+                onChoose={setSongbookHit}
+              />
+
+              <ImportPreview
+                hit={songbookHit}
+                onAdded={(item) => {
+                  /* Staged, not sent: adding a song is finishing a decision
+                     about the library, and the wall is a separate one. */
+                  const staged = presentableFor(item);
+                  if (staged) previewItem(staged);
+                  setNotice(`${item.title} was added to your song library.`);
+                  setSongbookHit(null);
+                }}
+                onError={setError}
+              />
+            </div>
+          </>
+        ) : null}
+
         {shape.frame === "deck" ? (
           <div
             className="grid min-h-0 flex-1 gap-2"
@@ -910,12 +1080,7 @@ export default function App() {
                    other list in the window. Built from the staged deck rather
                    than through goToSlide, which keeps whatever was live live:
                    right for a spoken instruction, wrong for a click. */
-                onSelect={(index, andShow) => {
-                  if (preview?.kind !== "lyric") return;
-                  const slide = { ...preview, index };
-                  if (andShow) showItem(slide);
-                  else previewItem(slide);
-                }}
+                onSelect={chooseSection}
               />
 
               <ScripturePanel

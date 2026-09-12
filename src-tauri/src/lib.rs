@@ -33,6 +33,7 @@ mod projector;
 mod semantic;
 mod settings;
 mod slides;
+mod songbook;
 mod songs_import;
 mod speech;
 mod log;
@@ -418,6 +419,46 @@ pub struct WindowLook {
     /// A stage display's two halves, each of which can be turned off.
     pub stage_clock: bool,
     pub stage_live: bool,
+}
+
+/// Searching the Songbook, which is the subscription's catalogue of songs.
+///
+/// Blocking work on a worker thread: it is a network call, and a search box
+/// that froze the desk while somebody typed would be worse than no search.
+#[tauri::command]
+async fn songbook_search(query: String, limit: Option<usize>) -> CommandResult<Vec<songbook::Hit>> {
+    tauri::async_runtime::spawn_blocking(move || songbook::search(&query, limit.unwrap_or(40)))
+        .await
+        .map_err(|err| err.to_string())?
+        .map_err(to_message)
+}
+
+/// One song's words, for the pane that shows what would be added.
+#[tauri::command]
+async fn songbook_get(id: String) -> CommandResult<songbook::Song> {
+    tauri::async_runtime::spawn_blocking(move || songbook::song(&id))
+        .await
+        .map_err(|err| err.to_string())?
+        .map_err(to_message)
+}
+
+/// Adds a Songbook song to this church's own library.
+///
+/// It is theirs from that moment: editable, exportable, and unaffected by
+/// anything that later happens to the subscription. Nothing is kept pointing
+/// back at the catalogue, because a song a church has is not a licence they are
+/// renting.
+#[tauri::command]
+async fn songbook_add(
+    catalog: State<'_, Arc<Catalog>>,
+    id: String,
+) -> CommandResult<Item> {
+    let song = tauri::async_runtime::spawn_blocking(move || songbook::song(&id))
+        .await
+        .map_err(|err| err.to_string())?
+        .map_err(to_message)?;
+
+    catalog.save(&songbook::as_item(&song)).map_err(to_message)
 }
 
 /// The typefaces this machine has, for the pickers in Settings and the studio.
@@ -2500,6 +2541,9 @@ pub fn run() {
             semantic_status,
             semantic_search,
             list_fonts,
+            songbook_search,
+            songbook_get,
+            songbook_add,
             get_live,
             set_live,
             get_audio,

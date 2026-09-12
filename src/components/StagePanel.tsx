@@ -620,6 +620,7 @@ function slideCount(item: Presentable | null): string {
  * proportions, so the difference between them is only which one has been sent.
  */
 export function MainOutput({
+  side = "column",
   preview,
   live,
   onDisplay,
@@ -642,7 +643,18 @@ export function MainOutput({
   onAudioChange,
   media,
   ticker,
-}: Output) {
+}: Output & {
+  /**
+   * How the two panes sit.
+   *
+   * A column on the slide desk, where the output is a narrow band beside the
+   * work. A row on the song desk, where the middle of the window is wide and
+   * two 16:9 panes stacked in it would each be a strip. The contents and the
+   * transport are identical either way -- this decides only which direction
+   * the pair runs.
+   */
+  side?: "column" | "row";
+}) {
   const [liveExtent, setLiveExtent] = useState<Extent>({
     screenfuls: 1,
     step: 1,
@@ -653,6 +665,31 @@ export function MainOutput({
     onStep,
     onWind,
   });
+
+  const previewPane = (
+    <div className="flex min-h-0 flex-1 flex-col gap-1">
+      <div className="flex shrink-0 items-baseline justify-between gap-2">
+        <span className="text-[10.5px] tracking-[0.12em] text-pulpitry-muted uppercase">
+          Preview
+        </span>
+        <span className="truncate text-[11px] text-pulpitry-muted">
+          {slideCount(preview) ||
+            (preview ? presentableLabel(preview) : "Nothing staged")}
+        </span>
+      </div>
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded border border-pulpitry-line [container-type:size]">
+        <Stage
+          body={preview ? presentableText(preview) : null}
+          asset={assetOf(preview)}
+          slide={slideOf(preview, theme)}
+          reference={preview ? presentableLabel(preview) : null}
+          tone="preview"
+          empty="Pick something below to stage it."
+          theme={theme}
+        />
+      </div>
+    </div>
+  );
 
   return (
     <Panel
@@ -678,6 +715,21 @@ export function MainOutput({
         </span>
       }
     >
+      {/*
+        Which way round the pair sits is the only difference between the two
+        desks: a column beside the slides, a row across the middle of the songs
+        window. Preview leads in a row because it is read left to right -- what
+        is coming, then what is up -- and Live leads in a column because the eye
+        goes to the top of one.
+      */}
+      <div
+        className={
+          side === "row"
+            ? "flex min-h-0 flex-1 gap-2"
+            : "flex min-h-0 flex-1 flex-col gap-2"
+        }
+      >
+      {side === "row" ? previewPane : null}
       <div className="flex min-h-0 flex-1 flex-col gap-1">
         <div className="flex shrink-0 items-baseline justify-between gap-2">
           <span className="text-[10.5px] tracking-[0.12em] text-pulpitry-gold uppercase">
@@ -707,6 +759,8 @@ export function MainOutput({
           />
           <TickerBand ticker={ticker} theme={theme} />
         </div>
+      </div>
+      {side === "column" ? previewPane : null}
       </div>
 
       {live?.body.kind === "media" ? (
@@ -750,29 +804,6 @@ export function MainOutput({
           </button>
         </div>
       ) : null}
-
-      <div className="flex min-h-0 flex-1 flex-col gap-1">
-        <div className="flex shrink-0 items-baseline justify-between gap-2">
-          <span className="text-[10.5px] tracking-[0.12em] text-pulpitry-muted uppercase">
-            Preview
-          </span>
-          <span className="truncate text-[11px] text-pulpitry-muted">
-            {slideCount(preview) ||
-              (preview ? presentableLabel(preview) : "Nothing staged")}
-          </span>
-        </div>
-        <div className="relative min-h-0 flex-1 overflow-hidden rounded border border-pulpitry-line [container-type:size]">
-          <Stage
-            body={preview ? presentableText(preview) : null}
-            asset={assetOf(preview)}
-            slide={slideOf(preview, theme)}
-            reference={preview ? presentableLabel(preview) : null}
-            tone="preview"
-            empty="Pick a deck below to stage it."
-            theme={theme}
-          />
-        </div>
-      </div>
 
       {/*
         The transport, in the order a hand uses it.

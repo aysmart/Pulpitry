@@ -63,8 +63,14 @@ export type LibraryTab =
  *   library that stages it, and one tall column holding what is on the wall,
  *   what is staged behind it and the transport between them. Right for work
  *   driven by the operator: a deck is stepped, and stepping is the job.
+ * - **song**: two rows of three. The plan, the output, and the song's parts
+ *   across the top; the library, the Songbook and what would be added along
+ *   the bottom. Right because a worship set is two jobs at once — running the
+ *   song that is up, and having the next one ready — and a song is not stepped
+ *   in order the way a deck is: the band repeats the chorus, goes back to verse
+ *   two, and finishes on the bridge, so every part needs to be one press.
  */
-export type Frame = "desk" | "deck";
+export type Frame = "desk" | "deck" | "song";
 
 export interface WorkspaceShape {
   label: string;
@@ -157,8 +163,8 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
   },
   songs: {
     label: "Songs",
-    hint: "The song library at the width a lyric needs, and what comes next",
-    frame: "desk",
+    hint: "The plan, the output, the song's parts, and where the next song comes from",
+    frame: "song",
     tabs: ["Songs", "Media", "Themes"],
     // Nothing about scripture detection: a worship set is not where a
     // paraphrase match is read, and those two panels are the width the
@@ -166,11 +172,19 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     transcript: false,
     detected: false,
     feed: false,
-    queue: true,
-    topColumns: "minmax(360px,1.6fr) minmax(220px,0.6fr)",
+    queue: false,
     original: false,
-    columns: "minmax(0,1.6fr) minmax(320px,1fr)",
-    basis: "46%",
+    // The plan, the output, the sections. The output takes the middle and most
+    // of the width: it is two 16:9 panes side by side, and everything either
+    // side of it is a list of names.
+    topColumns:
+      "minmax(200px,0.7fr) minmax(420px,1.9fr) minmax(200px,0.7fr)",
+    // The library, the Songbook, and what would be added. Even, because
+    // choosing a song is reading three lists against each other.
+    columns: "minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)",
+    // A little over half to the bottom row: the top is a preview and two short
+    // lists, and the bottom is where a set is actually built.
+    basis: "52%",
   },
   slides: {
     label: "Slides",
