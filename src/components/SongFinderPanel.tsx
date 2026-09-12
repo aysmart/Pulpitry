@@ -3,9 +3,9 @@ import { useCallback, useEffect, useState } from "react";
 import { describeError } from "../lib/api";
 import {
   RIGHTS_LABEL,
-  songbookSearch,
-  type SongbookHit,
-} from "../lib/songbook";
+  songFinderSearch,
+  type SongFinderHit,
+} from "../lib/songfinder";
 import { EmptyState, Panel } from "./Panel";
 
 /**
@@ -33,7 +33,7 @@ import { EmptyState, Panel } from "./Panel";
  * is a catalogue somebody assembles and hosts. An operator without a
  * subscription should be able to read what it is without being sold to.
  */
-export function SongbookPanel({
+export function SongFinderPanel({
   subscribed,
   chosen,
   onChoose,
@@ -42,10 +42,10 @@ export function SongbookPanel({
   subscribed: boolean;
   /** The id being previewed, so the list can mark it. */
   chosen: string | null;
-  onChoose: (hit: SongbookHit) => void;
+  onChoose: (hit: SongFinderHit) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [hits, setHits] = useState<SongbookHit[] | null>(null);
+  const [hits, setHits] = useState<SongFinderHit[] | null>(null);
   const [looking, setLooking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,7 +59,7 @@ export function SongbookPanel({
     setLooking(true);
     setError(null);
     try {
-      setHits(await songbookSearch(asked));
+      setHits(await songFinderSearch(asked));
     } catch (err) {
       setError(describeError(err));
       setHits(null);
@@ -89,7 +89,7 @@ export function SongbookPanel({
 
   return (
     <Panel
-      title="Songbook"
+      title="Song Finder"
       accent="teal"
       actions={
         hits && hits.length > 0 ? (
@@ -102,9 +102,14 @@ export function SongbookPanel({
       {!subscribed ? (
         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
           <p className="max-w-[34ch] text-[13px] leading-relaxed text-pulpitry-muted">
-            The Songbook is a catalogue of songs — the words, who wrote them,
-            and what is known about the rights — that comes with a Castavox
-            subscription. Search it, look at a song, and add it to your library.
+            Describe a song — a line you half-remember, or what it is about —
+            and the AI Song Finder works out which one you mean, from a
+            catalogue that carries the words, who wrote them, and what is known
+            about the rights. It comes with a Castavox subscription.
+          </p>
+          <p className="max-w-[34ch] text-[11.5px] leading-relaxed text-pulpitry-muted">
+            The words themselves are never generated: every song is a real
+            entry somebody checked, and a song whose terms are unknown says so.
           </p>
           <p className="max-w-[34ch] text-[11.5px] leading-relaxed text-pulpitry-muted">
             Everything else here stays free and on this machine: your own
@@ -127,8 +132,8 @@ export function SongbookPanel({
               <input
                 value={query}
                 spellCheck={false}
-                placeholder="A title, an author, or a line of the words…"
-                aria-label="Search the Songbook"
+                placeholder="A line you remember, or what it is about…"
+                aria-label="Search the AI Song Finder"
                 onChange={(event) => setQuery(event.target.value)}
                 className="w-full rounded border border-pulpitry-line bg-pulpitry-raised px-2 py-1.5 text-[12.5px] text-pulpitry-text outline-none placeholder:text-pulpitry-muted focus-visible:focus-ring"
               />
@@ -144,7 +149,9 @@ export function SongbookPanel({
           <div className="min-h-0 flex-1 overflow-auto p-1">
             {!hits && !looking && !error ? (
               <EmptyState>
-                Type a title, an author, or a line you remember.
+                Describe it. A line you half-remember, what the chorus is
+                about, or the title if you have it — the search reads meaning,
+                so it does not have to be the exact words.
               </EmptyState>
             ) : null}
 
@@ -156,8 +163,9 @@ export function SongbookPanel({
 
             {hits && hits.length === 0 ? (
               <EmptyState>
-                Nothing for “{query}”. Try a line of the words instead of the
-                title — a song is often catalogued under a name nobody uses.
+                Nothing close to “{query}”. Try saying what the song is about
+                instead — a song is often catalogued under a title nobody uses,
+                and the chorus is what people remember.
               </EmptyState>
             ) : null}
 

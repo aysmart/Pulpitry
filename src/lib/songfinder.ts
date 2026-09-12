@@ -3,12 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Item, SongRights, SongSection } from "./catalog";
 
 /**
- * The Songbook: the catalogue that comes with a subscription.
+ * The AI Song Finder: the catalogue that comes with a subscription.
  *
  * See src-tauri/src/songbook.rs for what it is and why it is the one part of
  * Pulpitry that is not on the machine. This end only asks and shows.
  */
-export interface SongbookHit {
+export interface SongFinderHit {
   id: string;
   title: string;
   author: string;
@@ -18,7 +18,7 @@ export interface SongbookHit {
   sections: number;
 }
 
-export interface SongbookSong {
+export interface SongFinderSong {
   id: string;
   title: string;
   author: string;
@@ -26,14 +26,14 @@ export interface SongbookSong {
   rights: SongRights;
 }
 
-export const songbookSearch = (query: string, limit = 40) =>
-  invoke<SongbookHit[]>("songbook_search", { query, limit });
+export const songFinderSearch = (query: string, limit = 40) =>
+  invoke<SongFinderHit[]>("songfinder_search", { query, limit });
 
-export const songbookGet = (id: string) =>
-  invoke<SongbookSong>("songbook_get", { id });
+export const songFinderGet = (id: string) =>
+  invoke<SongFinderSong>("songfinder_get", { id });
 
 /** Adds it to this church's library and hands back the row that was saved. */
-export const songbookAdd = (id: string) => invoke<Item>("songbook_add", { id });
+export const songFinderAdd = (id: string) => invoke<Item>("songfinder_add", { id });
 
 /** What a rights status means, in the words an operator can act on. */
 export const RIGHTS_LABEL: Record<string, string> = {

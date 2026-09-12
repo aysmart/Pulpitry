@@ -11,13 +11,13 @@ import { QueueRail } from "./components/QueueRail";
 import { ImportPreview } from "./components/ImportPreview";
 import { ScriptureFeed } from "./components/ScriptureFeed";
 import { SectionsPanel } from "./components/SectionsPanel";
-import { SongbookPanel } from "./components/SongbookPanel";
+import { SongFinderPanel } from "./components/SongFinderPanel";
 import { ScripturePanel } from "./components/ScripturePanel";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { OutputsDialog } from "./components/OutputsDialog";
 import { useFollow } from "./lib/useFollow";
 import { presentableFor } from "./lib/schedule";
-import type { SongbookHit } from "./lib/songbook";
+import type { SongFinderHit } from "./lib/songfinder";
 import { SlidesFromSermon } from "./components/SlidesFromSermon";
 import {
   MainOutput,
@@ -349,8 +349,8 @@ export default function App() {
     [preview, showItem, previewItem],
   );
 
-  /** The Songbook entry being looked at, before it is added to the library. */
-  const [songbookHit, setSongbookHit] = useState<SongbookHit | null>(null);
+  /** The AI Song Finder entry being looked at, before it is added to the library. */
+  const [found, setSongFinderHit] = useState<SongFinderHit | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -922,7 +922,7 @@ export default function App() {
           A worship set is two jobs at once -- running the song that is up, and
           having the next one ready -- so the top row is the running one (the
           plan, the output, the song's own parts) and the bottom row is the
-          finding one (this church's library, the Songbook, and what would be
+          finding one (this church's library, the AI Song Finder, and what would be
           added from it).
         */}
         {shape.frame === "song" ? (
@@ -1011,23 +1011,23 @@ export default function App() {
                 libraryError={library.error}
               />
 
-              <SongbookPanel
+              <SongFinderPanel
                 /* The courtesy gate. The real one is the broker's: the
                    endpoint refuses a machine that is not activated. */
                 subscribed={settings?.hasHostedSubscription ?? false}
-                chosen={songbookHit?.id ?? null}
-                onChoose={setSongbookHit}
+                chosen={found?.id ?? null}
+                onChoose={setSongFinderHit}
               />
 
               <ImportPreview
-                hit={songbookHit}
+                hit={found}
                 onAdded={(item) => {
                   /* Staged, not sent: adding a song is finishing a decision
                      about the library, and the wall is a separate one. */
                   const staged = presentableFor(item);
                   if (staged) previewItem(staged);
                   setNotice(`${item.title} was added to your song library.`);
-                  setSongbookHit(null);
+                  setSongFinderHit(null);
                 }}
                 onError={setError}
               />

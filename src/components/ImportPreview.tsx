@@ -4,11 +4,11 @@ import { describeError } from "../lib/api";
 import type { Item } from "../lib/catalog";
 import {
   RIGHTS_LABEL,
-  songbookAdd,
-  songbookGet,
-  type SongbookHit,
-  type SongbookSong,
-} from "../lib/songbook";
+  songFinderAdd,
+  songFinderGet,
+  type SongFinderHit,
+  type SongFinderSong,
+} from "../lib/songfinder";
 import { EmptyState, Panel } from "./Panel";
 
 /**
@@ -37,12 +37,12 @@ export function ImportPreview({
   onError,
 }: {
   /** The catalogue entry being looked at, or null. */
-  hit: SongbookHit | null;
+  hit: SongFinderHit | null;
   /** The saved row, so the library can refresh and stage it. */
   onAdded: (item: Item) => void;
   onError: (message: string) => void;
 }) {
-  const [song, setSong] = useState<SongbookSong | null>(null);
+  const [song, setSong] = useState<SongFinderSong | null>(null);
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +57,7 @@ export function ImportPreview({
     let live = true;
     setLoading(true);
     setError(null);
-    void songbookGet(hit.id)
+    void songFinderGet(hit.id)
       .then((found) => live && setSong(found))
       .catch((err) => {
         if (live) {
@@ -76,7 +76,7 @@ export function ImportPreview({
     if (!hit || adding) return;
     setAdding(true);
     try {
-      onAdded(await songbookAdd(hit.id));
+      onAdded(await songFinderAdd(hit.id));
     } catch (err) {
       onError(describeError(err));
     } finally {
@@ -103,7 +103,7 @@ export function ImportPreview({
     >
       {!hit ? (
         <EmptyState>
-          Pick a song from the Songbook and its words appear here.
+          Pick a song from the AI Song Finder and its words appear here.
         </EmptyState>
       ) : loading ? (
         <p className="px-3 py-4 text-center text-[12px] text-pulpitry-muted">

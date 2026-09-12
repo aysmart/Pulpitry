@@ -1,4 +1,4 @@
-//! The Songbook: songs a church can put on a wall tonight.
+//! The AI Song Finder: describe a song, and get the song.
 //!
 //! # What it is
 //!
@@ -8,6 +8,25 @@
 //! of the shape of a church's first Sunday with new software: the library is
 //! empty, the service is at ten, and typing out four songs by hand at nine is
 //! how presentation software gets abandoned.
+//!
+//! # Where the AI is, and where it deliberately is not
+//!
+//! **In the finding.** The search is by meaning rather than by keyword: the
+//! query is embedded and matched against the catalogue, so "the one about
+//! waiting on God" finds *Wait On The Lord*, and a half-remembered line finds
+//! its song whether or not the words are exact. That is the same retrieval
+//! Pulpitry already does against scripture — a paraphrase of a verse finds the
+//! verse — pointed at a different corpus. It matters because of how people
+//! actually ask for songs: by a line, by what a song is about, by the way the
+//! chorus goes. A keyword search answers none of those.
+//!
+//! **Not in the words.** Nothing here is generated. Every song is a real
+//! entry in a catalogue somebody assembled from libraries churches already own,
+//! carrying its own rights, and a song whose terms nobody has checked says so.
+//! An invented lyric on a wall is the failure this product cannot have — a
+//! congregation singing a line the songwriter never wrote, in a service, with
+//! our name on the screen. So the model chooses *which song*, never *what it
+//! says*.
 //!
 //! # Why it is not scraped
 //!
@@ -66,7 +85,7 @@ pub struct Hit {
 /// A whole song, in exactly the shape the library stores one.
 ///
 /// The same `SongSection` and `SongRights` the catalogue uses, so adding one is
-/// a save rather than a conversion — and so a song that came from the Songbook
+/// a save rather than a conversion — and so a song that came from the AI Song Finder
 /// is indistinguishable afterwards from one the church typed themselves. It is
 /// theirs once it is added: editable, exportable, and unaffected by anything
 /// that happens to the subscription.
@@ -91,7 +110,7 @@ struct Results {
 /// The token this machine was activated with, or a refusal naming the fix.
 fn credential() -> Result<String> {
     settings::load_hosted_token()?.ok_or_else(|| {
-        anyhow!("The Songbook comes with a Castavox subscription. Settings → Subscription to activate one.")
+        anyhow!("The AI Song Finder comes with a Castavox subscription. Settings → Subscription to activate one.")
     })
 }
 
@@ -105,25 +124,25 @@ fn get<T: serde::de::DeserializeOwned>(path: &str) -> Result<T> {
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .context("could not start a secure connection")?
-        .get(format!("{}/api/v1/songbook/{path}", broker_base()))
+        .get(format!("{}/api/v1/songfinder/{path}", broker_base()))
         .bearer_auth(token)
         .send()
-        .context("could not reach the Songbook")?;
+        .context("could not reach the AI Song Finder")?;
 
     let status = response.status();
     if status == reqwest::StatusCode::NOT_FOUND {
-        return Err(anyhow!("That song is no longer in the Songbook."));
+        return Err(anyhow!("That song is no longer in the AI Song Finder."));
     }
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
         return Err(anyhow!(
-            "This subscription does not include the Songbook, or it has ended. Settings → Subscription."
+            "This subscription does not include the AI Song Finder, or it has ended. Settings → Subscription."
         ));
     }
     if !status.is_success() {
-        return Err(anyhow!("The Songbook is not answering just now ({status})."));
+        return Err(anyhow!("The AI Song Finder is not answering just now ({status})."));
     }
 
-    response.json::<T>().context("the Songbook sent something unreadable")
+    response.json::<T>().context("the AI Song Finder sent something unreadable")
 }
 
 /// Searches by title, author or a line of the words.
@@ -155,7 +174,7 @@ pub fn song(id: &str) -> Result<Song> {
 pub fn as_item(song: &Song) -> Item {
     let mut rights = song.rights.clone();
     if rights.source.trim().is_empty() {
-        rights.source = "Pulpitry Songbook".to_string();
+        rights.source = "Pulpitry Song Finder".to_string();
     }
 
     Item {
@@ -239,6 +258,6 @@ mod tests {
         };
         assert_eq!(sections.len(), 1);
         // Where the words came from, so the rights claim can be traced.
-        assert_eq!(rights.source, "Pulpitry Songbook");
+        assert_eq!(rights.source, "Pulpitry Song Finder");
     }
 }
