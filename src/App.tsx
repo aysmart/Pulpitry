@@ -21,6 +21,7 @@ import { rememberLines, sameScreen, type LinesPerScreen } from "./lib/lyrics";
 import { presentableFor } from "./lib/schedule";
 import type { SongFinderHit } from "./lib/songfinder";
 import { SlidesFromSermon } from "./components/SlidesFromSermon";
+import { TemplateLibrary } from "./components/TemplateLibrary";
 import {
   MainOutput,
   PreviewPanel,
@@ -268,6 +269,15 @@ export default function App() {
   });
   const [translation, setTranslation] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /*
+   * The looks screen, opened from the top bar.
+   *
+   * Not from a tab: it was one on the song desk and nowhere at all on the
+   * scripture desk, which has a single library and therefore no tab strip to
+   * hang it from. A look belongs to the desk rather than to a library, so it
+   * is reached the way the desk's other belongings are.
+   */
+  const [looksOpen, setLooksOpen] = useState(false);
   const [outputsOpen, setOutputsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -917,6 +927,9 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         busy={busy || !settings}
         onOpenOutputs={() => setOutputsOpen(true)}
+        /* Absent on the slide desk, where a deck carries its own background
+           and a look over the top would be a second answer. */
+        onOpenLooks={shape.frame === "deck" ? null : () => setLooksOpen(true)}
         workspace={workspace}
         onWorkspace={chooseWorkspace}
       />
@@ -1126,7 +1139,6 @@ export default function App() {
                 libraryReady={library.ready && Boolean(translation)}
                 libraryImporting={library.importing}
                 libraryError={library.error}
-                deskLabel={shape.label}
                 onAddToSet={(item) => songSet.add(item)}
               />
 
@@ -1251,7 +1263,6 @@ export default function App() {
                 libraryReady={library.ready && Boolean(translation)}
                 libraryImporting={library.importing}
                 libraryError={library.error}
-                deskLabel={shape.label}
               />
             </div>
 
@@ -1482,7 +1493,6 @@ export default function App() {
             libraryReady={library.ready && Boolean(translation)}
             libraryImporting={library.importing}
             libraryError={library.error}
-            deskLabel={shape.label}
           />
 
           {/*
@@ -1661,6 +1671,16 @@ export default function App() {
           </span>
         )}
       </footer>
+
+      {looksOpen ? (
+        <TemplateLibrary
+          theme={look}
+          deskLabel={shape.label}
+          onApply={applyTheme}
+          onClose={() => setLooksOpen(false)}
+          onError={setError}
+        />
+      ) : null}
 
       {aboutOpen ? <AboutDialog onClose={() => setAboutOpen(false)} /> : null}
 

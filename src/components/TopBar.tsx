@@ -23,6 +23,7 @@ export function TopBar({
   onOpenSettings,
   busy,
   onOpenOutputs,
+  onOpenLooks,
   workspace,
   onWorkspace,
 }: {
@@ -35,6 +36,13 @@ export function TopBar({
   busy: boolean;
   /** Opens the Display outputs dialog, which replaced four controls here. */
   onOpenOutputs: () => void;
+  /**
+   * Opens the looks screen for this desk, or null where the desk has no look.
+   *
+   * Null rather than disabled: the slide desk does not have one to set, and a
+   * dead control teaches an operator to stop reading this row.
+   */
+  onOpenLooks: (() => void) | null;
   workspace: Workspace;
   onWorkspace: (workspace: Workspace) => void;
 }) {
@@ -146,6 +154,38 @@ export function TopBar({
       >
         Displays
       </button>
+
+      {/* Beside Displays, because it is the same kind of thing: how the
+          congregation's screen looks, rather than what is on it. Drawn as an
+          icon and not a word -- the row is already four controls long, and this
+          is pressed before a service rather than during one. */}
+      {onOpenLooks ? (
+        <button
+          type="button"
+          onClick={onOpenLooks}
+          aria-label="Looks"
+          title="How this desk's words are set: the typeface, the colours, the background"
+          className="rounded border border-pulpitry-line bg-pulpitry-raised p-1.5 text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          >
+            {/* A palette: the one icon everybody reads as "how this looks". */}
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 3a9 9 0 1 0 0 18c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.5-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4-4-7.6-9-7.6Z"
+            />
+            <circle cx="7.5" cy="11" r="1.2" fill="currentColor" stroke="none" />
+            <circle cx="10.5" cy="7.2" r="1.2" fill="currentColor" stroke="none" />
+            <circle cx="15" cy="8" r="1.2" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+      ) : null}
 
       <button
         type="button"

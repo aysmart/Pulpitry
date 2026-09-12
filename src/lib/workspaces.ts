@@ -50,8 +50,7 @@ export type LibraryTab =
   | "Media"
   | "Slides"
   | "Schedule"
-  | "History"
-  | "Themes";
+  | "History";
 
 /**
  * How the window itself is divided.
@@ -148,10 +147,10 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     label: "Scripture",
     hint: "What is being said, what was heard, the Bible, the original languages",
     frame: "desk",
-    // One name, so the pane is the Bible and carries no tab strip. Themes and
-    // the session's own history were tabs here and are neither of them
-    // scripture: a look is chosen once before a service, and the verses shown
-    // are a feed of their own in the row above.
+    // One name, so the pane is the Bible and carries no tab strip. The
+    // session's own history was a tab here and is not scripture: the verses
+    // shown are a feed of their own in the row above. The look is not a
+    // library either -- it is in the top bar, where every desk can reach it.
     tabs: ["Scripture"],
     transcript: true,
     detected: true,
@@ -167,7 +166,7 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     label: "Songs",
     hint: "The plan, the output, the song's parts, and where the next song comes from",
     frame: "song",
-    tabs: ["Songs", "Media", "Themes"],
+    tabs: ["Songs", "Media"],
     // Nothing about scripture detection: a worship set is not where a
     // paraphrase match is read, and those two panels are the width the
     // library needs.
@@ -205,13 +204,14 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
      */
     frame: "deck",
     /*
-     * No Themes tab, deliberately.
+     * Slides and media, and no look of its own.
      *
      * A deck carries its own background and every slide on it is laid out
      * against that background in the studio. A look applied over the top would
      * be a second answer to a question the deck has already answered -- and the
      * operator would have two places to change the same thing, which is how a
      * deck comes to look different on the wall than it did while it was made.
+     * The top bar's Looks button is absent on this desk for the same reason.
      */
     tabs: ["Slides", "Media"],
     transcript: false,
