@@ -133,10 +133,15 @@ export async function labelFor(entry: PlanEntry): Promise<string | null> {
  *
  * Dated rather than numbered: services are found by when they happened.
  */
-export function defaultServiceName(now = new Date()): string {
-  return now.toLocaleDateString(undefined, {
+export function defaultServiceName(
+  /** Which list is being named, so two dated the same day read differently. */
+  kind: "service" | "songSet" = "service",
+  now = new Date(),
+): string {
+  const date = now.toLocaleDateString(undefined, {
     weekday: "long",
     day: "numeric",
     month: "long",
   });
+  return kind === "songSet" ? `Songs · ${date}` : date;
 }

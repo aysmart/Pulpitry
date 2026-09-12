@@ -45,7 +45,18 @@ export interface ScheduleState {
  * Entries hold references, so a plan made on Tuesday still points at the right
  * things on Sunday even if the song was edited in between.
  */
-export function useSchedule(onError?: (message: string) => void) {
+export function useSchedule(
+  onError?: (message: string) => void,
+  /**
+   * Which list this is: the service plan, or the songs for it.
+   *
+   * One hook, two instances, because the two lists behave identically and
+   * differ only in what they are *about* -- see the note on `SongSet` in the
+   * catalogue. A second copy of this file would be a second place for the
+   * save-after-a-pause, the auto-create and the stale-label repair to drift.
+   */
+  kind: "service" | "songSet" = "service",
+) {
   const [services, setServices] = useState<Item[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
   const [name, setName] = useState("");
@@ -72,12 +83,12 @@ export function useSchedule(onError?: (message: string) => void) {
   // on Saturday expects to find it there, not an empty list.
   useEffect(() => {
     let active = true;
-    void catalogList("service", 100)
+    void catalogList(kind, 100)
       .then((found) => {
         if (!active) return;
         setServices(found);
         const latest = found[0];
-        if (!latest || latest.body.kind !== "service") return;
+        if (!latest || latest.body.kind !== kind) return;
         setOpenId(latest.id);
         setName(latest.title);
         setEntries(latest.body.entries);
@@ -94,9 +105,9 @@ export function useSchedule(onError?: (message: string) => void) {
       try {
         const saved = await catalogSave({
           id,
-          title: title.trim() || defaultServiceName(),
+          title: title.trim() || defaultServiceName(kind),
           subtitle: "",
-          body: { kind: "service", entries: list },
+          body: { kind, entries: list },
           path: null,
           updatedAt: 0,
         });
@@ -155,9 +166,9 @@ export function useSchedule(onError?: (message: string) => void) {
       try {
         const saved = await catalogSave({
           id: null,
-          title: title?.trim() || defaultServiceName(),
+          title: title?.trim() || defaultServiceName(kind),
           subtitle: "",
-          body: { kind: "service", entries: [] },
+          body: { kind, entries: [] },
           path: null,
           updatedAt: 0,
         });
@@ -179,7 +190,7 @@ export function useSchedule(onError?: (message: string) => void) {
     async (id: number) => {
       await flush();
       const service = services.find((candidate) => candidate.id === id);
-      if (!service || service.body.kind !== "service") return;
+      if (!service || service.body.kind !== kind) return;
       dirty.current = false;
       setOpenId(id);
       setName(service.title);
@@ -203,7 +214,7 @@ export function useSchedule(onError?: (message: string) => void) {
         // Fall back to whatever is next rather than leaving nothing open.
         dirty.current = false;
         const next = left[0];
-        if (next && next.body.kind === "service") {
+        if (next && next.body.kind === kind) {
           setOpenId(next.id);
           setName(next.title);
           setEntries(next.body.entries);

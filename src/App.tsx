@@ -299,6 +299,15 @@ export default function App() {
   // The running order. Kept in the library rather than in state, so closing
   // the app mid-service does not cost the plan.
   const schedule = useSchedule(setError);
+  /*
+   * The songs for this service, which is a different list from the plan.
+   *
+   * Its own rows, not a filtered view of the plan: two people build these,
+   * usually on different days, and sharing one list meant the worship leader
+   * reordering their songs reordered the service and the person planning the
+   * service could delete a song out from under the band.
+   */
+  const songSet = useSchedule(setError, "songSet");
   const { audio, change: changeAudio } = useAudio();
   const media = useMedia();
   const { ticker, change: changeTicker } = useTicker();
@@ -347,6 +356,23 @@ export default function App() {
       else previewItem(part);
     },
     [preview, showItem, previewItem],
+  );
+
+  /**
+   * Taking a song out of the set, which follows the plan's own rule on the
+   * other list: one click stages, two puts it up, and what goes on the screen
+   * is the item that came back rather than whatever `preview` holds this
+   * render.
+   */
+  const stageFromSet = useCallback(
+    (index: number, andShow?: boolean) => {
+      void songSet.stage(index).then((staged) => {
+        if (!staged) return;
+        previewItem(staged);
+        if (andShow) showItem(staged);
+      });
+    },
+    [songSet, previewItem, showItem],
   );
 
   /** The AI Song Finder entry being looked at, before it is added to the library. */
@@ -940,21 +966,25 @@ export default function App() {
               className="grid min-h-0 gap-2"
               style={{ gridTemplateColumns: shape.topColumns }}
             >
+              {/* The set, not the service. The plan lives on the Plan desk
+                  and in the scripture feed's queue; this is what the band is
+                  playing, in the order the worship leader put them. */}
               <Panel
-                title="Service"
+                title="Song set"
+                accent="teal"
                 actions={
                   <PanelCount
-                    count={schedule.entries.length}
-                    onClear={schedule.clearEntries}
-                    title="Empty the running order"
+                    count={songSet.entries.length}
+                    onClear={songSet.clearEntries}
+                    title="Empty the set"
                   />
                 }
               >
                 <QueueRail
-                  entries={schedule.entries}
-                  name={schedule.name}
-                  onStage={stageFromQueue}
-                  onRemove={schedule.removeAt}
+                  entries={songSet.entries}
+                  name={songSet.name}
+                  onStage={stageFromSet}
+                  onRemove={songSet.removeAt}
                   activeLabel={live?.caption || null}
                 />
               </Panel>
@@ -1009,6 +1039,7 @@ export default function App() {
                 libraryReady={library.ready && Boolean(translation)}
                 libraryImporting={library.importing}
                 libraryError={library.error}
+                onAddToSet={(item) => songSet.add(item)}
               />
 
               <SongFinderPanel
@@ -1056,7 +1087,9 @@ export default function App() {
                   follow.clearSuggestion();
                 }}
                 onWind={wind}
-                onAdd={() => preview && schedule.add(preview)}
+                /* Into the set here, because that is the list in front of the
+                   operator. Everywhere else Add means the running order. */
+                onAdd={() => preview && songSet.add(preview)}
                 theme={settings?.projector ?? DEFAULT_THEME}
                 canStepBack={canStepBack}
                 canStepForward={canStepForward}

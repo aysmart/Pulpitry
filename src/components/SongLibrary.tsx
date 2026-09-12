@@ -14,6 +14,7 @@ import {
   type SongSection,
 } from "../lib/catalog";
 import type { ProjectorTheme } from "../lib/theme";
+import { presentableFor } from "../lib/schedule";
 import type { Presentable } from "../lib/usePresentation";
 import { EmptyState } from "./Panel";
 import { SlideThumb } from "./SlideThumb";
@@ -291,6 +292,7 @@ function SongSections({
 export function SongLibrary({
   theme,
   onPreview,
+  onAddToSet,
   previewKey,
   liveKey,
   keyOf,
@@ -298,6 +300,14 @@ export function SongLibrary({
 }: {
   theme: ProjectorTheme;
   onPreview: (item: Presentable, andShow?: boolean) => void;
+  /**
+   * Puts a song in the set being built, without staging it.
+   *
+   * Absent on every arrangement but the song desk, and the plus is absent with
+   * it: a control that adds to a list nobody can see is a control that gets
+   * pressed twice and trusted never.
+   */
+  onAddToSet?: (item: Presentable) => void;
   previewKey: string | null;
   liveKey: string | null;
   keyOf: (item: Presentable) => string;
@@ -519,6 +529,30 @@ export function SongLibrary({
                         </span>
                       ) : null}
                     </button>
+                    {/*
+                      Straight into the set, without staging it.
+
+                      A worship leader building Sunday adds five songs in a
+                      row, and none of them is the one they want on the screen
+                      -- so this is deliberately not the click that stages.
+                      Shown on every row rather than only the open one: adding
+                      is the commonest thing done here, and needing to open a
+                      song first would make it two presses each.
+                    */}
+                    {onAddToSet ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const staged = presentableFor(song);
+                          if (staged) onAddToSet(staged);
+                        }}
+                        title={`Add ${song.title} to the set`}
+                        aria-label={`Add ${song.title} to the set`}
+                        className="shrink-0 rounded px-1.5 py-0.5 text-[14px] leading-none text-pulpitry-muted transition-colors hover:text-pulpitry-gold focus-visible:focus-ring"
+                      >
+                        +
+                      </button>
+                    ) : null}
                     {open ? (
                       <>
                         <button

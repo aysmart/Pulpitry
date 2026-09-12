@@ -58,6 +58,7 @@ export function ScripturePanel({
   libraryReady,
   libraryImporting,
   libraryError,
+  onAddToSet,
   tab: chosenTab,
   tabs,
   onTab,
@@ -91,6 +92,14 @@ export function ScripturePanel({
   libraryReady: boolean;
   libraryImporting: string | null;
   libraryError: string | null;
+  /**
+   * Puts a song straight into the set being built, without staging it.
+   *
+   * Only the song desk passes one: it is the arrangement with a set in front
+   * of the operator, and a plus on a song row anywhere else would add to a
+   * list that is not on screen.
+   */
+  onAddToSet?: (item: Presentable) => void;
   /** Which library is in front. Held by the desk, so a workspace can set it. */
   tab: Tab;
   /** The ones this arrangement offers, in order. */
@@ -182,6 +191,7 @@ export function ScripturePanel({
         <SongLibrary
           theme={theme}
           onPreview={onPreviewItem}
+          onAddToSet={onAddToSet}
           previewKey={previewKey}
           liveKey={liveKey}
           keyOf={keyOf}

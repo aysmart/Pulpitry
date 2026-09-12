@@ -289,6 +289,21 @@ pub enum ItemBody {
     },
     /// A service plan: the running order for one gathering.
     Service { entries: Vec<PlanEntry> },
+    /**
+     * The songs for one gathering, which is not the same list as the plan.
+     *
+     * Two lists because two people build them, usually on different days. The
+     * plan is the whole shape of the service -- welcome, notices, the reading,
+     * the sermon, the offering -- and the set is what the band is playing,
+     * often with a song in it that ends up unused and an order the worship
+     * leader owns. Keeping them as one list meant the worship leader
+     * rearranging their songs reordered the service, and the person planning
+     * the service could delete a song out from under the band.
+     *
+     * Same entry shape as a plan, so everything that stages, relabels or
+     * resolves an entry works on both without knowing which it has.
+     */
+    SongSet { entries: Vec<PlanEntry> },
 }
 
 impl ItemBody {
@@ -302,6 +317,7 @@ impl ItemBody {
             ItemBody::Slide { .. } => "slide",
             ItemBody::Deck { .. } => "deck",
             ItemBody::Service { .. } => "service",
+            ItemBody::SongSet { .. } => "songSet",
         }
     }
 
@@ -332,8 +348,10 @@ impl ItemBody {
                 .collect::<Vec<_>>()
                 .join(" "),
             // An operator looking for an old service remembers what was in it
-            // — a song, a passage — far sooner than what it was called.
-            ItemBody::Service { entries } => entries
+            // — a song, a passage — far sooner than what it was called. The
+            // same is true of a set, and more so: a set is *only* what was in
+            // it, and "the Sunday we did Waymaker" is how it gets found.
+            ItemBody::Service { entries } | ItemBody::SongSet { entries } => entries
                 .iter()
                 .map(|entry| entry.label.clone())
                 .collect::<Vec<_>>()

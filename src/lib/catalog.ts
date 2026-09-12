@@ -159,7 +159,17 @@ export type ItemBody =
       background?: Background | null;
     }
   /** A service plan: the running order for one gathering. */
-  | { kind: "service"; entries: PlanEntry[] };
+  | { kind: "service"; entries: PlanEntry[] }
+  /**
+   * The songs for one gathering, which is not the same list as the plan.
+   *
+   * Two lists because two people build them, usually on different days: the
+   * plan is the shape of the service, the set is what the band is playing.
+   * Held apart so that the worship leader reordering their songs does not
+   * reorder the service, and the person planning the service cannot delete a
+   * song out from under the band.
+   */
+  | { kind: "songSet"; entries: PlanEntry[] };
 
 export type ItemKind = ItemBody["kind"];
 
