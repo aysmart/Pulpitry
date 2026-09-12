@@ -17,7 +17,12 @@ import {
   type SlideComponent,
   type SlideLayout,
 } from "./projector";
-import { baseSize, panelStyle, type ProjectorTheme } from "./theme";
+import {
+  baseSize,
+  panelStyle,
+  withColourAlpha,
+  type ProjectorTheme,
+} from "./theme";
 
 /**
  * Turning an arranged slide into a laid-out one, as it was already drawn.
@@ -366,8 +371,10 @@ function piece(
               weight: 400,
               align: "left",
               vertical: "top",
-              opacity: 70,
-              color: accentOf(theme),
+              // Seven tenths, as the engine draws a marker -- carried in the
+              // colour, so nothing on a promoted slide has a second, hidden
+              // transparency an operator cannot reach.
+              color: withColourAlpha(accentOf(theme), 70),
             },
             theme,
           ),
@@ -455,7 +462,7 @@ function piece(
               weight: 400,
               align: "center",
               vertical: "top",
-              opacity: 70,
+              color: withColourAlpha(theme.textColor, 70),
             },
             theme,
           ),
@@ -716,8 +723,8 @@ function arrange(
           kind: "shape",
           id: `column-rule-${column}`,
           shape: "line",
-          fill: accentOf(theme),
-          opacity: 50,
+          fill: withColourAlpha(accentOf(theme), 50),
+          opacity: 100,
           radius: 0,
           x: left,
           y: at,

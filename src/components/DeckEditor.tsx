@@ -27,8 +27,14 @@ import {
   type Typeset,
 } from "../lib/design";
 import { promote } from "../lib/promote";
-import { FONT_FAMILIES, type ProjectorTheme } from "../lib/theme";
+import {
+  alphaOf,
+  FONT_FAMILIES,
+  withColourAlpha,
+  type ProjectorTheme,
+} from "../lib/theme";
 import { Backdrop } from "./Backdrop";
+import { Swatch } from "./Controls";
 import { boxStyle, DesignedView, typeStyle } from "./DesignedView";
 
 const FIELD =
@@ -196,61 +202,32 @@ function Segment<T extends string>({
   );
 }
 
-function Colour({
-  label,
-  value,
-  onChange,
-  opacity,
-  onOpacity,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  opacity?: number;
-  onOpacity?: (value: number) => void;
-}) {
-  return (
-    <div>
-      <span className="mb-1 block text-[11px] text-pulpitry-muted">
-        {label}
-      </span>
-      <div className="flex items-center gap-1.5">
-        <input
-          type="color"
-          value={value}
-          aria-label={label}
-          onChange={(event) => onChange(event.target.value)}
-          className="h-8 w-9 shrink-0 rounded border border-pulpitry-line bg-pulpitry-raised focus-visible:focus-ring"
-        />
-        <input
-          value={value.replace("#", "")}
-          spellCheck={false}
-          onChange={(event) => {
-            const hex = event.target.value.replace(/[^0-9a-fA-F]/g, "").slice(0, 6);
-            onChange(`#${hex.padEnd(6, hex.slice(-1) || "0")}`);
-          }}
-          className={`min-w-0 flex-1 ${FIELD}`}
-        />
-        {onOpacity ? (
-          <span className="flex shrink-0 items-center gap-1">
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={opacity ?? 100}
-              aria-label={`${label} opacity`}
-              onChange={(event) => {
-                const next = numeric(event.target.value);
-                if (next !== null) onOpacity(Math.max(0, Math.min(100, next)));
-              }}
-              className={`w-[3.6rem] ${FIELD}`}
-            />
-            <span className="text-[11px] text-pulpitry-muted">%</span>
-          </span>
-        ) : null}
-      </div>
-    </div>
-  );
+/**
+ * Folds an element's own opacity into its colour.
+ *
+ * Transparency used to be a multiplier on the element and is now part of the
+ * colour, which is where a tint and a fade both live. Rather than keep two
+ * controls that multiply — the kind of pair nobody can predict the result of —
+ * anything that arrives with a separate opacity has it folded into its colour
+ * once, on open. An image keeps its own, since a photograph has no colour to
+ * carry one.
+ */
+function folded(element: SlideElement): SlideElement {
+  if (element.kind === "image" || element.opacity >= 100) return element;
+
+  const share = element.opacity / 100;
+  if (element.kind === "shape") {
+    return {
+      ...element,
+      fill: withColourAlpha(element.fill, alphaOf(element.fill) * share),
+      opacity: 100,
+    };
+  }
+  return {
+    ...element,
+    color: withColourAlpha(element.color, alphaOf(element.color) * share),
+    opacity: 100,
+  };
 }
 
 /**
@@ -447,7 +424,9 @@ export function DeckEditor({
     (deck?.sections ?? []).map((section, index) => ({
       ...section,
       label: section.label || `Page ${index + 1}`,
-      elements: promote(section, churchTheme),
+      // Folded on the way in, so transparency is in one place — the colour —
+      // whatever the slide was saved with.
+      elements: promote(section, churchTheme).map(folded),
     })),
   );
   const [background, setBackground] = useState<Background>(
@@ -1214,18 +1193,12 @@ export function DeckEditor({
                         ))}
                       </select>
                     </label>
-                    <Colour
+                    <Swatch
                       label="Fill"
                       value={chosen.fill}
-                      opacity={chosen.opacity}
                       onChange={(fill) =>
                         change(chosen.id, (element) =>
                           element.kind === "shape" ? { ...element, fill } : element,
-                        )
-                      }
-                      onOpacity={(opacity) =>
-                        change(chosen.id, (element) =>
-                          element.kind === "shape" ? { ...element, opacity } : element,
                         )
                       }
                     />
@@ -1379,18 +1352,12 @@ export function DeckEditor({
                     />
                   </div>
 
-                  <Colour
+                  <Swatch
                     label="Colour"
                     value={chosen.color}
-                    opacity={chosen.opacity}
                     onChange={(color) =>
                       change(chosen.id, (element) =>
                         isTypeset(element) ? { ...element, color } : element,
-                      )
-                    }
-                    onOpacity={(opacity) =>
-                      change(chosen.id, (element) =>
-                        isTypeset(element) ? { ...element, opacity } : element,
                       )
                     }
                   />
@@ -1543,7 +1510,7 @@ export function DeckEditor({
             </label>
 
             {background.backgroundKind === "color" ? (
-              <Colour
+              <Swatch
                 label="Colour"
                 value={background.backgroundColor}
                 onChange={(backgroundColor) =>
@@ -1557,7 +1524,7 @@ export function DeckEditor({
               <>
                 <div className="flex gap-1.5">
                   <div className="min-w-0 flex-1">
-                    <Colour
+                    <Swatch
                       label="From"
                       value={background.gradientFrom}
                       onChange={(gradientFrom) =>
@@ -1566,7 +1533,7 @@ export function DeckEditor({
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <Colour
+                    <Swatch
                       label="To"
                       value={background.gradientTo}
                       onChange={(gradientTo) =>

@@ -391,21 +391,95 @@ export function panelStyle(theme: ProjectorTheme): {
   };
 }
 
+/**
+ * A colour's digits, whatever shape it was written in.
+ *
+ * Three, six or eight, with or without a hash: `#FFF`, `ffffff`, `#FFFFFF80`.
+ * Eight is six plus alpha, which CSS understands natively — so a colour with
+ * alpha needs no special handling anywhere it is *drawn*, only where it is
+ * picked apart.
+ */
+function digits(hex: string): { rgb: string; alpha: number } | null {
+  const clean = hex.trim().replace("#", "");
+  if (!/^[0-9a-fA-F]+$/.test(clean)) return null;
+
+  if (clean.length === 3 || clean.length === 4) {
+    const doubled = clean
+      .split("")
+      .map((part) => part + part)
+      .join("");
+    return {
+      rgb: doubled.slice(0, 6),
+      alpha: clean.length === 4 ? Number.parseInt(doubled.slice(6, 8), 16) / 255 : 1,
+    };
+  }
+  if (clean.length === 6) return { rgb: clean, alpha: 1 };
+  if (clean.length === 8) {
+    return {
+      rgb: clean.slice(0, 6),
+      alpha: Number.parseInt(clean.slice(6, 8), 16) / 255,
+    };
+  }
+  return null;
+}
+
+/** The opaque part of a colour, as `<input type="color">` requires it. */
+export function rgbOf(hex: string): string {
+  return `#${digits(hex)?.rgb ?? "000000"}`;
+}
+
+/** How transparent a colour is, 0 to 100, as the editors show it. */
+export function alphaOf(hex: string): number {
+  return Math.round((digits(hex)?.alpha ?? 1) * 100);
+}
+
+/**
+ * The same colour at a different alpha.
+ *
+ * Stored as six digits at full opacity and eight below it, so a colour nobody
+ * has made transparent stays exactly the string it always was — which keeps
+ * every theme, look and deck saved before alpha existed byte-identical.
+ */
+export function withColourAlpha(hex: string, percent: number): string {
+  const parts = digits(hex);
+  const rgb = parts?.rgb ?? "000000";
+  const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+  if (clamped >= 100) return `#${rgb}`;
+  const byte = Math.round((clamped / 100) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `#${rgb}${byte}`;
+}
+
+/**
+ * What somebody typed, as a colour, or nothing.
+ *
+ * Returns null rather than a guess while a field is half-typed: "#ff" is not a
+ * colour yet, and turning it into one would fight the person typing it.
+ */
+export function readColour(raw: string): string | null {
+  const parts = digits(raw);
+  if (!parts) return null;
+  return parts.alpha >= 1
+    ? `#${parts.rgb}`
+    : withColourAlpha(`#${parts.rgb}`, parts.alpha * 100);
+}
+
+/**
+ * A colour at a fraction of its own opacity.
+ *
+ * Multiplies rather than replaces: a hairline derived at 0.45 from a text
+ * colour the church already set to 80% should be 0.36, not 0.45. Before alpha
+ * could be stored that distinction could not arise, and the stored alpha was
+ * silently dropped here.
+ */
 export function withAlpha(hex: string, alpha: number): string {
-  const clean = hex.replace("#", "");
-  const full =
-    clean.length === 3
-      ? clean
-          .split("")
-          .map((part) => part + part)
-          .join("")
-      : clean.padEnd(6, "0").slice(0, 6);
-  const value = Number.parseInt(full, 16);
+  const parts = digits(hex);
+  if (!parts) return `rgba(0,0,0,${alpha})`;
+  const value = Number.parseInt(parts.rgb, 16);
   if (!Number.isFinite(value)) return `rgba(0,0,0,${alpha})`;
-  return `rgba(${(value >> 16) & 255},${(value >> 8) & 255},${value & 255},${Math.min(
-    1,
-    Math.max(0, alpha),
-  )})`;
+  const combined = Math.min(1, Math.max(0, alpha)) * parts.alpha;
+  return `rgba(${(value >> 16) & 255},${(value >> 8) & 255},${value & 255},${combined})`;
 }
 
 /**

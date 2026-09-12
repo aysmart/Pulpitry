@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import type { ProjectorTheme } from "../lib/theme";
+import { withAlpha, type ProjectorTheme } from "../lib/theme";
 
 /**
  * A background that moves, drawn rather than played.
@@ -262,21 +262,12 @@ function stars(
  * a background is decoration, and a typo in a hex field must not stop a
  * service.
  */
-function withAlpha(colour: string, alpha: number): string {
-  const hex = colour.trim().replace("#", "");
-  const full =
-    hex.length === 3
-      ? hex
-          .split("")
-          .map((c) => c + c)
-          .join("")
-      : hex;
-  const value = Number.parseInt(full.slice(0, 6), 16);
-  if (full.length < 6 || Number.isNaN(value)) {
-    return `rgba(255, 255, 255, ${alpha})`;
-  }
-  const r = (value >> 16) & 255;
-  const g = (value >> 8) & 255;
-  const b = value & 255;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
+/*
+ * The shared one, deliberately.
+ *
+ * This file kept a copy, which was harmless while a colour was six digits and
+ * wrong the moment one could carry its own alpha: a motion background built
+ * from a gradient the operator had set to a third would have been drawn at full
+ * strength here and at a third everywhere else. The shared helper multiplies,
+ * so the two agree.
+ */

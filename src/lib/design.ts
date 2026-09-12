@@ -340,8 +340,16 @@ export function newShape(shape: ShapeKind): ShapeElement {
     kind: "shape",
     id: identity(),
     shape,
-    fill: line ? "#D8B25C" : "#FFFFFF",
-    opacity: line ? 100 : 20,
+    /*
+     * A rule arrives solid and a band arrives as a tint.
+     *
+     * The transparency is in the colour rather than in the element, because a
+     * tint is what a band is *for* — something for words to sit on with the
+     * picture behind still showing — and that is a property of the colour.
+     * `opacity` stays at full so there is one number to think about.
+     */
+    fill: line ? "#D8B25C" : "#FFFFFF33",
+    opacity: 100,
     radius: shape === "rounded" ? 32 : line ? 4 : 0,
     x: line ? 210 : 660,
     y: line ? 660 : 340,
