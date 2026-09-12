@@ -101,7 +101,23 @@ export function SongEditor({
           type="button"
           disabled={!title.trim()}
           onClick={() =>
-            onSave({ title: title.trim(), author: author.trim(), sections, rights })
+            onSave({
+            title: title.trim(),
+            author: author.trim(),
+            sections,
+            /*
+             * Everything the song arrived with is kept: an imported song
+             * carries its terms and where it came from, and this screen no
+             * longer asks about either -- so it must not quietly drop them.
+             *
+             * The one field it does feed is who wrote the words, from the
+             * author box above. It used to be asked twice on this screen.
+             */
+            rights: {
+              ...rights,
+              author: rights.author.trim() || author.trim(),
+            },
+          })
           }
           title={title.trim() ? "Keep this song" : "A title is needed first"}
           className="rounded bg-pulpitry-gold px-3.5 py-2 text-[13px] text-pulpitry-ink disabled:opacity-40 focus-visible:focus-ring"
@@ -223,8 +239,6 @@ export function SongEditor({
           {/* How the words are set, against the words themselves. It is the
               church's look and says so -- see TypeControls. */}
           <TypeControls theme={theme} onChange={onTheme} />
-
-          <RightsFields rights={rights} onChange={setRights} />
         </div>
 
         {/* What it turns into, all of it. */}
@@ -264,72 +278,6 @@ export function SongEditor({
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-/**
- * Where the words came from and on what terms.
- *
- * Kept beside the words rather than behind a button: the question is easiest to
- * answer at the moment somebody has the source in front of them, and hardest
- * six months later when a licence is being reported.
- */
-function RightsFields({
-  rights,
-  onChange,
-}: {
-  rights: SongRights;
-  onChange: (rights: SongRights) => void;
-}) {
-  return (
-    <div className="flex shrink-0 flex-col gap-2 rounded border border-pulpitry-line p-2.5">
-      <label className="block">
-        <span className="mb-1 block text-[11px] tracking-wide text-pulpitry-muted uppercase">
-          May these words go on a screen?
-        </span>
-        <select
-          value={rights.status}
-          onChange={(event) =>
-            onChange({
-              ...rights,
-              status: event.target.value as SongRights["status"],
-            })
-          }
-          className={FIELD}
-        >
-          <option value="unknown">Nobody has checked</option>
-          <option value="publicDomain">Public domain</option>
-          <option value="licensed">Covered by our licence</option>
-          <option value="restricted">Not covered</option>
-        </select>
-      </label>
-
-      <div className="flex gap-2">
-        <input
-          value={rights.author}
-          placeholder="Words by"
-          onChange={(event) => onChange({ ...rights, author: event.target.value })}
-          className={FIELD}
-        />
-        {/* Separate because words and tune expire separately, and only the
-            words are what this application reproduces. */}
-        <input
-          value={rights.composer}
-          placeholder="Tune by"
-          onChange={(event) =>
-            onChange({ ...rights, composer: event.target.value })
-          }
-          className={FIELD}
-        />
-      </div>
-
-      <input
-        value={rights.source}
-        placeholder="Where the words came from"
-        onChange={(event) => onChange({ ...rights, source: event.target.value })}
-        className={FIELD}
-      />
     </div>
   );
 }
