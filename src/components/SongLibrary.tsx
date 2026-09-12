@@ -17,6 +17,7 @@ import type { ProjectorTheme } from "../lib/theme";
 import type { Presentable } from "../lib/usePresentation";
 import { EmptyState } from "./Panel";
 import { SlideThumb } from "./SlideThumb";
+import { SongImport } from "./SongImport";
 
 /**
  * Sections are written as plain text, blank line between blocks, an optional
@@ -312,6 +313,7 @@ export function SongLibrary({
     body: string;
     rights: SongRights;
   } | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const refresh = useCallback(
     async (keep?: number | null) => {
@@ -359,6 +361,16 @@ export function SongLibrary({
       onError(err instanceof Error ? err.message : String(err));
     }
   };
+
+  if (importing) {
+    return (
+      <SongImport
+        onClose={() => setImporting(false)}
+        onImported={() => void refresh()}
+        onError={onError}
+      />
+    );
+  }
 
   if (editing) {
     return (
@@ -453,6 +465,14 @@ export function SongLibrary({
         </button>
         <button
           type="button"
+          onClick={() => setImporting(true)}
+          title="Bring a library over from EasyWorship, OpenLP or OpenSong"
+          className="rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1.5 text-[12.5px] text-pulpitry-text hover:border-pulpitry-gold-dim hover:text-pulpitry-gold focus-visible:focus-ring"
+        >
+          Import
+        </button>
+        <button
+          type="button"
           onClick={() => {
             // Without this the save path treats a new song as an edit of
             // whichever one is open and overwrites it.
@@ -470,7 +490,7 @@ export function SongLibrary({
         <EmptyState>
           {query.trim()
             ? `Nothing matching “${query}”.`
-            : "No songs yet. Press New to add one — paste the lyrics and blank lines will split them into slides."}
+            : "No songs yet. Press Import to bring a library over from EasyWorship, OpenLP or OpenSong, or New to add one — paste the lyrics and blank lines will split them into slides."}
         </EmptyState>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
