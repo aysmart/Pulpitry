@@ -96,14 +96,73 @@ export interface ScriptureElement extends Box, Typeset {
   showReference: boolean;
 }
 
+/**
+ * Every shape the renderer can draw.
+ *
+ * A short list on purpose, and each one earns its place on a church slide: a
+ * band to tint or divide, a rule under a heading, a disc or a marker behind a
+ * number, a triangle or a chevron to point at something. Anything beyond this
+ * is a drawing program, and a church making a poster has one of those.
+ */
+export type ShapeKind =
+  | "rectangle"
+  | "rounded"
+  | "circle"
+  | "ellipse"
+  | "triangle"
+  | "diamond"
+  | "chevron"
+  | "star"
+  | "line";
+
+export const SHAPES: ShapeKind[] = [
+  "rectangle",
+  "rounded",
+  "circle",
+  "ellipse",
+  "triangle",
+  "diamond",
+  "chevron",
+  "star",
+  "line",
+];
+
+export const SHAPE_LABELS: Record<ShapeKind, string> = {
+  rectangle: "Rectangle",
+  rounded: "Rounded",
+  circle: "Circle",
+  ellipse: "Ellipse",
+  triangle: "Triangle",
+  diamond: "Diamond",
+  chevron: "Chevron",
+  star: "Star",
+  line: "Rule",
+};
+
 export interface ShapeElement extends Box {
   kind: "shape";
   id: string;
-  shape: "rectangle" | "ellipse" | "line";
+  shape: ShapeKind;
   fill: string;
   opacity: number;
-  /** Corner rounding in canvas units. Ignored by an ellipse and a line. */
+  /** Corner rounding in canvas units. Only the boxy shapes use it. */
   radius: number;
+}
+
+/**
+ * A comparison, a rota, a set of figures — the one arranged component that
+ * cannot be reduced to lines without losing what it is.
+ *
+ * It exists so a generated slide survives being edited. The engine draws
+ * tables often — "under the law" beside "under grace", a giving summary, a
+ * rota — and promoting one to a stack of text elements would turn the grid
+ * into a paragraph. Drawn here with the same hairlines the wall uses.
+ */
+export interface TableElement extends Box, Typeset {
+  kind: "table";
+  id: string;
+  header: string[];
+  rows: string[][];
 }
 
 export interface ImageElement extends Box {
@@ -118,14 +177,19 @@ export interface ImageElement extends Box {
 export type SlideElement =
   | TextElement
   | ScriptureElement
+  | TableElement
   | ImageElement
   | ShapeElement;
 
 /** Whether an element is set in type, and therefore carries a `Typeset`. */
 export function isTypeset(
   element: SlideElement,
-): element is TextElement | ScriptureElement {
-  return element.kind === "text" || element.kind === "scripture";
+): element is TextElement | ScriptureElement | TableElement {
+  return (
+    element.kind === "text" ||
+    element.kind === "scripture" ||
+    element.kind === "table"
+  );
 }
 
 /**
@@ -266,21 +330,45 @@ export function newScripture(): ScriptureElement {
   };
 }
 
-export function newShape(shape: ShapeElement["shape"]): ShapeElement {
-  // A line is drawn as a short thin rule rather than a band, because the
-  // commonest use of one is the gold underline beneath a title.
+export function newShape(shape: ShapeKind): ShapeElement {
+  // A rule arrives as a rule rather than as a band: the commonest shape on a
+  // church slide is the short line under a heading, and one that had to be
+  // flattened from a square first is a shape nobody would bother adding.
   const line = shape === "line";
+  const round = shape === "circle";
   return {
     kind: "shape",
     id: identity(),
     shape,
     fill: line ? "#D8B25C" : "#FFFFFF",
     opacity: line ? 100 : 20,
-    radius: line ? 4 : 24,
+    radius: shape === "rounded" ? 32 : line ? 4 : 0,
     x: line ? 210 : 660,
     y: line ? 660 : 340,
-    w: line ? 280 : 600,
+    w: line ? 280 : round ? 400 : 600,
     h: line ? 8 : 400,
+  };
+}
+
+export function newTable(): TableElement {
+  return {
+    kind: "table",
+    id: identity(),
+    header: ["", ""],
+    rows: [
+      ["", ""],
+      ["", ""],
+    ],
+    x: 210,
+    y: 340,
+    w: 1500,
+    h: 400,
+    ...TYPESET,
+    size: 56,
+    weight: 400,
+    lineHeight: 1.3,
+    align: "left",
+    vertical: "top",
   };
 }
 
@@ -324,15 +412,23 @@ export function cased(text: string, how: Typeset["textCase"]): string {
 /** Everything readable on a designed slide, for sizing, search and mirroring. */
 export function elementsText(elements: SlideElement[]): string {
   return elements
-    .map((element) =>
-      element.kind === "text"
-        ? element.text
-        : element.kind === "scripture"
-          ? [element.lines.join(" "), element.reference]
-              .filter(Boolean)
-              .join(" — ")
-          : "",
-    )
+    .map((element) => {
+      switch (element.kind) {
+        case "text":
+          return element.text;
+        case "scripture":
+          return [element.lines.join(" "), element.reference]
+            .filter(Boolean)
+            .join(" — ");
+        case "table":
+          return [element.header, ...element.rows]
+            .map((row) => row.filter(Boolean).join("   "))
+            .filter(Boolean)
+            .join("\n");
+        default:
+          return "";
+      }
+    })
     .filter(Boolean)
     .join("\n");
 }

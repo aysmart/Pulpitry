@@ -9,19 +9,24 @@ import {
   DEFAULT_BACKGROUND,
   GRADIENT_PRESETS,
   MOTIONS,
+  SHAPES,
+  SHAPE_LABELS,
   isTypeset,
   newImage,
   newScripture,
   newShape,
+  newTable,
   newText,
   reidentify,
   withBackground,
   within,
   type Background,
+  type ShapeKind,
   type SlideElement,
+  type TableElement,
   type Typeset,
 } from "../lib/design";
-import { componentText, type SlideComponent } from "../lib/projector";
+import { promote } from "../lib/promote";
 import { FONT_FAMILIES, type ProjectorTheme } from "../lib/theme";
 import { Backdrop } from "./Backdrop";
 import { boxStyle, DesignedView, typeStyle } from "./DesignedView";
@@ -32,75 +37,31 @@ const FIELD =
 const BUTTON =
   "rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1.5 text-[12px] text-pulpitry-text transition-colors hover:border-pulpitry-gold-dim hover:text-pulpitry-gold disabled:opacity-40 focus-visible:focus-ring";
 
-/**
- * Turns an arranged slide into a laid-out one.
- *
- * A generated sermon deck, an imported deck and every shipped template are
- * *components*: a title and a body that `layoutFor` arranges. Opening one here
- * has to give the operator something to move, so the components are laid out
- * once — title large at the top, everything under it in the order it was
- * written — and from then on the arrangement is theirs.
- *
- * Deliberately plain. It is a starting point an operator will drag about within
- * seconds, and a clever guess at what they meant would be a worse starting
- * point than an obvious one.
- */
-function elementsFrom(section: SongSection): SlideElement[] {
-  if (section.elements && section.elements.length > 0) return section.elements;
-
-  const written: Array<{ text: string; big: boolean }> = [];
-
-  if (section.components && section.components.length > 0) {
-    for (const component of section.components as SlideComponent[]) {
-      if (component.kind === "text") {
-        written.push({
-          text: component.text,
-          big: component.level !== "body",
-        });
-        continue;
-      }
-      if (component.kind === "list") {
-        for (const point of component.items) {
-          written.push({ text: componentText({ ...component, items: [point] }), big: false });
-        }
-        continue;
-      }
-      if (component.kind === "table") {
-        for (const row of component.rows) {
-          written.push({ text: row.join("   "), big: false });
-        }
-        continue;
-      }
-      const text = componentText(component);
-      if (text.trim()) written.push({ text, big: false });
-    }
-  } else {
-    for (const line of section.lines) {
-      if (line.trim()) written.push({ text: line, big: false });
-    }
-  }
-
-  if (written.length === 0) return [];
-
-  // Stacked from the top with room under each, which is a layout somebody can
-  // read and then rearrange, rather than a pile in the middle of the frame.
-  let y = 160;
-  return written.map((entry) => {
-    const height = entry.big ? 190 : 130;
-    const element = within({
-      ...newText(entry.text),
-      x: 150,
-      y,
-      w: 1620,
-      h: height,
-      size: entry.big ? 132 : 66,
-      weight: entry.big ? 800 : 500,
-      align: "left" as const,
-      vertical: "top" as const,
-    });
-    y += height + 20;
-    return element;
-  });
+/** The shapes, drawn rather than named — though both are offered. */
+function ShapeGlyph({ shape }: { shape: ShapeKind }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.6,
+    strokeLinejoin: "round" as const,
+  };
+  return (
+    <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0" aria-hidden>
+      {shape === "rectangle" ? <rect x="2" y="4" width="16" height="12" {...common} /> : null}
+      {shape === "rounded" ? <rect x="2" y="4" width="16" height="12" rx="4" {...common} /> : null}
+      {shape === "circle" ? <circle cx="10" cy="10" r="7" {...common} /> : null}
+      {shape === "ellipse" ? <ellipse cx="10" cy="10" rx="8" ry="5.5" {...common} /> : null}
+      {shape === "triangle" ? <path d="M10 3 18 17H2Z" {...common} /> : null}
+      {shape === "diamond" ? <path d="M10 2 18 10 10 18 2 10Z" {...common} /> : null}
+      {shape === "chevron" ? <path d="M3 4h8l5 6-5 6H3l5-6Z" {...common} /> : null}
+      {shape === "star" ? (
+        <path d="M10 2.5 12.2 8h5.6l-4.5 3.4 1.7 5.4L10 13.6l-5 3.2 1.7-5.4L2.2 8h5.6Z" {...common} />
+      ) : null}
+      {shape === "line" ? (
+        <path d="M3 10h14" {...common} strokeWidth={2.4} strokeLinecap="round" />
+      ) : null}
+    </svg>
+  );
 }
 
 /** A blank deck, with one page, ready to be drawn on. */
@@ -293,6 +254,138 @@ function Colour({
 }
 
 /**
+ * The cells of a table, edited as a grid.
+ *
+ * A grid rather than a text field with separators, because that is the shape of
+ * the thing: a comparison has columns whose headings mean something, and asking
+ * somebody to keep tabs and commas lined up is asking them to maintain a data
+ * format by hand. Rows and columns are added and removed from the ends, which
+ * is where a rota or a set of figures grows.
+ */
+function TableFields({
+  element,
+  onChange,
+}: {
+  element: TableElement;
+  onChange: (patch: Partial<TableElement>) => void;
+}) {
+  const columns = Math.max(element.header.length, 1);
+
+  /** Every row the same length, whatever was stored or pasted in. */
+  const square = (rows: string[][], width: number) =>
+    rows.map((row) =>
+      Array.from({ length: width }, (_, index) => row[index] ?? ""),
+    );
+
+  return (
+    <>
+      <div className="flex flex-col gap-1">
+        <span className="text-[11px] text-pulpitry-muted">
+          Headings — leave them empty for a table with no head
+        </span>
+        <div className="flex gap-1">
+          {element.header.map((cell, column) => (
+            <input
+              key={column}
+              value={cell}
+              aria-label={`Heading ${column + 1}`}
+              onChange={(event) =>
+                onChange({
+                  header: element.header.map((current, index) =>
+                    index === column ? event.target.value : current,
+                  ),
+                })
+              }
+              className={`min-w-0 flex-1 ${FIELD}`}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        {element.rows.map((row, at) => (
+          <div key={at} className="flex items-center gap-1">
+            {Array.from({ length: columns }, (_, column) => (
+              <input
+                key={column}
+                value={row[column] ?? ""}
+                aria-label={`Row ${at + 1}, column ${column + 1}`}
+                onChange={(event) =>
+                  onChange({
+                    rows: element.rows.map((current, index) =>
+                      index === at
+                        ? Array.from({ length: columns }, (_, cell) =>
+                            cell === column
+                              ? event.target.value
+                              : (current[cell] ?? ""),
+                          )
+                        : current,
+                    ),
+                  })
+                }
+                className={`min-w-0 flex-1 ${FIELD}`}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  rows: element.rows.filter((_, index) => index !== at),
+                })
+              }
+              aria-label={`Remove row ${at + 1}`}
+              className="shrink-0 rounded px-1 text-[13px] leading-none text-pulpitry-muted hover:text-pulpitry-text focus-visible:focus-ring"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          onClick={() =>
+            onChange({
+              rows: [...element.rows, Array.from({ length: columns }, () => "")],
+            })
+          }
+          className={`flex-1 ${BUTTON}`}
+        >
+          Add row
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onChange({
+              header: [...element.header, ""],
+              rows: square(element.rows, columns + 1),
+            })
+          }
+          className={`flex-1 ${BUTTON}`}
+        >
+          Add column
+        </button>
+        <button
+          type="button"
+          disabled={columns <= 1}
+          onClick={() =>
+            onChange({
+              header: element.header.slice(0, -1),
+              rows: square(element.rows, columns - 1),
+            })
+          }
+          title="Remove the last column"
+          className={BUTTON}
+        >
+          −
+        </button>
+      </div>
+    </>
+  );
+}
+
+/**
  * Making a slide deck by hand.
  *
  * # Why a design surface at all
@@ -341,11 +434,20 @@ export function DeckEditor({
   const deck = item.body.kind === "deck" ? item.body : null;
 
   const [title, setTitle] = useState(item.title);
+  /*
+   * The pages, with anything arranged laid out where the engine had it.
+   *
+   * `promote` does that once, on open, and the whole point of it is that a
+   * generated deck opens looking like the deck the operator saw on the wall --
+   * the hanging rules, the panels, the cards, the table's hairlines, at the
+   * same sizes. From here on the slide is drawn by the studio's own renderer
+   * on every surface, so what is on this canvas is exactly what goes up.
+   */
   const [pages, setPages] = useState<SongSection[]>(() =>
     (deck?.sections ?? []).map((section, index) => ({
       ...section,
       label: section.label || `Page ${index + 1}`,
-      elements: elementsFrom(section),
+      elements: promote(section, churchTheme),
     })),
   );
   const [background, setBackground] = useState<Background>(
@@ -704,19 +806,18 @@ export function DeckEditor({
               <button
                 type="button"
                 onClick={() => setShapes(!shapes)}
-                className={BUTTON}
+                aria-expanded={shapes}
+                className={`${BUTTON} inline-flex items-center gap-1.5`}
               >
+                <ShapeGlyph shape="rounded" />
                 Shape ▾
               </button>
               {shapes ? (
-                <span className="absolute top-full left-0 z-10 mt-1 flex w-36 flex-col rounded border border-pulpitry-line bg-pulpitry-surface p-1">
-                  {(
-                    [
-                      ["rectangle", "Rectangle"],
-                      ["ellipse", "Ellipse"],
-                      ["line", "Rule"],
-                    ] as const
-                  ).map(([shape, label]) => (
+                /* Two columns of shape and name. The drawing is how somebody
+                   picks; the name is how they are sure, and how anybody using
+                   a screen reader picks at all. */
+                <span className="absolute top-full left-0 z-10 mt-1 grid w-[19rem] grid-cols-2 gap-0.5 rounded border border-pulpitry-line bg-pulpitry-surface p-1">
+                  {SHAPES.map((shape) => (
                     <button
                       key={shape}
                       type="button"
@@ -724,14 +825,23 @@ export function DeckEditor({
                         add(newShape(shape));
                         setShapes(false);
                       }}
-                      className="rounded px-2 py-1.5 text-left text-[12px] text-pulpitry-text hover:bg-pulpitry-raised focus-visible:focus-ring"
+                      className="flex items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] text-pulpitry-text hover:bg-pulpitry-raised focus-visible:focus-ring"
                     >
-                      {label}
+                      <ShapeGlyph shape={shape} />
+                      {SHAPE_LABELS[shape]}
                     </button>
                   ))}
                 </span>
               ) : null}
             </span>
+            <button
+              type="button"
+              onClick={() => add(newTable())}
+              title="A comparison, a rota, or a set of figures"
+              className={BUTTON}
+            >
+              Table
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -1064,8 +1174,46 @@ export function DeckEditor({
                   </>
                 ) : null}
 
+                {chosen.kind === "table" ? (
+                  <TableFields
+                    element={chosen}
+                    onChange={(patch) =>
+                      change(chosen.id, (element) =>
+                        element.kind === "table"
+                          ? { ...element, ...patch }
+                          : element,
+                      )
+                    }
+                  />
+                ) : null}
+
                 {chosen.kind === "shape" ? (
                   <>
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] text-pulpitry-muted">
+                        Shape
+                      </span>
+                      <select
+                        value={chosen.shape}
+                        onChange={(event) =>
+                          change(chosen.id, (element) =>
+                            element.kind === "shape"
+                              ? {
+                                  ...element,
+                                  shape: event.target.value as ShapeKind,
+                                }
+                              : element,
+                          )
+                        }
+                        className={FIELD}
+                      >
+                        {SHAPES.map((shape) => (
+                          <option key={shape} value={shape}>
+                            {SHAPE_LABELS[shape]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <Colour
                       label="Fill"
                       value={chosen.fill}
@@ -1081,7 +1229,8 @@ export function DeckEditor({
                         )
                       }
                     />
-                    {chosen.shape !== "ellipse" ? (
+                    {/* Only the shapes that have corners to round. */}
+                    {chosen.shape === "rounded" || chosen.shape === "line" ? (
                       <NumberField
                         label="Corner rounding"
                         value={chosen.radius}

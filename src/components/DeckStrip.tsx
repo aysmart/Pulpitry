@@ -1,12 +1,23 @@
 import { componentText, type LiveBody } from "../lib/projector";
 import type { SongSection } from "../lib/catalog";
+import { elementsText, type Background } from "../lib/design";
 import type { ProjectorTheme } from "../lib/theme";
 import type { Presentable } from "../lib/usePresentation";
 import { EmptyState, Panel } from "./Panel";
 import { SlideCanvas } from "./SlideCanvas";
 
-/** What a section is made of, in the form the canvas draws. */
-function bodyOf(section: SongSection): LiveBody {
+/**
+ * What a section is made of, in the form the canvas draws.
+ *
+ * Elements first, in the same order `toLiveContent` prefers them: a slide the
+ * operator laid out is drawn as they laid it out, here as on the wall. A strip
+ * that still showed the lines a designed slide grew from would be showing
+ * something that is no longer on any screen.
+ */
+function bodyOf(section: SongSection, background?: Background | null): LiveBody {
+  if (section.elements && section.elements.length > 0) {
+    return { kind: "designed", elements: section.elements, background };
+  }
   return section.components && section.components.length > 0
     ? {
         kind: "composed",
@@ -19,9 +30,11 @@ function bodyOf(section: SongSection): LiveBody {
 /** The words on a slide, however it is made of them. */
 function wordsIn(section: SongSection): number {
   const text =
-    section.components && section.components.length > 0
-      ? section.components.map(componentText).join(" ")
-      : section.lines.join(" ");
+    section.elements && section.elements.length > 0
+      ? elementsText(section.elements)
+      : section.components && section.components.length > 0
+        ? section.components.map(componentText).join(" ")
+        : section.lines.join(" ");
   return text.split(/\s+/).filter(Boolean).length;
 }
 
@@ -121,7 +134,17 @@ export function DeckStrip({
                       : "border-transparent hover:border-pulpitry-line hover:bg-pulpitry-raised"
                 }`}
               >
-                <SlideCanvas blocks={[]} body={bodyOf(section)} theme={theme} />
+                {/* The deck's own background travels with the body, so a
+                    designed deck's slides look here as they will on the wall;
+                    SlideCanvas merges it over the church's theme. */}
+                <SlideCanvas
+                  blocks={[]}
+                  body={bodyOf(
+                    section,
+                    deck.kind === "lyric" ? deck.background : null,
+                  )}
+                  theme={theme}
+                />
 
                 <span className="flex items-baseline gap-1.5">
                   <span

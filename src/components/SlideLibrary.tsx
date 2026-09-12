@@ -6,6 +6,7 @@ import {
   describeTemplate,
   type DeckTemplate,
 } from "../lib/deckTemplates";
+import { elementsText } from "../lib/design";
 import { componentText, type LiveBody, type TextBlock } from "../lib/projector";
 import { blankDeck, DeckEditor } from "./DeckEditor";
 import { presentableFor } from "../lib/schedule";
@@ -56,6 +57,18 @@ function thumbnailOf(item: Item): { blocks: TextBlock[]; body?: LiveBody } {
   if (item.body.kind === "deck") {
     // The first slide, because that is what a deck looks like from outside.
     const first = item.body.sections[0];
+    // Laid out by hand, and drawn that way here: a card showing the lines a
+    // designed slide grew from would advertise a slide nobody has.
+    if (first?.elements && first.elements.length > 0) {
+      return {
+        blocks: [],
+        body: {
+          kind: "designed",
+          elements: first.elements,
+          background: item.body.background ?? null,
+        },
+      };
+    }
     if (first?.components && first.components.length > 0) {
       return {
         blocks: [],
@@ -90,6 +103,9 @@ function textOf(item: Item): string {
     for (const section of item.body.sections) {
       parts.push(section.label, ...section.lines);
       parts.push(...(section.components ?? []).map(componentText));
+      // What a designed slide actually says, so searching finds the deck by
+      // the words on it rather than by whatever it used to say.
+      if (section.elements) parts.push(elementsText(section.elements));
     }
   }
   return parts.join(" ").toLowerCase();
