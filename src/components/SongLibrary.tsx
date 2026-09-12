@@ -14,33 +14,12 @@ import {
   type SongSection,
 } from "../lib/catalog";
 import type { ProjectorTheme } from "../lib/theme";
-import { screensOf } from "../lib/lyrics";
+import { parseSections, screensOf } from "../lib/lyrics";
 import { presentableFor } from "../lib/schedule";
 import type { Presentable } from "../lib/usePresentation";
 import { EmptyState } from "./Panel";
 import { SongEditor } from "./SongEditor";
 import { SongImport } from "./SongImport";
-
-/**
- * Sections are written as plain text, blank line between blocks, an optional
- * label on its own first line. Typing that is far quicker than filling in a
- * form for every verse and chorus, and it is how lyrics arrive when pasted.
- */
-function parseSections(text: string): SongSection[] {
-  return text
-    .split(/\n\s*\n/)
-    .map((block) => block.split("\n").filter((line) => line.trim() !== ""))
-    .filter((lines) => lines.length > 0)
-    .map((lines) => {
-      const first = lines[0]!.trim();
-      // A short first line with no sentence punctuation reads as a label.
-      const isLabel = lines.length > 1 && first.length <= 24 && !/[.,;!?]$/.test(first);
-      return {
-        label: isLabel ? first : "",
-        lines: isLabel ? lines.slice(1) : lines,
-      };
-    });
-}
 
 function toText(sections: SongSection[]): string {
   return sections
@@ -119,7 +98,14 @@ function RightsBadge({ status }: { status: RightsStatus }) {
  * can walk it without a database round trip mid-service.
  */
 function sectionItem(song: Item, sections: SongSection[], index: number): Presentable {
-  return { kind: "lyric", songId: song.id ?? 0, title: song.title, index, sections };
+  return {
+    kind: "lyric",
+    songId: song.id ?? 0,
+    title: song.title,
+    index,
+    sections,
+    source: "song",
+  };
 }
 
 /** The sections of one song, as slides or as a list. */

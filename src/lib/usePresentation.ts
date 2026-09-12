@@ -29,6 +29,21 @@ export type Presentable =
       title: string;
       index: number;
       sections: SongSection[];
+      /**
+       * A song, or a deck of slides.
+       *
+       * They share this shape because they are stepped identically — a labelled
+       * part of a longer thing, one at a time — and that sharing is worth
+       * keeping. What it cost until now is that nothing downstream could tell
+       * them apart: a song staged while the operator was on the slide desk
+       * appeared in the deck strip as a one-slide deck, and a deck staged on the
+       * song desk appeared as a song's parts.
+       *
+       * They are not the same thing and the panes that show them are not
+       * interchangeable, so the item says which it is. Absent on nothing:
+       * everything that builds one of these sets it.
+       */
+      source: "song" | "deck";
       /** A designed deck's background, carried so what goes live has it. */
       background?: Background | null;
     }

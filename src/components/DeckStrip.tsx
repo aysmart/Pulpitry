@@ -81,11 +81,20 @@ export function DeckStrip({
   /** Stages that slide. `andShow` sends it in the same gesture. */
   onSelect: (index: number, andShow?: boolean) => void;
 }) {
-  const sections = deck?.kind === "lyric" ? deck.sections : [];
+  /*
+   * A deck, and not a song that happens to share its shape.
+   *
+   * A song staged while the operator was on the slide desk appeared here as a
+   * one-slide deck holding the entire lyric -- which is both wrong and the
+   * clearest possible statement of a thing this application should never say:
+   * a song is not a deck of slides.
+   */
+  const isDeck = deck?.kind === "lyric" && deck.source === "deck";
+  const sections = isDeck ? deck.sections : [];
 
   return (
     <Panel
-      title={deck?.kind === "lyric" ? deck.title : "No deck staged"}
+      title={isDeck ? deck.title : "No deck staged"}
       accent="teal"
       className="min-h-0"
       actions={
@@ -96,7 +105,7 @@ export function DeckStrip({
         ) : null
       }
     >
-      {deck?.kind !== "lyric" || sections.length === 0 ? (
+      {!isDeck || deck?.kind !== "lyric" || sections.length === 0 ? (
         <EmptyState>
           Choose a deck below and its slides appear here, ready to step
           through.

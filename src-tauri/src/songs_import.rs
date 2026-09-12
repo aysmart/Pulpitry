@@ -300,27 +300,71 @@ pub fn from_plain(title: &str, text: &str) -> Result<Imported> {
 /// Shared by the paste box and by EasyWorship, whose words arrive as one run of
 /// RTF with blank lines between what it calls slides -- which is the same
 /// problem, once the RTF is gone.
+/// Breaking a song's words into its parts.
+///
+/// # Two things can start a part, and it has to be both
+///
+/// A blank line, which is how a typed lyric sheet separates verses, **and** a
+/// label on its own line, which is how every presentation program's export
+/// does it. This split on blank lines alone and looked at only the first line
+/// of each block for a name -- so an EasyWorship song, whose paragraphs run one
+/// after another with no blank line anywhere, arrived as a single part called
+/// "Intro" with "Verse 1" and "Chorus" sitting inside it as though they were
+/// words somebody sings.
+///
+/// That is the whole of this function's difficulty: a label is a label
+/// wherever it appears, and a blank line is a break whether or not a label
+/// follows it.
+///
+/// # A label with nothing under it
+///
+/// Dropped. In these exports a bare "Chorus" between two verses means *sing
+/// the chorus again*, and there is nothing to put on a screen for it: an empty
+/// part would be a blank projector in the middle of a song. The operator
+/// presses the chorus again instead, which is what they would do anyway.
 fn sections_from_text(text: &str) -> Vec<SongSection> {
-    let mut sections = Vec::new();
-    let mut verse = 0;
+    let mut sections: Vec<(String, Vec<String>)> = Vec::new();
+    let mut current: Option<(String, Vec<String>)> = None;
+    // Only the parts nobody named get numbered, and they are numbered in the
+    // order they appear rather than by how many parts there are.
+    let mut unnamed = 0;
 
-    for block in text.replace("\r\n", "\n").split("\n\n") {
-        let lines: Vec<&str> = block.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
-        if lines.is_empty() {
+    let mut flush = |section: Option<(String, Vec<String>)>, into: &mut Vec<_>| {
+        if let Some((label, lines)) = section {
+            if !lines.is_empty() {
+                into.push((label, lines));
+            }
+        }
+    };
+
+    for line in text.replace("\r\n", "\n").lines() {
+        let line = line.trim();
+
+        if line.is_empty() {
+            flush(current.take(), &mut sections);
             continue;
         }
 
-        let (label, words) = match looks_like_label(lines[0]) {
-            Some(label) if lines.len() > 1 => (label, &lines[1..]),
-            _ => {
-                verse += 1;
-                (format!("Verse {verse}"), &lines[..])
+        if let Some(label) = looks_like_label(line) {
+            flush(current.take(), &mut sections);
+            current = Some((label, Vec::new()));
+            continue;
+        }
+
+        match current.as_mut() {
+            Some((_, lines)) => lines.push(line.to_string()),
+            None => {
+                unnamed += 1;
+                current = Some((format!("Verse {unnamed}"), vec![line.to_string()]));
             }
-        };
-        sections.push(section(label, words.iter().map(|line| line.to_string()).collect()));
+        }
     }
+    flush(current.take(), &mut sections);
 
     sections
+        .into_iter()
+        .map(|(label, lines)| section(label, lines))
+        .collect()
 }
 
 /// Whether a line is a section heading rather than a line of the song.
@@ -329,11 +373,33 @@ fn sections_from_text(text: &str) -> Vec<SongSection> {
 /// lyric, and a rule loose enough to catch the second would eat a line of
 /// somebody's song.
 fn looks_like_label(line: &str) -> Option<String> {
-    let bare = line.trim().trim_end_matches(':').trim();
+    /*
+     * The wrappers a label arrives in.
+     *
+     * "[Verse 1]" from OpenSong and anything that has been through a text
+     * editor, "(Chorus)" from a lyric sheet, "VERSE 1:" from EasyWorship.
+     * Stripped before the name is read, because the brackets are punctuation
+     * around the label rather than part of it.
+     */
+    let bare = line
+        .trim()
+        .trim_start_matches(['[', '(', '{'])
+        .trim_end_matches([']', ')', '}'])
+        .trim()
+        .trim_end_matches([':', '.'])
+        .trim();
     if bare.split_whitespace().count() > 2 || bare.len() > 16 {
         return None;
     }
     let lower = bare.to_ascii_lowercase();
+
+    // Two-word names, which the word-and-number reading below cannot see: the
+    // second word is not a number, so it would refuse them.
+    match lower.replace(['-', '_'], " ").as_str() {
+        "pre chorus" => return Some("Pre-chorus".to_string()),
+        "post chorus" => return Some("Post-chorus".to_string()),
+        _ => {}
+    }
     let (word, number) = match lower.split_once(char::is_whitespace) {
         Some((word, rest)) => (word, rest.trim().to_string()),
         None => {
@@ -351,8 +417,14 @@ fn looks_like_label(line: &str) -> Option<String> {
         "bridge" | "b" => "Bridge",
         "pre-chorus" | "prechorus" | "p" => "Pre-chorus",
         "tag" | "t" => "Tag",
-        "ending" | "outro" => "Ending",
+        "ending" | "outro" | "coda" => "Ending",
         "intro" => "Intro",
+        // Parts with no words of their own, which these exports label anyway.
+        // Kept as names: a section with nothing under it is dropped, and one
+        // that does carry words -- an instrumental with a spoken line over it
+        // -- is a part the operator may want.
+        "vamp" => "Vamp",
+        "interlude" | "instrumental" => "Interlude",
         _ => return None,
     };
     Some(match number.as_str() {
@@ -723,6 +795,80 @@ fn cp1252(byte: u8) -> char {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The fault a real EasyWorship export arrived with.
+    ///
+    /// Its paragraphs run one after another with no blank line anywhere, so
+    /// splitting on blank lines gave one part called "Intro" holding the whole
+    /// song -- with "Verse 1" and "Chorus" inside it as though somebody sang
+    /// them. Every label starts a part, blank line or not.
+    #[test]
+    fn labels_start_a_part_without_a_blank_line_anywhere() {
+        let sections = sections_from_text(
+            "Intro\n             Yeah-yeah\n             I've seen Your power\n             Verse 1\n             I've lived stories that have proved Your faithfulness\n             And I've seen miracles my mind can't comprehend\n             Chorus\n             I believe\n             You're the wonder-working God",
+        );
+
+        let names: Vec<&str> = sections.iter().map(|s| s.label.as_str()).collect();
+        assert_eq!(names, vec!["Intro", "Verse 1", "Chorus"]);
+        assert_eq!(sections[0].lines, vec!["Yeah-yeah", "I've seen Your power"]);
+        assert_eq!(sections[2].lines.len(), 2);
+        assert!(
+            sections.iter().all(|s| !s.lines.iter().any(|line| line == "Chorus")),
+            "a label must never end up as a line of the song: {sections:?}"
+        );
+    }
+
+    /// Blank lines still separate parts, for songs that use them and name
+    /// nothing -- a pasted lyric sheet, most often.
+    #[test]
+    fn blank_lines_still_separate_unnamed_parts() {
+        let sections = sections_from_text(
+            "Amazing grace how sweet the sound\nThat saved a wretch like me\n\n             I once was lost but now am found\nWas blind but now I see",
+        );
+
+        let names: Vec<&str> = sections.iter().map(|s| s.label.as_str()).collect();
+        assert_eq!(names, vec!["Verse 1", "Verse 2"]);
+    }
+
+    /// A label with nothing under it means "sing it again", and there is
+    /// nothing to put on a screen for it. An empty part would be a blank
+    /// projector in the middle of a song.
+    #[test]
+    fn a_bare_repeat_marker_does_not_become_an_empty_part() {
+        let sections = sections_from_text(
+            "Chorus\nI believe\n\nVerse 2\nI have heard\n\nChorus\n",
+        );
+
+        let names: Vec<&str> = sections.iter().map(|s| s.label.as_str()).collect();
+        assert_eq!(names, vec!["Chorus", "Verse 2"]);
+        assert!(sections.iter().all(|s| !s.lines.is_empty()));
+    }
+
+    /// The wrappers a label arrives in, and the two-word names the
+    /// word-and-number reading cannot see on its own.
+    #[test]
+    fn a_label_is_read_however_it_is_written() {
+        for (written, expected) in [
+            ("[Verse 2]", "Verse 2"),
+            ("(Chorus)", "Chorus"),
+            ("VERSE 1:", "Verse 1"),
+            ("Pre-Chorus", "Pre-chorus"),
+            ("pre chorus", "Pre-chorus"),
+            ("Bridge", "Bridge"),
+            ("Vamp", "Vamp"),
+            ("Instrumental", "Interlude"),
+        ] {
+            assert_eq!(
+                looks_like_label(written).as_deref(),
+                Some(expected),
+                "{written} should be read as {expected}"
+            );
+        }
+
+        // And the line that must never be mistaken for one.
+        assert_eq!(looks_like_label("Chorus of angels sing"), None);
+        assert_eq!(looks_like_label("I believe"), None);
+    }
 
     #[test]
     fn opensong_keeps_the_lines_where_the_writer_broke_them() {

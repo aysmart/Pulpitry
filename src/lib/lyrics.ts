@@ -135,3 +135,111 @@ export function sameScreen(
   const at = screens.findIndex((screen) => screen.lines[0] === firstLine);
   return at >= 0 ? at : 0;
 }
+
+
+/**
+ * Whether a line names a part rather than being one.
+ *
+ * The same rule the importer applies to a file (src-tauri/src/songs_import.rs)
+ * and deliberately as narrow: "Chorus" is a heading, "Chorus of angels sing" is
+ * a lyric, and a rule loose enough to catch the second would eat a line of
+ * somebody's song. Two words at most, sixteen characters at most, and a name
+ * this application recognises.
+ */
+const NAMES: Record<string, string> = {
+  verse: "Verse",
+  v: "Verse",
+  chorus: "Chorus",
+  c: "Chorus",
+  refrain: "Chorus",
+  bridge: "Bridge",
+  b: "Bridge",
+  tag: "Tag",
+  t: "Tag",
+  intro: "Intro",
+  ending: "Ending",
+  outro: "Ending",
+  coda: "Ending",
+  vamp: "Vamp",
+  interlude: "Interlude",
+  instrumental: "Interlude",
+};
+
+export function looksLikeLabel(line: string): string | null {
+  // The wrappers a label arrives in: "[Verse 1]", "(Chorus)", "VERSE 1:".
+  const bare = line
+    .trim()
+    .replace(/^[[({]+/, "")
+    .replace(/[\])}]+$/, "")
+    .trim()
+    .replace(/[:.]+$/, "")
+    .trim();
+
+  if (!bare || bare.length > 16 || bare.split(/\s+/).length > 2) return null;
+
+  const lower = bare.toLowerCase();
+  const twoWord: Record<string, string> = {
+    "pre chorus": "Pre-chorus",
+    "post chorus": "Post-chorus",
+  };
+  const spaced = lower.replace(/[-_]/g, " ");
+  if (twoWord[spaced]) return twoWord[spaced];
+
+  // "verse 2", "verse2" and "v2" all say the same thing.
+  const match = /^([a-z-]+)\s*(\d*)$/.exec(lower);
+  if (!match) return null;
+  const name = NAMES[match[1]!];
+  if (!name) return null;
+  return match[2] ? `${name} ${match[2]}` : name;
+}
+
+/**
+ * Lyrics as somebody types or pastes them, read into parts.
+ *
+ * Two things start a part and it has to be both: a blank line, which is how a
+ * typed lyric sheet separates verses, and a label on its own line, which is how
+ * every export writes them. Splitting on blank lines alone turned a pasted
+ * EasyWorship song -- whose lines run one after another with no blank line
+ * anywhere -- into a single part called "Intro" with "Verse 1" and "Chorus"
+ * sitting inside it as words somebody sings.
+ *
+ * A label with nothing under it is dropped: in these files a bare "Chorus"
+ * between two verses means sing it again, and an empty part would be a blank
+ * projector in the middle of a song.
+ */
+export function parseSections(text: string): SongSection[] {
+  const sections: SongSection[] = [];
+  let current: SongSection | null = null;
+  let unnamed = 0;
+
+  const flush = () => {
+    if (current && current.lines.length > 0) sections.push(current);
+    current = null;
+  };
+
+  for (const raw of text.replace(/\r\n/g, "\n").split("\n")) {
+    const line = raw.trim();
+
+    if (!line) {
+      flush();
+      continue;
+    }
+
+    const label = looksLikeLabel(line);
+    if (label) {
+      flush();
+      current = { label, lines: [] };
+      continue;
+    }
+
+    if (current) {
+      current.lines.push(line);
+    } else {
+      unnamed += 1;
+      current = { label: `Verse ${unnamed}`, lines: [line] };
+    }
+  }
+  flush();
+
+  return sections;
+}

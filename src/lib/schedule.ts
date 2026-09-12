@@ -79,6 +79,7 @@ export function presentableFor(item: Item): Presentable | null {
          * about the room rather than an edit to the song.
          */
         sections: screensOf(item.body.sections),
+        source: "song",
       };
     // A deck is a song's shape with a sermon's content, so it stages as one:
     // stepping, keys and the projector all work without knowing the
@@ -90,6 +91,7 @@ export function presentableFor(item: Item): Presentable | null {
         title: item.title,
         index: 0,
         sections: item.body.sections,
+        source: "deck",
         // What a designed deck is drawn against. Carried here because this is
         // the only place that has the item in hand; by the time a slide is
         // live, nothing downstream can read the library.

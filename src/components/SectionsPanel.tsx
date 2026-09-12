@@ -42,7 +42,13 @@ export function SectionsPanel({
   /** Re-splits what is staged. See lib/lyrics.ts. */
   onLinesChange: (lines: LinesPerScreen) => void;
 }) {
-  const sections = song?.kind === "lyric" ? song.sections : [];
+  /*
+   * A song, and not a deck that shares its shape. A deck's slides belong to
+   * the slide desk's strip, where they are drawn; listing them here as words
+   * would be the same mistake in the other direction.
+   */
+  const isSong = song?.kind === "lyric" && song.source === "song";
+  const sections = isSong ? song.sections : [];
 
   return (
     <Panel
@@ -73,7 +79,7 @@ export function SectionsPanel({
         </select>
       }
     >
-      {song?.kind !== "lyric" || sections.length === 0 ? (
+      {!isSong || song?.kind !== "lyric" || sections.length === 0 ? (
         <EmptyState>
           Choose a song and its parts appear here, each one a press away.
         </EmptyState>
