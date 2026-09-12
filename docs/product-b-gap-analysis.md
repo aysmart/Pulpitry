@@ -1,173 +1,267 @@
-# Product B, and where Pulpitry stands against it
+# Product B: what it does, where we stand, and the plan to get ahead
 
 **Internal. None of this belongs on the website** — least of all the parts
 where they are ahead.
 
-Called Product B here for the same reason Product A is: naming a competitor in
-our own documents is a habit that eventually leaks into a release note. It is a
-desktop app, Windows and macOS, that listens to a sermon and puts the verse on
-the screen. Same idea as Pulpitry, same market — it prices in naira — and it
-was called something else until recently, so there is a rebrand behind it.
+Called Product B for the same reason Product A is: a competitor's name in our
+own documents eventually leaks into a release note. Desktop app, Windows and
+macOS, listens to a sermon and puts the verse on the screen. Same idea as
+Pulpitry, same market, and it traded under another name until recently.
 
-## How this was compiled, and what is not in it
+Pricing is deliberately left out of this version.
 
-From their own public material: the product site, its how-it-works page, its
-documentation, its FAQ and its pricing page, read 2026-09-12. **Nobody has
-operated it.** So everything below is what they *say* they do, and the things
-that decide whether a church stays — how good the detection really is, what
-the operator's screen is like under pressure, whether the overlay output is
-actually keyable — are unverified. There is a list at the end of what to try
-when somebody has it in front of them.
+## Evidence
 
-## What they have that we do not
+- Their site, how-it-works page, documentation and FAQ, read 2026-09-12.
+- Six screenshots of the running app on a Mac, 2026-09-12: the Scriptures
+  workspace, Slides, Lyrics, the theme picker, Settings → Help with the
+  keyboard-shortcut list, and the slide editor.
+- **Nobody has operated it.** Timings, detection quality under a Nigerian
+  accent, and whether the keyable output really keys are still unverified.
+  The last section lists what to try.
 
-Ordered by how much I think it costs us.
+## What the app actually is
+
+Three workspaces, switched at the top right: **Scriptures**, **Slides**,
+**Lyrics**. One window at a time, each a full screen of panels.
+
+### Scriptures
+
+- **Live transcription** panel with its own Start button, and a quota readout
+  in the title bar counting down the free hour.
+- **Preview** and **Live** side by side, each drawing the verse card. Under
+  Live: previous, **Clear**, **Hold**, next. Above: a **size slider** (1.0×)
+  and an **Auto** toggle that lets detections go straight to the screen.
+- **Scripture feed** on the right, with **History** and **Queue** tabs, each
+  entry timestamped.
+- **Chapter navigator**: the whole chapter listed, the live verse highlighted,
+  a **Reference / Paraphrase** mode switch, a translation picker, a
+  book-chapter-verse search box, a **Compare** toggle for two translations,
+  and per-verse buttons to queue or cut.
+- **Detected verses** panel with a **Sermon points** switch.
+- **Paraphrase matches (AI)** as its own panel, with Live and Saved tabs.
+- Audio input picked in the title bar; in the screenshot it is a virtual
+  device, so they capture the machine's own output as happily as a microphone.
+
+### Slides
+
+- Decks as thumbnail strips, and a **Main output** column showing **Live
+  display** and **Preview** with previous / clear / next.
+- A library of **13 decks and templates**, searchable by title *and slide
+  text*, filtered All / My decks / Templates.
+- Templates are designed, not blank: Scripture Focus, Sermon Points, Welcome
+  Service, Worship Night, Golden Welcome, Prayer Focus, Growth Track, Revival
+  Service — gradient art, typeset.
+- **A slide editor.** Add Text, Scripture, Shape or Image; a zoomable canvas;
+  per-element font, weight, size, line height, letter spacing and colour;
+  duplicate and delete pages. It is a small Canva, and it is theirs.
+
+### Lyrics
+
+- **Service schedule** built by adding songs, **Sections** panel per song,
+  Preview and Live display with previous / display / next.
+- **Song library** with Export and New — **empty on a fresh install**.
+- **AI Magic Import**: online lyrics search, locked behind premium, with an
+  import preview beside it.
+
+### Theme picker ("Themify")
+
+- **Output: Main or Alternate.** Two outputs, named, no more.
+- **Background: Full screen or Lower third.** Two shapes.
+- A gallery of backgrounds, several marked Motion, **most locked behind
+  premium**; plus a transparent option and a **green-screen** option, which is
+  how they expect a switcher to key them.
+- **Import theme** for bringing your own.
+- Scripture and lyrics have separate theme pickers.
+
+### Settings, and the support surface
+
+Transcription, Display, Bible Bank, Typography, Outputs, Usage, License,
+Subscription, Help, Send Feedback. The Help pane is the part worth staring at:
+
+- **YouTube tutorial** link.
+- **What's new** → changelog, in the app.
+- **Interactive highlights → Start tour**: a walkthrough of the app.
+- **Send logs to support**, one button.
+- **Contact us on WhatsApp**, with a copy button.
+- Twitter, Instagram, TikTok, Facebook.
+- **A documented keyboard-shortcut list**: arrows for next/previous verse,
+  ⌘K search, ⇧T cycle translation, ⌘T themes, ⌘S settings, ⌘⇧R full refresh,
+  ⌘⇧X clear session, M search mode, L live sync, ⌘D projection view, ⌘L lyrics
+  mode, Enter to present.
+
+## Where they are ahead
+
+Ordered by what it costs us.
 
 ### 1. A phone as the operator's remote
 
-They ship a mobile companion: change the display, switch translation, move
-slides, manage the sermon, from a phone, so the volunteer is not tied to the
-laptop. We have nothing like it. In a room where the desk is at the back and
-the person who knows the service is at the front, this is the difference
-between one volunteer and two.
+Their documentation describes a mobile companion: change the display, switch
+translation, move slides, manage the sermon from a phone. We have nothing. In a
+room where the desk is at the back and the person who knows the service is at
+the front, that is one volunteer instead of two. Not visible in the
+screenshots, so its real scope is unverified — but it is on their site as a
+headline.
 
-This is the gap I would close first. It is also the largest piece of work here,
-because it needs the app to answer something over the network that is not
-Castavox.
+### 2. The slide editor and the template gallery
 
-### 2. The translations churches ask for by name
+Ours composes slides from structure — title, text, list, table — and lays them
+out. Theirs lets a volunteer drag a text box, drop in a shape, set Poppins 700
+at 30px with 4 of letter spacing, and save it as a page. Then it ships
+thirteen designed decks so the first thing a church sees is something that
+already looks made.
 
-They advertise 120–150+ translations including ESV, NIV, NKJV, NLT, NASB, CSB,
-AMP and MSG. We ship 22, and they are the public-domain and permissively
-licensed ones: KJV, WEB, the Free Bible Version, Yoruba, Igbo, Hausa, Swahili,
-Twi, French, Spanish, Portuguese and so on.
+A church evaluating both on a Tuesday evening sees their gallery and our empty
+list. This is the gap that decides the "does it look good?" question, and it is
+the second biggest.
 
-A church that reads NIV from the pulpit compares those two lists and stops
-reading ours. Worth being clear internally about what the difference actually
-is: those editions are licensed texts, and the licences are held by
-publishers who mostly do not grant them to small software companies. Whatever
-they are doing to offer them is a question for them, not a capability we can
-copy by deciding to.
+### 3. The translations churches ask for by name
 
-What we can do is stop losing the comparison on the spot: say what we ship and
-why, and make the African-language editions — which they do not appear to
-offer at all — the thing a Nigerian church notices first.
+They advertise 120–150+, including ESV, NIV, NKJV, NLT, NASB, CSB, AMP and MSG.
+We ship 22: the public-domain and permissively licensed ones, plus Yoruba,
+Igbo, Hausa, Swahili, Twi, French, Spanish and Portuguese.
 
-### 3. Songs out of the tools churches already use
+Those named editions are licensed texts whose licences publishers rarely grant
+to small companies, so how they carry them is their problem, not a capability
+we can copy by deciding to. What we can stop doing is losing the comparison
+in silence: say what we ship, say why, and put the African-language editions —
+which they do not appear to offer at all — where a Nigerian church sees them
+first.
 
-They import song libraries from EasyWorship and OpenLP. That is a migration
-path: a church with four hundred songs in EasyWorship can try them on Sunday
-without retyping anything. Our hymn library is 266 public-domain hymns and
-whatever the church types in. An importer for those two formats is a
-weekend's work and removes the single biggest reason not to switch.
+### 4. Being easy to get help from
 
-### 4. A free tier that exists
+WhatsApp support, a tour, a YouTube channel, a changelog in the app, one-button
+log upload, four social accounts. Individually small; together they are why a
+church trusts a young product. Our Feedback pane asks three questions and
+sends; there is no tour, no in-app changelog, no WhatsApp, no shortcut list.
+In this market WhatsApp in particular is not a nice-to-have.
 
-Theirs: one hour of transcription, one device, no watermark. Ours: no free
-plan at all — but transcription on the church's own machine is free for ever
-and needs no account, which is a *better* offer badly told. Their free hour
-runs out on the first Sunday; our free engine does not. That story is not on
-our pricing page in those words.
+### 5. Songs from the tools churches already use
 
-### 5. Price, in this market
+They import from EasyWorship and OpenLP, and offer an AI lyrics search for
+everything else. Their library still starts empty, where ours ships 266
+public-domain hymns — but a church with four hundred songs in EasyWorship
+cares about the importer, not the hymnal.
 
-| | Product B | Castavox/Pulpitry |
-|---|---|---|
-| Free | ₦0 — 1 hour, 1 device | none named; local engine free, unmetered |
-| Entry | ₦9,999 — 12 hours, 1 device | Desk $20 ≈ ₦31,000 — 3 devices, 45 h fair use |
-| Unlimited | ₦15,000 — "unlimited", fair use, 1 device | — |
-| Top | ₦37,000 — 3 devices | Studio $50 ≈ ₦77,500 — 8 devices, 120 h fair use |
+### 6. Small operator affordances we should simply take
 
-At ₦1,550 to the dollar, their unlimited tier is about half our entry plan, and
-their top tier is under half. We carry things they do not — Castavox, two
-concurrent services, eight machines — but a church comparing the first line of
-each page sees ₦15,000 against ₦31,000.
+- **A live size slider.** Text bigger, now, without opening a theme.
+- **Hold**, as a first-class button beside Clear.
+- **Auto**, stated plainly as a switch: detections go live unattended.
+- **Search that looks inside slide text**, not only titles.
+- **A documented shortcut list in the app.**
+- **A detection log** they export as CSV or JSON. We export summaries as text,
+  .docx and PDF and keep transcripts, but not "what did we show, and when".
 
-### 6. Smaller things, each real
+## Where we are ahead
 
-- **Two translations side by side** on one screen. We can put different
-  Bibles on different outputs, which is a different (and I think better)
-  answer for two rooms, but not the one a church asks for when it wants
-  English beside Yoruba on the same wall.
-- **Custom CSS themes.** Our theme designer is better for the volunteer and
-  worse for the one technical church that wants exactly its brand.
-- **A local REST API and WebSocket** for custom integrations.
-- **A detection log exported as CSV or JSON**, timestamped. We export
-  summaries as text, .docx and PDF, and keep transcripts, but not that.
-- **Claims we do not make:** 98% accuracy, 0.5-second latency. Ours is honest
-  about arriving a second or two after a sentence on the local engine. Their
-  number is a cloud number, which is why the next section matters.
-
-## What we have that they do not
-
-From their documentation, they have NDI output, a secondary display,
-configurable themes and a session log. They do not describe:
+Their two screenshots of output configuration are the whole of it: Main and
+Alternate, full screen or lower third. Against that:
 
 - **Outputs as a list.** Any number of congregation-facing screens, each with
-  its own look, Bible, shape, capitals, resolution, and either a monitor or
-  the network alone. They describe one secondary display and one NDI feed.
-- **Keyable overlays in six shapes**, sent with transparency intact, so a
-  switcher lays the band over the camera instead of receiving a picture of a
-  projector.
-- **A stage display**: timer counting up or down, the time, what the
-  congregation is seeing, what comes next in the plan, and a line the desk can
-  send the platform.
+  its own look, Bible, shape, capitals, resolution, and either a monitor or the
+  network alone. Every feed is NDI, not one.
+- **Six overlay shapes**, keyed by transparency rather than a green screen —
+  which no switcher operator prefers, because green spills.
+- **A stage display**: timer up or down, the time, what the congregation sees,
+  what comes next in the plan, and a line the desk sends the platform. Nothing
+  in their app suggests an equivalent.
 - **Following the sermon through a deck** — offering the slide the preaching
-  has reached — and slide commands by voice.
-- **Service plans, media, backgrounds** with fit, scale and blur, a ticker.
-- **Original languages**: the Greek and Hebrew behind the verse, with a
-  lexicon. Nothing in their material suggests this exists.
-- **Summaries of the service afterwards**, and the transcript history.
-- **Castavox** — a whole streaming application that draws the verse itself —
-  and the mirror that pairs the two so one machine listens for both.
-- **Local transcription on every platform.** Theirs is Apple-silicon only;
-  Windows and Intel Macs must use their cloud. A Windows church with no
-  internet cannot run their product at all, and most Nigerian churches at the
-  desk are on Windows.
+  has reached — and slide commands by voice. Their sermon points are detection,
+  not navigation.
+- **Original languages**: the Greek and Hebrew behind the verse, with a lexicon.
+- **Service summaries afterwards**, and transcript history.
+- **Castavox**, a whole streaming application that draws the verse itself, and
+  the mirror that pairs the two so one machine listens for both.
+- **Themes that are all free** and designed by the church, against a gallery
+  where most backgrounds are locked.
+- **Local transcription on every platform.** This is the big one, below.
 
-That last point is the strongest thing we have and it is worth saying plainly
-on the site: ours works with the building's internet down.
+## The wedge: free, unlimited, local, and on Windows
 
-## What I would do, in order
+Their free tier counts down an hour in the title bar. Their local engine is
+**Apple-silicon only**; Windows and Intel Macs must use their cloud, which
+means a Windows church at the desk — most Nigerian desks — is on a meter from
+the first Sunday, and dead when the building's internet is.
 
-1. **The phone remote.** Biggest operational win, and the one thing they have
-   that a volunteer feels every single service.
-2. **EasyWorship and OpenLP import.** Cheap, and it removes the cost of
-   switching.
-3. **Say the free engine louder** on the pricing page, in their terms: not
-   "free plan" but "transcription on your own machine, free for ever, no
-   account, offline".
-4. **Two Bibles on one screen.** A shape, not an architecture: the outputs
-   already carry a translation each.
-5. **The African-language editions as a headline**, not an item in a list of
-   22.
-6. **A detection log export**, CSV. Small, and it answers "what did we show
-   last Sunday" for a pastor who asks.
-7. **REST/WebSocket**, last. One technical church in fifty asks, and NDI plus
-   the mirror covers most of what they would build with it.
+Ours: transcription on the church's own machine, unlimited, offline, free for
+ever, no account, on Windows and Mac and Linux. A subscription buys streaming
+accuracy and the assistant; it does not buy the ability to work.
 
-Not on the list: chasing 150 translations, or their accuracy and latency
-numbers. The first we cannot license, and the second we should measure rather
-than advertise.
+We have been describing this as "no free plan". It is the strongest thing we
+have and it is currently told worse than their countdown. The exact words
+matter: **"Free for ever, unlimited, on your own machine, with the internet
+off."** That belongs on the pricing page, the download page, the product pages
+and the first run.
+
+Honesty attached: it needs a fast machine, and Time it measures theirs in
+seconds. Say that in the same breath — it is what stops the promise turning
+into a support thread.
+
+## The plan
+
+### Now — a fortnight, no new architecture
+
+1. **Tell the free engine properly.** Pricing page, download page, both
+   product pages, and the empty state on first run. Their countdown against
+   our "unlimited, offline, free for ever", with the hardware caveat beside it.
+2. **The support surface.** In Settings → Help: WhatsApp, a changelog view
+   (we already write release notes — render them), the keyboard shortcuts we
+   already have, and one-button log upload. A day or two each.
+3. **Operator affordances.** Live size slider, Hold beside Clear, Auto stated
+   as a switch, slide search that reads slide text.
+4. **EasyWorship and OpenLP import.** A weekend, and it removes the cost of
+   switching for a church with a library.
+5. **Detection log export, CSV.** Small, and it answers "what did we show last
+   Sunday".
+
+### Next — four to six weeks, the two that matter
+
+6. **The phone remote.** Pulpitry serves a small page on the church's own
+   network; the desk shows a QR code; a phone gets next/previous, display and
+   clear, the translation, the slide deck, and the stage note. Pair once, like
+   the mirror does, and never through anybody's cloud — which is a claim they
+   cannot match if their remote goes through theirs. Verify that first.
+7. **Slides that look made before anybody edits them.** Two halves:
+   - **A dozen designed decks** shipped with the app — welcome, announcements,
+     sermon points, offering, prayer focus, scripture focus — in our themes.
+     This is design work, not engineering, and it is the cheaper half.
+   - **An element editor** for a slide page: text, scripture, shape, image,
+     with font, size, spacing and colour per element. We have the composed
+     slide model already; this is a canvas and a properties panel over it.
+
+### Then — the quarter
+
+8. **Two Bibles on one screen**: a shape, not an architecture. Outputs already
+   carry a translation each.
+9. **A first-run tour.** Theirs is a walkthrough; ours can be four steps to a
+   verse on a screen.
+10. **Motion backgrounds**, ours, free.
+11. **The translations story.** Make the African editions a headline, publish
+    what we ship and why, and look — carefully — at which licensed texts can
+    be served through an API on terms we can actually meet.
+
+### Not on the list
+
+- Chasing 150 translations by any route that ignores a licence.
+- Matching their accuracy and latency numbers with numbers of our own. Measure
+  ours, publish what we measure, and let the honest number be the claim.
+- A premium-locked theme gallery. Ours being free is a difference worth
+  keeping.
 
 ## To verify by driving it
 
-Their documentation cannot answer these, and each one changes the analysis:
-
-1. **Is the NDI output keyable** — a lower third on transparency — or a
-   picture of the whole screen? Take it into OBS and look for alpha.
-2. **How many outputs can it drive at once**, and can two screens show
-   different translations?
-3. **What is the detection actually like** on a paraphrase, on a Nigerian
-   accent, and on a preacher who says "the next verse"? Time from spoken
-   reference to verse on screen, by stopwatch, three times.
-4. **What does the operator do when it is wrong?** How many clicks to correct
-   or clear a wrong verse mid-sermon.
-5. **The phone remote**: what it can actually do, and whether it needs their
-   cloud or works on church wifi.
-6. **Songs**: does the import keep verse order and chords? What does the lyric
-   screen look like?
-7. **With the internet off** on a Windows machine: what still works?
-8. **Where does the audio come from** — a microphone, or the machine's own
-   output? Ours takes a device; if theirs can take system audio, that is a
-   setup step fewer.
+1. **Is the transparent background actually keyable** in OBS — alpha, not a
+   black or green fill? Their green-screen option suggests the transparent one
+   may be newer or weaker.
+2. **What is in Settings → Outputs?** Two outputs is what the theme picker
+   implies; confirm whether Main and Alternate can differ in translation,
+   shape and resolution, or only in background.
+3. **Detection, timed**: stopwatch from spoken reference to verse on screen,
+   three times; then a paraphrase; then a Nigerian accent; then "the next
+   verse".
+4. **Correcting a wrong verse mid-sermon**: how many clicks.
+5. **The phone remote**: what it drives, and whether it needs their cloud.
+6. **With the internet off** on Windows: what still works.
+7. **Does anything resemble a stage display** or a service plan with timings?
+8. **What the free hour actually gates** — transcription only, or features too.
