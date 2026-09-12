@@ -85,6 +85,10 @@ function Stage({
           body={slide.body}
           theme={slide.theme}
           progress={progress}
+          /* These two panes are the wall in miniature: what is on it, and what
+             is about to be. A still where the wall is moving is the one
+             disagreement they must not have. */
+          motion
           onExtent={onExtent}
         />
       </div>

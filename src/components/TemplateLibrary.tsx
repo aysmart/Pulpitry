@@ -47,7 +47,18 @@ function Tile({
         <span
           className={`block rounded ${current ? "ring-2 ring-pulpitry-gold" : ""}`}
         >
-          <SlideCanvas blocks={sample} theme={theme} />
+          {/*
+            Moving here too, which is a deliberate exception to stills in a
+            grid.
+
+            The usual reason for a still is that a wall of animation is noise.
+            It does not apply on this screen: twenty of the looks are motions,
+            they differ from each other only in how they move, and a grid of
+            stills offers twenty gradients and asks the operator to choose by
+            name. Only the motion looks carry a canvas at all, and this is the
+            one screen nobody opens during a service.
+          */}
+          <SlideCanvas blocks={sample} theme={theme} motion />
         </span>
         <span
           className={`mt-1.5 block truncate text-[12.5px] ${
@@ -262,7 +273,9 @@ export function TemplateLibrary({
                 given only a width grows past the bottom of a short window, and
                 the operator is back to scrolling. */}
             <div className="w-full max-w-[min(100%,calc((100vh-12rem)*1.777))]">
-              <SlideCanvas blocks={sample} theme={editing.theme} />
+              {/* Moving, because a motion that is not moving is a gradient
+                  and this is the screen where the choice is made. */}
+              <SlideCanvas blocks={sample} theme={editing.theme} motion />
             </div>
             <p className="text-[11px] text-pulpitry-muted">
               Sample words, at the proportions of the wall.

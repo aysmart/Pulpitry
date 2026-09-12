@@ -230,6 +230,22 @@ export function backgroundStyle(theme: ProjectorTheme): React.CSSProperties {
       backgroundImage: `linear-gradient(${theme.gradientAngle}deg, ${theme.gradientFrom}, ${theme.gradientTo})`,
     };
   }
+
+  /*
+   * A drawn motion sits on its own ground.
+   *
+   * The canvas paints `gradientTo` and then draws over it, so that is what has
+   * to be underneath. It fell through to `backgroundColor` here -- which on
+   * every shipped motion look is the default warm paper, because a motion look
+   * sets its colours in the gradient ends and never touches it. The result was
+   * a pale hairline at the edges of a dark moving background wherever the
+   * canvas and its box disagreed by a fraction of a pixel, and a flash of cream
+   * in the moment before the canvas had been sized at all.
+   */
+  if (theme.backgroundKind === "motion") {
+    return { backgroundColor: theme.gradientTo || theme.backgroundColor };
+  }
+
   return { backgroundColor: theme.backgroundColor };
 }
 

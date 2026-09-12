@@ -22,6 +22,7 @@ export function SlideCanvas({
   body,
   theme: churchTheme,
   progress = 0,
+  motion = false,
   onExtent,
 }: {
   blocks: TextBlock[];
@@ -37,6 +38,17 @@ export function SlideCanvas({
   theme: ProjectorTheme;
   /** How far through a long slide it is wound, 0 to 1. */
   progress?: number;
+  /**
+   * Whether a drawn motion or a video background actually moves here.
+   *
+   * Still by default, and that is right for a wall of thumbnails: thirty-five
+   * animating panels in a chooser is noise, and what an operator is reading
+   * there is the colour and the shape. It is wrong everywhere a look is being
+   * *judged* -- the editor, the preview of what is about to go up -- because a
+   * motion that is not moving is a gradient, and choosing between ten of them
+   * from stills is choosing by name.
+   */
+  motion?: boolean;
   /** How far it runs. This box is 16:9, and so is the projector's own text
    *  frame, so what it measures here is what the wall would. */
   onExtent?: (extent: Extent) => void;
@@ -74,7 +86,7 @@ export function SlideCanvas({
       // all of them.
       style={{ aspectRatio: 16 / 9 }}
     >
-      <Backdrop theme={theme} playVideo={false} />
+      <Backdrop theme={theme} playVideo={motion} />
 
       {/* The same rule the projector uses, from the same function: a picture
           meant to be the screen is not inset, or the preview would disagree

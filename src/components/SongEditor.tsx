@@ -228,6 +228,7 @@ export function SongEditor({
             blocks={[]}
             body={{ kind: "lyric", lines: showing?.lines ?? [] }}
             theme={theme}
+            motion
           />
 
           <p className="text-[11.5px] leading-relaxed text-pulpitry-muted">
