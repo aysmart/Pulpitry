@@ -2125,14 +2125,10 @@ async fn import_songs(
             report.duplicates += 1;
             continue;
         }
-        let item = Item {
-            id: None,
-            title: song.title.clone(),
-            subtitle: String::new(),
-            body: catalog::ItemBody::Song { sections: song.sections, rights: song.rights },
-            path: None,
-            updated_at: 0,
-        };
+        // Built by the importer, which is where the author ends up in the
+        // field the library actually shows. It was assembled here with an
+        // empty subtitle, so every song arrived by nobody.
+        let item = songs_import::as_item(&song);
         match catalog.save(&item) {
             Ok(_) => report.added += 1,
             Err(why) => {

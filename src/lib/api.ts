@@ -114,6 +114,14 @@ export interface Settings {
 
   /** How the congregation-facing window looks. */
   projector: ProjectorTheme;
+  /**
+   * A look per desk, keyed by its name, for the desks that put words up.
+   *
+   * Absent keys fall back to `projector`, which is what every installation
+   * before this had. The slide desk is deliberately not in here: a deck carries
+   * its own background and is laid out against it.
+   */
+  deskLooks: Record<string, ProjectorTheme>;
 }
 
 /** One whisper.cpp model the operator could transcribe with. */

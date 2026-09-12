@@ -189,6 +189,26 @@ pub struct Settings {
     /// the two windows always shared.
     pub projector: ProjectorTheme,
 
+    /**
+     * A look per desk, for the desks that put words on a wall.
+     *
+     * Scripture, songs and the running order are three different kinds of
+     * reading and a church may well want them set differently: a verse in a
+     * serif a congregation can follow, a lyric in something plainer and larger
+     * because nobody is reading it so much as singing along. Sharing one look
+     * made that a choice between them.
+     *
+     * Keyed by the desk's own name, and empty on every installation that
+     * predates this -- which reads as "all three use `projector`", exactly the
+     * behaviour it replaces.
+     *
+     * The slide desk is deliberately absent. A deck carries its own background
+     * and its slides are laid out against it, so a look applied over the top
+     * would be a second answer to a question the deck has already answered.
+     */
+    #[serde(default)]
+    pub desk_looks: std::collections::HashMap<String, ProjectorTheme>,
+
     /// The congregation-facing outputs, beyond the first.
     ///
     /// Empty on every installation that predates this, which is the behaviour
@@ -580,6 +600,7 @@ impl Default for Settings {
             // paraphrases sit at 0.71-0.81, so this separates them cleanly.
             semantic_threshold: 0.70,
             projector: ProjectorTheme::default(),
+            desk_looks: std::collections::HashMap::new(),
             outputs: Vec::new(),
         }
     }

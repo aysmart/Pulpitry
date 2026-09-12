@@ -975,6 +975,9 @@ export function SettingsDialog({
         // Carried through untouched: the look is edited in the Themes tab, and
         // a stale copy held open in this dialog would undo it on save.
         projector: settings.projector,
+        // Carried through untouched: this dialogue does not edit the desks'
+        // own looks, and writing the settings without them would wipe three.
+        deskLooks: settings.deskLooks,
       });
 
       onSaved(next);

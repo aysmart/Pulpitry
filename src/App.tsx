@@ -147,6 +147,7 @@ export default function App() {
     preview,
     live,
     liveKey,
+    liveDesk,
     history,
     clearHistory,
     previewVerse,
@@ -287,6 +288,21 @@ export default function App() {
    * asked a moment later when settings arrive.
    */
   const update = useUpdate(settings?.updateCheck ?? false);
+
+  /**
+   * The look this desk works in.
+   *
+   * Each desk has its own — a verse and a lyric are different kinds of reading
+   * and a church may well set them differently — and a desk that has never
+   * chosen one falls back to the wall's, which is what every installation
+   * before this had.
+   *
+   * The slide desk is not given one on purpose: a deck carries its own
+   * background and its slides are laid out against it, so a look over the top
+   * would be a second answer to a question the deck has already answered.
+   */
+  const look =
+    settings?.deskLooks?.[workspace] ?? settings?.projector ?? DEFAULT_THEME;
 
   const [error, setError] = useState<string | null>(null);
   const [projector, setProjector] = useState<ProjectorState>({
@@ -585,14 +601,49 @@ export default function App() {
    * disagreeing about what the congregation is looking at.
    */
   const applyTheme = useCallback(
-    (projector: typeof DEFAULT_THEME) => {
+    (chosen: typeof DEFAULT_THEME) => {
       if (!settings) return;
-      void saveSettings({ ...settings, projector })
+      /*
+       * This desk's look, and the wall's too when this desk is the one on it.
+       *
+       * Changing the look of the desk you are working at while a verse from it
+       * is on the wall should change the wall -- that is what "apply" means to
+       * the person pressing it. Changing it while another desk owns the wall
+       * changes what you are preparing and leaves the congregation alone.
+       */
+      const owns = liveDesk === null || liveDesk === workspace;
+      void saveSettings({
+        ...settings,
+        deskLooks: { ...(settings.deskLooks ?? {}), [workspace]: chosen },
+        projector: owns ? chosen : settings.projector,
+      })
         .then(setSettings)
         .catch((err) => setError(describeError(err)));
     },
-    [settings],
+    [settings, workspace, liveDesk],
   );
+
+  /*
+   * The wall wears the look of whichever desk put something on it.
+   *
+   * Compared before writing, because settings are a file: consecutive slides
+   * from one desk must not each cost a write, and only actually changing desks
+   * does. Keys are sorted first -- a plain stringify would depend on Rust and
+   * TypeScript declaring the fields in the same order.
+   */
+  useEffect(() => {
+    if (!settings || liveDesk === null) return;
+    const wanted = settings.deskLooks?.[liveDesk];
+    if (!wanted) return;
+
+    const stable = (theme: typeof DEFAULT_THEME) =>
+      JSON.stringify(Object.entries(theme).sort(([a], [b]) => a.localeCompare(b)));
+    if (stable(wanted) === stable(settings.projector)) return;
+
+    void saveSettings({ ...settings, projector: wanted })
+      .then(setSettings)
+      .catch((err) => setError(describeError(err)));
+  }, [liveDesk, settings]);
 
   const selectDevice = useCallback(
     async (id: string | null) => {
@@ -1067,7 +1118,7 @@ export default function App() {
                 keyOf={keyOf}
                 previewKey={preview ? keyOf(preview) : null}
                 liveKey={liveKey}
-                theme={settings?.projector ?? DEFAULT_THEME}
+                theme={look}
                 onApplyTheme={applyTheme}
                 ticker={ticker}
                 onTickerChange={changeTicker}
@@ -1126,7 +1177,7 @@ export default function App() {
                 /* Into the set here, because that is the list in front of the
                    operator. Everywhere else Add means the running order. */
                 onAdd={() => preview && songSet.add(preview)}
-                theme={settings?.projector ?? DEFAULT_THEME}
+                theme={look}
                 canStepBack={canStepBack}
                 canStepForward={canStepForward}
                 projectorOpen={projector.open}
@@ -1153,7 +1204,7 @@ export default function App() {
                 deck={preview}
                 liveKey={liveKey}
                 keyOf={keyOf}
-                theme={settings?.projector ?? DEFAULT_THEME}
+                theme={look}
                 /* One click stages, two puts it up -- the same rule as every
                    other list in the window. Built from the staged deck rather
                    than through goToSlide, which keeps whatever was live live:
@@ -1191,7 +1242,7 @@ export default function App() {
                 keyOf={keyOf}
                 previewKey={preview ? keyOf(preview) : null}
                 liveKey={liveKey}
-                theme={settings?.projector ?? DEFAULT_THEME}
+                theme={look}
                 onApplyTheme={applyTheme}
                 ticker={ticker}
                 onTickerChange={changeTicker}
@@ -1222,7 +1273,7 @@ export default function App() {
               }}
               onWind={wind}
               onAdd={() => preview && schedule.add(preview)}
-              theme={settings?.projector ?? DEFAULT_THEME}
+              theme={look}
               canStepBack={canStepBack}
               canStepForward={canStepForward}
               projectorOpen={projector.open}
@@ -1307,7 +1358,7 @@ export default function App() {
             }}
             onWind={wind}
             onAdd={() => preview && schedule.add(preview)}
-            theme={settings?.projector ?? DEFAULT_THEME}
+            theme={look}
             canStepBack={canStepBack}
             canStepForward={canStepForward}
             projectorOpen={projector.open}
@@ -1421,7 +1472,7 @@ export default function App() {
             keyOf={keyOf}
             previewKey={preview ? keyOf(preview) : null}
             liveKey={liveKey}
-            theme={settings?.projector ?? DEFAULT_THEME}
+            theme={look}
             onApplyTheme={applyTheme}
             ticker={ticker}
             onTickerChange={changeTicker}
@@ -1584,7 +1635,7 @@ export default function App() {
 
           <PreviewPanel
             preview={preview}
-            theme={settings?.projector ?? DEFAULT_THEME}
+            theme={look}
           />
         </div>
         ) : null}

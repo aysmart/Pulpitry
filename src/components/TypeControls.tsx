@@ -236,6 +236,26 @@ export function TypeControls({
         />
       </div>
 
+      {/*
+        The line under the words: "John 3:16 (KJV)", "Egypt (Live) — Verse 1".
+
+        Worth a switch of its own rather than a theme detail, because the two
+        answers are both right for different halves of a service. A reference
+        under a verse is information a congregation uses -- somebody is finding
+        the passage in their own Bible. A song's title under its chorus is
+        information nobody needs while singing it, and on a wall it reads as a
+        caption on a photograph.
+      */}
+      <label className="flex items-center gap-2 text-[12px] text-pulpitry-text">
+        <input
+          type="checkbox"
+          checked={theme.showReference}
+          onChange={(event) => set("showReference", event.target.checked)}
+          className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+        />
+        Show the title under the words
+      </label>
+
       <div>
         <span className={LABEL}>
           Shadow — lifts light words off a busy background

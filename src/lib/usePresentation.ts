@@ -309,6 +309,15 @@ export function usePresentation(desk: Workspace) {
   // Verse ids identify live scripture, but a lyric has none, so remember what
   // this window last put up. Only this window displays, so it stays accurate.
   const [liveKey, setLiveKey] = useState<string | null>(null);
+  /*
+   * Which desk put it there.
+   *
+   * The wall shows one thing and each desk has its own look, so something has
+   * to say whose look the wall should be wearing. It is whichever desk last
+   * sent something -- not whichever desk the operator is looking at, or moving
+   * to the slide desk to prepare would restyle a verse mid-reading.
+   */
+  const [liveDesk, setLiveDesk] = useState<Workspace | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -365,6 +374,7 @@ export function usePresentation(desk: Workspace) {
 
     const key = keyOf(item);
     setLiveKey(key);
+    setLiveDesk(desk);
     setHistory((current) => {
       // Re-displaying a passage should move it, not duplicate it -- and it
       // takes the newer time with it, which is the one that answers "when were
@@ -381,7 +391,7 @@ export function usePresentation(desk: Workspace) {
      * older one would stage onto the desk the operator has just left -- and the
      * fault would show as the wrong thing going live from the right button.
      */
-  }, [setPreview]);
+  }, [setPreview, desk]);
 
   /**
    * Forgets what has been shown.
@@ -673,6 +683,7 @@ export function usePresentation(desk: Workspace) {
     preview,
     live,
     liveKey,
+    liveDesk,
     history,
     clearHistory,
     keyOf,

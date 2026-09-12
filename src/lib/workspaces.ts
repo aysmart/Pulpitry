@@ -204,7 +204,16 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
      * deck and the library, which are read as pictures rather than as text.
      */
     frame: "deck",
-    tabs: ["Slides", "Media", "Themes"],
+    /*
+     * No Themes tab, deliberately.
+     *
+     * A deck carries its own background and every slide on it is laid out
+     * against that background in the studio. A look applied over the top would
+     * be a second answer to a question the deck has already answered -- and the
+     * operator would have two places to change the same thing, which is how a
+     * deck comes to look different on the wall than it did while it was made.
+     */
+    tabs: ["Slides", "Media"],
     transcript: false,
     detected: false,
     feed: false,

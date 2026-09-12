@@ -53,6 +53,45 @@ pub struct Imported {
     pub rights: SongRights,
 }
 
+/// An imported song as a row of the library.
+///
+/// # Why this is here rather than at the call site
+///
+/// Because the call site got it wrong, silently, for every format. It built the
+/// row inline with an empty subtitle -- and the subtitle is where a song's
+/// author is *shown*: under the title in the library, and in the Author box on
+/// the song screen. So every import read the author faithfully out of the file,
+/// stored it in the rights where nothing looks, and presented four hundred
+/// songs by nobody.
+///
+/// One place, with a test, so the next format to be added cannot repeat it.
+pub fn as_item(song: &Imported) -> crate::catalog::Item {
+    /*
+     * Who wrote the words, or failing that who wrote the tune.
+     *
+     * A hymn's text is often the interesting half -- "Charles Wesley" is what
+     * an operator searches for -- but a file that names only a composer should
+     * still show a name rather than nothing.
+     */
+    let by = if song.rights.author.trim().is_empty() {
+        song.rights.composer.trim()
+    } else {
+        song.rights.author.trim()
+    };
+
+    crate::catalog::Item {
+        id: None,
+        title: song.title.trim().to_string(),
+        subtitle: by.to_string(),
+        body: crate::catalog::ItemBody::Song {
+            sections: song.sections.clone(),
+            rights: song.rights.clone(),
+        },
+        path: None,
+        updated_at: 0,
+    }
+}
+
 /// A block of a song. Components, layout and elements belong to slides.
 fn section(label: impl Into<String>, lines: Vec<String>) -> SongSection {
     SongSection { label: label.into(), lines, components: None, layout: None, elements: None }
@@ -795,6 +834,52 @@ fn cp1252(byte: u8) -> char {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The fault every import had: the author was read and never shown.
+    #[test]
+    fn an_imported_song_carries_its_author_where_it_is_shown() {
+        let song = Imported {
+            title: "  Way Maker  ".into(),
+            sections: vec![section("Verse 1", vec!["You are here".into()])],
+            rights: SongRights {
+                status: RightsStatus::Unknown,
+                author: "Osinachi Okoro".into(),
+                composer: String::new(),
+                terms: "© Integrity Music".into(),
+                source: "Imported from EasyWorship".into(),
+                ccli: "7115744".into(),
+            },
+        };
+
+        let item = as_item(&song);
+        assert_eq!(item.title, "Way Maker", "the title is trimmed");
+        assert_eq!(
+            item.subtitle, "Osinachi Okoro",
+            "the author belongs in the subtitle, which is where it is shown"
+        );
+
+        let crate::catalog::ItemBody::Song { rights, .. } = item.body else {
+            panic!("a song should arrive as a song");
+        };
+        // And the evidence is kept as it arrived.
+        assert_eq!(rights.terms, "© Integrity Music");
+        assert_eq!(rights.ccli, "7115744");
+    }
+
+    /// A file that names only whoever wrote the tune still shows a name.
+    #[test]
+    fn a_composer_stands_in_where_there_is_no_author() {
+        let song = Imported {
+            title: "Hymn".into(),
+            sections: vec![section("Verse 1", vec!["A line".into()])],
+            rights: SongRights {
+                composer: "John Bacchus Dykes".into(),
+                ..SongRights::default()
+            },
+        };
+
+        assert_eq!(as_item(&song).subtitle, "John Bacchus Dykes");
+    }
 
     /// The fault a real EasyWorship export arrived with.
     ///
