@@ -34,16 +34,37 @@ import { EmptyState, Panel } from "./Panel";
  * is a catalogue somebody assembles and hosts. An operator without a
  * subscription should be able to read what it is without being sold to.
  */
+/** The one mark everybody reads as "not yours yet". */
+function Padlock({ size = 11 }: { size?: number }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden
+    >
+      <rect x="4" y="10.5" width="16" height="10" rx="2" />
+      <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function SongFinderPanel({
   subscribed,
   chosen,
   onChoose,
+  onSubscribe,
 }: {
   /** Whether this machine is activated. The real gate is the broker's. */
   subscribed: boolean;
   /** The id being previewed, so the list can mark it. */
   chosen: string | null;
   onChoose: (hit: SongFinderHit) => void;
+  /** Opens Settings, which starts on the subscription. */
+  onSubscribe?: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SongFinderHit[] | null>(null);
@@ -94,12 +115,13 @@ export function SongFinderPanel({
       title="Song Finder"
       accent="teal"
       actions={
-        !CATALOGUE_OPEN ? (
+        !CATALOGUE_OPEN || !subscribed ? (
           /* Said on the panel itself rather than only in the text below it: a
              pane with a search box in it is a promise, and this one cannot
              keep it yet. */
-          <span className="rounded border border-pulpitry-gold-dim bg-pulpitry-gold/10 px-1.5 py-0.5 text-[10px] tracking-[0.12em] text-pulpitry-gold uppercase">
-            Coming soon
+          <span className="flex items-center gap-1 rounded border border-pulpitry-gold-dim bg-pulpitry-gold/10 px-1.5 py-0.5 text-[10px] tracking-[0.12em] text-pulpitry-gold uppercase">
+            {CATALOGUE_OPEN ? <Padlock /> : null}
+            {CATALOGUE_OPEN ? "Subscription" : "Coming soon"}
           </span>
         ) : hits && hits.length > 0 ? (
           <span className="text-[11px] text-pulpitry-muted tabular-nums">
@@ -139,7 +161,22 @@ export function SongFinderPanel({
           </p>
         </div>
       ) : !subscribed ? (
+        /*
+         * Shut, and saying so.
+         *
+         * The pane used to read as an advertisement with no search box, which
+         * leaves an operator wondering whether they are looking at something
+         * broken. A lock is the one mark everybody reads as "this is not for
+         * you yet", and the button is the whole of what to do about it.
+         *
+         * Nothing is asked of the broker while this stands -- the real gate is
+         * the endpoint's, which refuses a machine that is not activated, and
+         * this is the courtesy of not making the request.
+         */
         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+          <span className="text-pulpitry-gold" aria-hidden>
+            <Padlock size={22} />
+          </span>
           <p className="max-w-[34ch] text-[13px] leading-relaxed text-pulpitry-muted">
             Describe a song — a line you half-remember, or what it is about —
             and the AI Song Finder works out which one you mean, from a
@@ -155,9 +192,19 @@ export function SongFinderPanel({
             library, imports from EasyWorship, ProPresenter, OpenLP and
             OpenSong, and anything you write yourself.
           </p>
-          <p className="text-[11.5px] text-pulpitry-teal">
-            Settings → Subscription
-          </p>
+          {onSubscribe ? (
+            <button
+              type="button"
+              onClick={onSubscribe}
+              className="rounded border border-pulpitry-gold-dim bg-pulpitry-gold/10 px-3 py-1.5 text-[12.5px] text-pulpitry-gold transition-colors hover:bg-pulpitry-gold/15 focus-visible:focus-ring"
+            >
+              Activate a subscription
+            </button>
+          ) : (
+            <p className="text-[11.5px] text-pulpitry-teal">
+              Settings → Subscription
+            </p>
+          )}
         </div>
       ) : (
         <div className="flex h-full min-h-0 flex-col">

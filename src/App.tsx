@@ -1357,6 +1357,9 @@ export default function App() {
                 /* The courtesy gate. The real one is the broker's: the
                    endpoint refuses a machine that is not activated. */
                 subscribed={settings?.hasHostedSubscription ?? false}
+                /* Settings opens on the subscription, so this is the whole
+                   journey from a locked pane to activating one. */
+                onSubscribe={() => setSettingsOpen(true)}
                 chosen={found?.id ?? null}
                 onChoose={setSongFinderHit}
               />
