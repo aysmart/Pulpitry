@@ -35,14 +35,15 @@
  *   else here.
  * - **Media**: the pictures and clips, at the size they are actually chosen by,
  *   beside the output that plays them.
- * - **Plan**: the service in order, and the output it is run from.
+ *
+ * The service plan had a desk of its own and does not need one. A running
+ * order is written and then followed, and neither of those is a job with a
+ * whole window's worth of work in it: what it wants is to be *beside* the
+ * thing being prepared. It is a second tab on the scripture desk's library
+ * pane, where a reading is looked up -- which is the half of a service plan
+ * anybody actually sits down and prepares.
  */
-export type Workspace =
-  | "scripture"
-  | "songs"
-  | "slides"
-  | "media"
-  | "plan";
+export type Workspace = "scripture" | "songs" | "slides" | "media";
 
 /**
  * Every library the panel can show.
@@ -157,11 +158,20 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     label: "Scripture",
     hint: "What is being said, what was heard, the Bible, the original languages",
     frame: "desk",
-    // One name, so the pane is the Bible and carries no tab strip. The
-    // session's own history was a tab here and is not scripture: the verses
-    // shown are a feed of their own in the row above. The look is not a
-    // library either -- it is in the top bar, where every desk can reach it.
-    tabs: ["Scripture"],
+    /*
+     * The Bible, and the service it is being read in.
+     *
+     * The plan was a desk and is a tab, because it is not a job: a running
+     * order is written once and then followed, and the following is done from
+     * whichever desk holds the next thing. Here rather than anywhere else
+     * because preparing a service and looking a reading up are the same
+     * sitting, and this is the pane with the room for both.
+     *
+     * The session's own history is not a tab: the verses shown are a feed of
+     * their own in the row above. Neither is the look -- that is in the top
+     * bar, where every desk can reach it.
+     */
+    tabs: ["Scripture", "Schedule"],
     transcript: true,
     detected: true,
     feed: true,
@@ -260,11 +270,7 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
      */
     frame: "deck",
     strip: false,
-    // One name, so the pane is the library and carries no tab strip. Media is
-    // still a tab on the song and slide desks: reaching a picture without
-    // leaving the desk you are running is the thing this window is for, and
-    // this arrangement is for when the pictures *are* the job -- importing a
-    // folder of them, sorting out which is which, running a loop.
+    // One name, so the pane is the library and carries no tab strip.
     tabs: ["Media"],
     transcript: false,
     detected: false,
@@ -277,44 +283,6 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     // that means nothing: the library is the whole column.
     basis: "0",
   },
-  plan: {
-    label: "Plan",
-    hint: "The service in order, and running it",
-    /*
-     * The service is the work, and the output is how it is run.
-     *
-     * It was a desk: a row of the output beside a rail of the plan, over a row
-     * of the plan again beside a preview. Two lists of the same entries in one
-     * window, one of them stageable and one of them editable, and four library
-     * tabs over the top -- so the pane that actually holds the service had a
-     * quarter of the window and the operator had to know which of the two
-     * lists did what.
-     *
-     * A service is a *list in order*, read down: what we are on, what is
-     * after it, where the notices sit. So it takes the working column whole,
-     * and beside it is the same output column the slide, song and media desks
-     * use -- the pane an operator watches the congregation through does not
-     * move when they change desks.
-     */
-    frame: "deck",
-    // Nothing steps in this frame's upper row here. The plan is the list, and
-    // showing a strip of it above a pane holding the same list was the
-    // duplication this arrangement had.
-    strip: false,
-    // One name, so the pane is the service and carries no tab strip. The
-    // libraries were tabs here and are desks: a plan is built by staging
-    // something on the desk that holds it and pressing Add to plan, which is
-    // one gesture from anywhere rather than a second copy of four libraries
-    // behind a tab strip on a fifth desk.
-    tabs: ["Schedule"],
-    transcript: false,
-    detected: false,
-    feed: false,
-    original: false,
-    columns: "minmax(0,1fr) minmax(340px,0.42fr)",
-    // Unused without a strip: the service takes the whole column.
-    basis: "0",
-  },
 };
 
 /** Left to right, in the order a service is prepared and then run. */
@@ -323,7 +291,6 @@ export const WORKSPACE_ORDER: Workspace[] = [
   "songs",
   "slides",
   "media",
-  "plan",
 ];
 
 const KEY = "pulpitry.workspace";
