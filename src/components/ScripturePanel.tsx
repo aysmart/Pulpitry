@@ -1,12 +1,7 @@
 import { useState } from "react";
 
 import type { Translation, Verse } from "../lib/bible";
-import {
-  presentableLabel,
-  presentableText,
-  type Presentable,
-  type Shown,
-} from "../lib/usePresentation";
+import type { Presentable } from "../lib/usePresentation";
 import type { IndexStatus } from "../lib/useSemanticIndex";
 import { ChapterNavigator } from "./ChapterNavigator";
 import type { ProjectorTheme } from "../lib/theme";
@@ -42,7 +37,6 @@ export function ScripturePanel({
   liveVerseIds,
   index,
   follow,
-  history,
   schedule,
   onStageEntry,
   onPreviewItem,
@@ -73,7 +67,6 @@ export function ScripturePanel({
   index: IndexStatus;
   /** The staged verse the chapter list should follow. */
   follow: Verse | null;
-  history: Shown[];
   schedule: ScheduleController;
   onStageEntry: (
     index: number,
@@ -135,7 +128,7 @@ export function ScripturePanel({
       // between, the one name becomes the heading instead.
       title={choosing ? "" : tab}
       accent="teal"
-      bodyClassName={tab === "History" ? "" : "overflow-hidden"}
+      bodyClassName="overflow-hidden"
       actions={
         !choosing ? null : (
         <div className="flex flex-wrap justify-end gap-0">
@@ -278,32 +271,6 @@ export function ScripturePanel({
         />
       ) : null}
 
-      {tab === "History" ? (
-        history.length === 0 ? (
-          <EmptyState>
-            Verses you put on the projector will collect here.
-          </EmptyState>
-        ) : (
-          <div className="flex flex-col p-1">
-            {history.map((shown) => (
-              <button
-                key={keyOf(shown.item)}
-                type="button"
-                onClick={() => onPreviewItem(shown.item)}
-                onDoubleClick={() => onPreviewItem(shown.item, true)}
-                className="rounded px-2 py-1.5 text-left transition-colors hover:bg-pulpitry-raised focus-visible:focus-ring"
-              >
-                <span className="block text-[11px] text-pulpitry-muted">
-                  {presentableLabel(shown.item)}
-                </span>
-                <span className="line-clamp-2 text-[12.5px] text-pulpitry-text">
-                  {presentableText(shown.item)}
-                </span>
-              </button>
-            ))}
-          </div>
-        )
-      ) : null}
     </Panel>
   );
 }

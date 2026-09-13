@@ -75,6 +75,7 @@ import { usePresentation } from "./lib/usePresentation";
 import { useUpdate } from "./lib/useUpdate";
 import { useAudio } from "./lib/useAudio";
 import { useMedia } from "./lib/useMedia";
+import { useAside } from "./lib/useAside";
 import { useSchedule } from "./lib/useSchedule";
 import { useTicker } from "./lib/useTicker";
 import { useSemanticIndex } from "./lib/useSemanticIndex";
@@ -368,6 +369,15 @@ export default function App() {
    * service could delete a song out from under the band.
    */
   const songSet = useSchedule(setError, "songSet");
+  /*
+   * Passages put aside during this service, which is a third list again.
+   *
+   * The scripture desk's Queue, and not the running order it used to be: a
+   * preacher doubling back three times would otherwise leave three verses in
+   * Sunday's plan, and the plan somebody prepared on Friday was no longer the
+   * plan. See lib/useAside.ts.
+   */
+  const aside = useAside();
   const { audio, change: changeAudio } = useAudio();
   const media = useMedia();
   const { ticker, change: changeTicker } = useTicker();
@@ -384,20 +394,6 @@ export default function App() {
       return staged;
     },
     [schedule, previewItem, showItem],
-  );
-
-  /**
-   * Taking an entry out of the running order, from wherever it is shown.
-   *
-   * Written once because three lists now show the same queue — the rail, the
-   * scripture feed and the plan — and three copies of the staging rule would be
-   * three chances to get it wrong.
-   */
-  const stageFromQueue = useCallback(
-    (index: number, andShow?: boolean) => {
-      void stageEntry(index, andShow);
-    },
-    [stageEntry],
   );
 
   /**
@@ -1207,7 +1203,6 @@ export default function App() {
                 liveVerseIds={live?.ids ?? []}
                 index={semanticIndex}
                 follow={originalVerse}
-                history={history}
                 schedule={schedule}
                 onStageEntry={stageEntry}
                 onPreviewItem={(item, andShow) =>
@@ -1274,7 +1269,12 @@ export default function App() {
                 onWind={wind}
                 /* Into the set here, because that is the list in front of the
                    operator. Everywhere else Add means the running order. */
-                onAdd={() => preview && songSet.add(preview)}
+                onAdd={() => preview && schedule.add(preview)}
+                own={{
+                  label: "Add to set",
+                  hint: "Add what is staged to the worship set",
+                  add: () => preview && songSet.add(preview),
+                }}
                 theme={look}
                 canStepBack={canStepBack}
                 canStepForward={canStepForward}
@@ -1339,7 +1339,6 @@ export default function App() {
                 liveVerseIds={live?.ids ?? []}
                 index={semanticIndex}
                 follow={originalVerse}
-                history={history}
                 schedule={schedule}
                 onStageEntry={stageEntry}
                 onPreviewItem={(item, andShow) =>
@@ -1464,6 +1463,18 @@ export default function App() {
             }}
             onWind={wind}
             onAdd={() => preview && schedule.add(preview)}
+            /* Where this desk keeps a feed, the Queue in it is the list: a
+               passage put aside for later in the hour, which is not the
+               service and does not survive it. */
+            own={
+              shape.feed
+                ? {
+                    label: "Set aside",
+                    hint: "Keep it to hand for later in this service, in the Queue",
+                    add: () => preview && aside.add(preview),
+                  }
+                : undefined
+            }
             theme={look}
             canStepBack={canStepBack}
             canStepForward={canStepForward}
@@ -1475,49 +1486,27 @@ export default function App() {
           />
           {/*
             On the scripture desk the queue is half a pane: the other half is
-            what has already been read. Two lists, one glance, and the same
-            running order underneath -- putting a verse aside to come back to
-            and putting it in the plan are the same act.
+            what has already been read. Two lists, one glance, both about the
+            hour in progress -- what we have read, and what we are coming back
+            to. The service's own running order is not either of these and
+            lives on the Plan desk.
           */}
           {shape.feed ? (
             <ScriptureFeed
               history={history}
               onClearHistory={clearHistory}
-              entries={schedule.entries}
-              name={schedule.name}
-              onStage={stageFromQueue}
-              onRemove={schedule.removeAt}
-              onClearEntries={schedule.clearEntries}
+              aside={aside.items}
+              onRemoveAside={aside.removeAt}
+              onClearAside={aside.clear}
               onPreviewItem={(item, andShow) =>
                 andShow ? showItem(item) : previewItem(item)
               }
               keyOf={keyOf}
               previewKey={preview ? keyOf(preview) : null}
               liveKey={liveKey}
-              activeLabel={live?.caption || null}
             />
           ) : null}
 
-          {shape.queue ? (
-          <Panel
-            title="Queue"
-            actions={
-              <PanelCount
-                count={schedule.entries.length}
-                onClear={schedule.clearEntries}
-                title="Empty the running order"
-              />
-            }
-          >
-            <QueueRail
-              entries={schedule.entries}
-              name={schedule.name}
-              onStage={stageFromQueue}
-              onRemove={schedule.removeAt}
-              activeLabel={live?.caption || null}
-            />
-          </Panel>
-          ) : null}
         </div>
         ) : null}
 
@@ -1569,7 +1558,6 @@ export default function App() {
                the index is still building or switched off. */
             index={semanticIndex}
             follow={originalVerse}
-            history={history}
             schedule={schedule}
             onStageEntry={stageEntry}
             onPreviewItem={(item, andShow) =>

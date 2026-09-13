@@ -322,6 +322,20 @@ interface Output {
   /** Winds what is live to a point in it, 0 at the top and 1 at the end. */
   onWind: (progress: number) => void;
   onAdd: () => void;
+  /**
+   * This desk's own list, where it keeps one.
+   *
+   * Two desks do, and neither is the service: the scripture desk puts a
+   * passage aside for later in the hour, and the song desk builds the set the
+   * band is playing. Both used to write into the running order, so a preacher
+   * doubling back three times left three verses in Sunday's plan and the
+   * worship leader reordering their songs reordered the service.
+   *
+   * So the row reads left to right as near to far: this desk's list, then the
+   * service. Absent on the desks with no list of their own, where the row is
+   * one button rather than a dead one.
+   */
+  own?: { label: string; hint: string; add: () => void };
   theme: ProjectorTheme;
   canStepBack: boolean;
   canStepForward: boolean;
@@ -635,6 +649,7 @@ export function MainOutput({
   onStep,
   onWind,
   onAdd,
+  own,
   canFollow,
   following,
   onFollowChange,
@@ -856,6 +871,17 @@ export function MainOutput({
         being dropped for a tidier column.
       */}
       <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        {own ? (
+          <button
+            type="button"
+            onClick={own.add}
+            disabled={!preview}
+            title={own.hint}
+            className={QUIET}
+          >
+            {own.label}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onAdd}

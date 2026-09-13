@@ -29,13 +29,13 @@
  *   what scripture was heard in it, the feed of verses shown and verses put
  *   aside, the Bible itself searched by word or by meaning, the original
  *   languages behind the staged verse, and what the screen will look like.
- * - **Songs**: the song library at the width a lyric needs, the queue beside
- *   what is live, and nothing about scripture detection.
+ * - **Songs**: the song library at the width a lyric needs, the set beside what
+ *   is live, and nothing about scripture detection.
  * - **Slides**: a deck read as thumbnails, which wants more room than anything
  *   else here.
  * - **Media**: the pictures and clips, at the size they are actually chosen by,
  *   beside the output that plays them.
- * - **Plan**: the running order, and what comes next.
+ * - **Plan**: the service in order, and the output it is run from.
  */
 export type Workspace =
   | "scripture"
@@ -56,8 +56,7 @@ export type LibraryTab =
   | "Songs"
   | "Media"
   | "Slides"
-  | "Schedule"
-  | "History";
+  | "Schedule";
 
 /**
  * How the window itself is divided.
@@ -118,11 +117,6 @@ export interface WorkspaceShape {
    */
   feed: boolean;
   /**
-   * The running order on its own, for the jobs that do not keep a verse
-   * history worth reading. The feed's Queue tab shows the same list.
-   */
-  queue: boolean;
-  /**
    * Columns for that row, in the order the panels are written. Desk frame only.
    *
    * It has to match what is rendered: a template with more columns than
@@ -171,7 +165,6 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     transcript: true,
     detected: true,
     feed: true,
-    queue: false,
     topColumns:
       "minmax(200px,0.7fr) minmax(240px,0.9fr) minmax(360px,1.5fr) minmax(220px,0.75fr)",
     original: true,
@@ -182,14 +175,18 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     label: "Songs",
     hint: "The plan, the output, the song's parts, and where the next song comes from",
     frame: "song",
-    tabs: ["Songs", "Media"],
+    // One name, so the pane is the song library and carries no tab strip.
+    // Media was a second tab here until it became a desk of its own: a picture
+    // reached from behind the songs was a pane and a half of somebody else's
+    // work, and the desk that holds them holds them at the size they are
+    // chosen by.
+    tabs: ["Songs"],
     // Nothing about scripture detection: a worship set is not where a
     // paraphrase match is read, and those two panels are the width the
     // library needs.
     transcript: false,
     detected: false,
     feed: false,
-    queue: false,
     original: false,
     // Work, then output -- the deck frame's own split, so the pane an operator
     // watches the congregation through is in the same place and the same shape
@@ -220,7 +217,7 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
      */
     frame: "deck",
     /*
-     * Slides and media, and no look of its own.
+     * The decks, and no look of its own.
      *
      * A deck carries its own background and every slide on it is laid out
      * against that background in the studio. A look applied over the top would
@@ -228,15 +225,17 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
      * operator would have two places to change the same thing, which is how a
      * deck comes to look different on the wall than it did while it was made.
      * The top bar's Looks button is absent on this desk for the same reason.
+     *
+     * Media was a second tab here and is a desk now, for the same reason the
+     * decks want this width: pictures are chosen by looking at them.
      */
-    tabs: ["Slides", "Media"],
+    tabs: ["Slides"],
     transcript: false,
     detected: false,
     feed: false,
     // The plan lives on the far side of the deck strip in this frame: the
     // library and the output are what a deck is run from, and a third list
     // would take the width the slides are read at.
-    queue: false,
     original: false,
     // Work, then output. The output column is given a floor rather than a
     // share: below about 340px a 16:9 pane stops being a preview of anything.
@@ -270,7 +269,6 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     transcript: false,
     detected: false,
     feed: false,
-    queue: false,
     original: false,
     // The same split as the slide and song desks, so the pane an operator
     // watches the congregation through does not move when they change desks.
@@ -281,17 +279,41 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
   },
   plan: {
     label: "Plan",
-    hint: "The running order, and what comes next",
-    frame: "desk",
-    tabs: ["Schedule", "History", "Songs", "Slides"],
+    hint: "The service in order, and running it",
+    /*
+     * The service is the work, and the output is how it is run.
+     *
+     * It was a desk: a row of the output beside a rail of the plan, over a row
+     * of the plan again beside a preview. Two lists of the same entries in one
+     * window, one of them stageable and one of them editable, and four library
+     * tabs over the top -- so the pane that actually holds the service had a
+     * quarter of the window and the operator had to know which of the two
+     * lists did what.
+     *
+     * A service is a *list in order*, read down: what we are on, what is
+     * after it, where the notices sit. So it takes the working column whole,
+     * and beside it is the same output column the slide, song and media desks
+     * use -- the pane an operator watches the congregation through does not
+     * move when they change desks.
+     */
+    frame: "deck",
+    // Nothing steps in this frame's upper row here. The plan is the list, and
+    // showing a strip of it above a pane holding the same list was the
+    // duplication this arrangement had.
+    strip: false,
+    // One name, so the pane is the service and carries no tab strip. The
+    // libraries were tabs here and are desks: a plan is built by staging
+    // something on the desk that holds it and pressing Add to plan, which is
+    // one gesture from anywhere rather than a second copy of four libraries
+    // behind a tab strip on a fifth desk.
+    tabs: ["Schedule"],
     transcript: false,
     detected: false,
     feed: false,
-    queue: true,
-    topColumns: "minmax(360px,1.6fr) minmax(220px,0.6fr)",
     original: false,
-    columns: "minmax(0,1.25fr) minmax(320px,1fr)",
-    basis: "42%",
+    columns: "minmax(0,1fr) minmax(340px,0.42fr)",
+    // Unused without a strip: the service takes the whole column.
+    basis: "0",
   },
 };
 
