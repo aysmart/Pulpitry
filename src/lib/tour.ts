@@ -215,7 +215,7 @@ export const TOUR: TourStep[] = [
     group: "Songs",
     title: "Song Finder",
     body:
-      "A hosted catalogue searched by meaning, for the song nobody can name — a line, a theme, a feeling. It needs a Castavox subscription.",
+      "A hosted catalogue searched by meaning, for the song nobody can name — a line, a theme, a feeling. The catalogue is still being assembled; it arrives in an update, with a Castavox subscription.",
   },
   {
     at: "library",

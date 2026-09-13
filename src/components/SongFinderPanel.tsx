@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { describeError } from "../lib/api";
 import {
+  CATALOGUE_OPEN,
   RIGHTS_LABEL,
   songFinderSearch,
   type SongFinderHit,
@@ -77,7 +78,7 @@ export function SongFinderPanel({
    * enough that nobody presses Enter wondering whether it is broken.
    */
   useEffect(() => {
-    if (!subscribed) return;
+    if (!subscribed || !CATALOGUE_OPEN) return;
     const asked = query.trim();
     if (!asked) {
       setHits(null);
@@ -93,14 +94,51 @@ export function SongFinderPanel({
       title="Song Finder"
       accent="teal"
       actions={
-        hits && hits.length > 0 ? (
+        !CATALOGUE_OPEN ? (
+          /* Said on the panel itself rather than only in the text below it: a
+             pane with a search box in it is a promise, and this one cannot
+             keep it yet. */
+          <span className="rounded border border-pulpitry-gold-dim bg-pulpitry-gold/10 px-1.5 py-0.5 text-[10px] tracking-[0.12em] text-pulpitry-gold uppercase">
+            Coming soon
+          </span>
+        ) : hits && hits.length > 0 ? (
           <span className="text-[11px] text-pulpitry-muted tabular-nums">
             {hits.length}
           </span>
         ) : null
       }
     >
-      {!subscribed ? (
+      {!CATALOGUE_OPEN ? (
+        /*
+         * The catalogue is not being served yet.
+         *
+         * Shown to everybody, subscribed or not: a search box that answers
+         * every church with an error they cannot act on is a worse first
+         * impression than a plain sentence saying it is not open. What it will
+         * do is still described, because somebody deciding about a
+         * subscription is entitled to know what is coming with it -- and
+         * because the honest part of this feature, that the words are real
+         * entries somebody checked, is the part worth saying early.
+         */
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+          <p className="max-w-[34ch] text-[13px] leading-relaxed text-pulpitry-muted">
+            Describe a song — a line you half-remember, or what it is about —
+            and the Song Finder works out which one you mean, from a catalogue
+            that carries the words, who wrote them, and what is known about the
+            rights.
+          </p>
+          <p className="max-w-[34ch] text-[11.5px] leading-relaxed text-pulpitry-muted">
+            The catalogue is still being assembled. It arrives in an update,
+            and this pane starts working on its own when it does — there is
+            nothing to install.
+          </p>
+          <p className="max-w-[34ch] text-[11.5px] leading-relaxed text-pulpitry-muted">
+            Everything else here is ready and on this machine: your own
+            library, imports from EasyWorship, ProPresenter, OpenLP and
+            OpenSong, and anything you write yourself.
+          </p>
+        </div>
+      ) : !subscribed ? (
         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
           <p className="max-w-[34ch] text-[13px] leading-relaxed text-pulpitry-muted">
             Describe a song — a line you half-remember, or what it is about —
