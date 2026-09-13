@@ -11,7 +11,13 @@ import {
   type Ticker,
 } from "../lib/projector";
 import { OVERLAY_FORMS, type OverlayForm } from "../lib/overlays";
-import { formFor, listShapes, shapeFromForm, shapeIdOf } from "../lib/shapes";
+import {
+  formFor,
+  listShapes,
+  onShapeChanged,
+  shapeFromForm,
+  shapeIdOf,
+} from "../lib/shapes";
 import { ShapeStudio } from "./ShapeStudio";
 import type { ProjectorTheme } from "../lib/theme";
 import { OutputPreview } from "./OutputPreview";
@@ -117,6 +123,16 @@ export function OutputsPanel({
   /** Which output opened it, so what is drawn lands on that output. */
   const [designingFor, setDesigningFor] = useState<string | null>(null);
 
+  /**
+   * Whether a freshly read list says anything new.
+   *
+   * By value, because these are re-read on a timer and every read hands back
+   * new objects. Comparing them is cheaper than re-rendering a pane of live
+   * previews twice a second for an answer that has not changed.
+   */
+  const same = <T,>(held: T[], found: T[]) =>
+    JSON.stringify(held) === JSON.stringify(found);
+
   /** Re-read after the studio saves or deletes, so the picker is current. */
   const refreshShapes = () => {
     void listShapes()
@@ -163,16 +179,51 @@ export function OutputsPanel({
       .then((sources) => setSeen((current) => ({ ...current, [id]: sources })));
   };
 
+  /*
+   * The lists this pane chooses from, kept current while it is open.
+   *
+   * They were read once, when the pane appeared, and a pane that is open for
+   * twenty minutes while somebody sets a church up is exactly where that
+   * fails: a projector is plugged in and its screen is not in the list, a look
+   * is saved next door and the Look picker has never heard of it, a shape is
+   * drawn and the output that was drawn for cannot be pointed at it. Closing
+   * and reopening the pane fixed all three, which is a thing an operator
+   * should never have to learn.
+   *
+   * A shape says when it changes, so that one is told rather than asked. The
+   * monitors and the looks have nothing to say for themselves -- there is no
+   * event for a screen being plugged in -- so they are re-read on the same
+   * two-second tick that keeps the feeds honest, and the state is only
+   * replaced when the answer is actually different: a new array every two
+   * seconds would re-render every preview in the pane for nothing.
+   */
   useEffect(() => {
-    void listDisplays()
-      .then(setDisplays)
-      .catch(() => undefined);
-    void catalogList("template")
-      .then(setTemplates)
-      .catch(() => undefined);
-    void listShapes()
-      .then(setShapes)
-      .catch(() => undefined);
+    const read = () => {
+      void listDisplays()
+        .then((found) => setDisplays((held) => (same(held, found) ? held : found)))
+        .catch(() => undefined);
+      void catalogList("template")
+        .then((found) => setTemplates((held) => (same(held, found) ? held : found)))
+        .catch(() => undefined);
+    };
+
+    read();
+    const timer = window.setInterval(read, 2000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    refreshShapes();
+    const stop = onShapeChanged(refreshShapes);
+    return () => {
+      void stop.then((unlisten) => unlisten());
+    };
+    // Once, for the life of the pane. `refreshShapes` is rebuilt on every
+    // render and does the same thing each time, so listing it here would
+    // resubscribe on every keystroke in the pane above.
+  }, []);
+
+  useEffect(() => {
     void libraryStatus()
       .then((status) => setTranslations(status.translations))
       .catch(() => undefined);
