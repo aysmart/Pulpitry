@@ -1,3 +1,4 @@
+import { laidOut, type LiveContent } from "./projector";
 import type { ProjectorTheme } from "./theme";
 
 /**
@@ -376,4 +377,36 @@ export function plainText(
     .replace(/\n{2,}/g, "\n")
     .trim();
   return trimmed ? trimmed : null;
+}
+
+/**
+ * What an overlay output may draw of what is live — or null, meaning draw
+ * nothing at all.
+ *
+ * # A slide is a whole screen, and cannot be one line of a band
+ *
+ * A verse, a lyric and a lexicon entry are words, and words go into a band:
+ * that is the whole idea of a lower third. A slide is not words. It is a
+ * layout -- a heading over a table, three panels across the frame, a chart, a
+ * notice board with four things on it -- and the only honest way to show one is
+ * to show it, which an overlay by definition cannot do. Flattened into a band
+ * it arrives as a run of words with the structure that carried the meaning
+ * taken out: "This week Midweek service Wednesday 6:00 PM Prayer meeting
+ * Tuesday 6:00 AM" is not what anybody laid out.
+ *
+ * So slides go to screens of their own and overlays let them pass. An output
+ * keyed over a camera simply keeps showing the camera, which is right: the
+ * congregation in the room is looking at the notices, and the people watching
+ * the stream are looking at whoever is speaking.
+ *
+ * # Nothing is also an answer
+ *
+ * Null where nothing is live, which every caller draws as an empty frame. A
+ * band holding no verse is the bug worth not shipping -- and a shape a church
+ * drew is furniture with holes in it, so a shape with nothing to put in its
+ * holes is the same bug with their own logo on it.
+ */
+export function overlayWords(content: LiveContent | null): string | null {
+  if (!content) return null;
+  return laidOut(content.body) ? null : plainText(content);
 }

@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 
 import { scriptureIn } from "../lib/bible";
 import type { SlideElement } from "../lib/design";
-import { plainText, type OverlayForm } from "../lib/overlays";
+import { overlayWords, plainText, type OverlayForm } from "../lib/overlays";
 import {
   filled,
   loadShape,
@@ -154,16 +154,21 @@ export function OutputPreview({
           the output sent another.
         */
         <div className="absolute inset-0" style={CHEQUER}>
-          {shape ? (
+          {shape && overlayWords(drawn) ? (
             <DesignedView
               elements={filled(
                 shape,
-                plainText(drawn),
+                overlayWords(drawn),
                 captions ? (drawn?.caption ?? null) : null,
               )}
               theme={theme}
               uppercase={uppercase}
             />
+          ) : shape ? (
+            /* Nothing live, or a slide -- which belongs on a screen of its
+               own. The chequer is the honest picture of what a switcher
+               receives: the camera, and nothing over it. */
+            null
           ) : (
             <p className="flex h-full items-center justify-center px-4 text-center text-[11px] text-pulpitry-muted">
               This shape is no longer in the library, so this output draws
@@ -181,7 +186,7 @@ export function OutputPreview({
             form={form}
             theme={theme}
             reference={drawn?.caption ?? null}
-            text={plainText(drawn)}
+            text={overlayWords(drawn)}
             uppercase={uppercase}
             captions={captions}
           />

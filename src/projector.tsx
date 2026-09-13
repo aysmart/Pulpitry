@@ -39,7 +39,7 @@ import { withBackground } from "./lib/design";
 import { Backdrop } from "./components/Backdrop";
 import { OverlayView } from "./components/OverlayView";
 import { StageView } from "./components/StageView";
-import { plainText, type OverlayForm } from "./lib/overlays";
+import { overlayWords, plainText, type OverlayForm } from "./lib/overlays";
 import {
   filled,
   loadShape,
@@ -392,7 +392,16 @@ function Projector() {
    * somebody else's furniture hides both.
    */
   if (shapeIdOf(form) !== null) {
-    if (!shape) {
+    /*
+     * A shape draws when it has something to put in it.
+     *
+     * Null covers both of the cases where it has not: nothing is live, and what
+     * is live is a slide, which belongs on a screen of its own. Either way the
+     * furniture goes too -- a band with no words in it is not an overlay, it is
+     * a bar across somebody's camera.
+     */
+    const words = overlayWords(drawn);
+    if (!shape || !words) {
       return (
         <div
           className="relative h-full w-full overflow-hidden"
@@ -409,7 +418,7 @@ function Projector() {
         <DesignedView
           elements={filled(
             shape,
-            plainText(drawn),
+            words,
             captions ? (drawn?.caption ?? null) : null,
           )}
           theme={theme}
@@ -437,7 +446,9 @@ function Projector() {
           form={form}
           theme={theme}
           reference={drawn?.caption ?? null}
-          text={plainText(drawn)}
+          // A slide is not words: see `overlayWords`. Nothing here means this
+          // output draws nothing, which leaves the camera showing.
+          text={overlayWords(drawn)}
           uppercase={uppercase}
           captions={captions}
         />

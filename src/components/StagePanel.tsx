@@ -4,6 +4,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 
 import {
   bodyText,
+  laidOut,
   type AudioState,
   type LiveBody,
   type LiveContent,
@@ -227,25 +228,27 @@ function Stage({
  * pane and a table arrived as a run of words.
  */
 function slideOf(item: Presentable | null, theme: ProjectorTheme) {
-  if (!item) return null;
-  const body = toLiveContent(item).body;
-  if (body.kind === "richText") return { blocks: body.blocks, theme, body };
-  if (body.kind === "composed") return { blocks: [], theme, body };
-  return null;
+  return item ? liveSlide(toLiveContent(item).body, theme) : null;
 }
 
 /**
  * The same, for whatever the projector is currently showing.
  *
- * Both kinds of slide: `richText` is what every slide made before components
- * existed carries, and `composed` is what one made since carries. Leaving the
- * second out sent it to the plain-text pane, where a table arrived as a run of
- * words -- so a slide that was correct on the wall looked broken on the desk.
+ * Every kind of slide, asked once: see `laidOut`. Written out by hand here it
+ * was wrong twice -- a generated table reached these panes as a run of words,
+ * and then a slide laid out in the studio did the same, correct on the wall and
+ * flattened on the two panes whose whole job is to show what the wall has.
+ *
+ * `blocks` only where the slide is made of them. Every other kind carries its
+ * own contents on `body`, and the empty array is what says so.
  */
 function liveSlide(body: LiveBody | undefined, theme: ProjectorTheme) {
-  if (body?.kind === "richText") return { blocks: body.blocks, theme, body };
-  if (body?.kind === "composed") return { blocks: [], theme, body };
-  return null;
+  if (!body || !laidOut(body)) return null;
+  return {
+    blocks: body.kind === "richText" ? body.blocks : [],
+    theme,
+    body,
+  };
 }
 
 /** The picture or clip behind an item, if that is what it is. */

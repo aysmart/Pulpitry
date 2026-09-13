@@ -341,6 +341,48 @@ export function fillsFrame(body: LiveBody): boolean {
 }
 
 /**
+ * Whether this body is a slide: something already laid out, to be drawn rather
+ * than flattened into a run of words.
+ *
+ * # Why this is a function and not a list at each call site
+ *
+ * The desk's Live and Preview panes take two routes: a slide goes to
+ * `LiveBodyView`, and everything else to a plain-text pane that centres a
+ * paragraph. Which kinds take which route was written out by hand in two
+ * places, and each time a new kind of slide arrived it was left out of both --
+ * `composed` once, so a generated table reached the desk as a run of words, and
+ * `designed` after it, so a slide the operator laid out in the studio was
+ * correct on the wall and flattened on the two panes that are supposed to show
+ * them what the wall has.
+ *
+ * A `switch` over the union with no `default`, so the third time somebody adds
+ * a kind of slide the compiler says this, rather than a congregation seeing it.
+ *
+ * @see fillsFrame, which answers the neighbouring question about edges.
+ */
+export function laidOut(body: LiveBody): boolean {
+  switch (body.kind) {
+    // Slides. Three shapes for one reason each: `richText` is every slide
+    // saved before components existed, `composed` is one the engine generated,
+    // `designed` is one somebody positioned by hand.
+    case "richText":
+    case "composed":
+    case "designed":
+      return true;
+
+    // Words, drawn by the pane that knows how to size words to a box.
+    case "scripture":
+    case "lyric":
+      return false;
+
+    // Neither: these panes draw a picture or a clip themselves.
+    case "image":
+    case "media":
+      return false;
+  }
+}
+
+/**
  * The background a body brings with it, if any.
  *
  * Only a designed deck does. Every surface that paints a backdrop asks this

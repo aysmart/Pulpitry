@@ -564,6 +564,15 @@ export function OutputsPanel({
                 {output.overlay && output.overlay !== "none"
                   ? " Sent with a transparent background, so a switcher can lay it over a camera."
                   : ""}
+                {/* Said here because it is a rule about this choice, and the
+                    alternative is an operator watching a notice board go up in
+                    the room and wondering why the stream did not change. A
+                    slide is a layout -- a heading over a table, panels across
+                    the frame -- and a band can hold a sentence. */}
+                {output.overlay &&
+                !["none", "stage"].includes(output.overlay)
+                  ? " Slides pass it by: a slide is a whole screen, so it goes to the screens and this output keeps showing the camera."
+                  : ""}
               </p>
 
               {/* A stage display is the one shape whose content is its own, so
