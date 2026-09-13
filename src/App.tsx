@@ -110,20 +110,33 @@ interface VoiceCommand {
 /**
  * What a desk looks like before anybody has chosen anything.
  *
- * The wall's look, with one change: a song desk does not caption its words.
+ * The wall's look for the colours, the type and the background -- and its own
+ * answer about the line underneath, always, rather than whatever the wall
+ * happens to be wearing.
  *
- * The line under the words is a reference under a verse and a *title* under a
- * chorus, and only the first is information. Somebody reading a passage is
- * finding it in their own Bible; nobody singing needs to be told which song
- * they are singing, and on a wall it reads as a caption on a photograph. It is
- * a switch rather than a rule -- a church that wants their set list on screen
- * turns it on -- but the default should be the thing most churches want.
+ * # Why the caption is decided here and not inherited
+ *
+ * The wall wears the look of whichever desk last put something on it, so
+ * `wall` is not a neutral starting point: it is another desk's opinion. Take
+ * the caption from it and the song desk's answer -- no titles -- becomes the
+ * answer everywhere, permanently. Put a chorus up, go back to the scripture
+ * desk, and the reference under the verse is gone with nothing on screen
+ * connecting the two; the desk has never chosen, so it goes on inheriting a
+ * decision made about singing.
+ *
+ * So each desk says for itself. The line under the words is a reference under
+ * a verse and a *title* under a chorus, and only the first is information.
+ * Somebody reading a passage is finding it in their own Bible; nobody singing
+ * needs to be told which song they are singing, and on a wall it reads as a
+ * caption on a photograph. It stays a switch -- a church that wants their set
+ * list on screen turns it on -- but the default is the thing most churches
+ * want, per desk, and it cannot be changed by accident from another one.
  */
 function deskDefault(
   desk: Workspace,
   wall: typeof DEFAULT_THEME,
 ): typeof DEFAULT_THEME {
-  return desk === "songs" ? { ...wall, showReference: false } : wall;
+  return { ...wall, showReference: desk !== "songs" };
 }
 
 /**
@@ -725,8 +738,21 @@ export default function App() {
    * -- is applied exactly as chosen.
    */
   const applyLook = useCallback(
-    (chosen: typeof DEFAULT_THEME) =>
-      applyTheme({ ...chosen, showReference: look.showReference }),
+    (chosen: typeof DEFAULT_THEME, edited = false) =>
+      /*
+       * Edited means the switch was in front of them.
+       *
+       * Choosing a look from the grid is choosing colours, type and a
+       * background, and must not quietly turn titles on or off. But the look
+       * editor *contains* that switch: somebody who ticks "Show the reference",
+       * presses Save and watches nothing happen has been told the setting does
+       * not work -- which is exactly what was reported. So a theme that has
+       * just been edited is applied whole, and one picked off the shelf keeps
+       * the desk's own answer.
+       */
+      applyTheme(
+        edited ? chosen : { ...chosen, showReference: look.showReference },
+      ),
     [applyTheme, look.showReference],
   );
 

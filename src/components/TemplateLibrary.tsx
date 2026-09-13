@@ -44,9 +44,30 @@ function Tile({
         title={hint}
         className="block text-left focus-visible:focus-ring"
       >
+        {/*
+          The one in use, said three ways at once.
+
+          A thin ring is not enough among thirty-five tiles that are themselves
+          full of colour: on a bright look the gold sat on gold, and an
+          operator about to change what a congregation is reading could not
+          tell which one they were already on. So the tile is ringed *and*
+          offset from the grid by a gap of its own ground, and it carries a
+          label that says so in words. Any two of those can fail -- a colour
+          that swallows the ring, a screen too small to read the caption -- and
+          the answer is still unmistakable.
+        */}
         <span
-          className={`block rounded ${current ? "ring-2 ring-pulpitry-gold" : ""}`}
+          className={`relative block rounded ${
+            current
+              ? "ring-2 ring-pulpitry-gold ring-offset-2 ring-offset-pulpitry-ink"
+              : ""
+          }`}
         >
+          {current ? (
+            <span className="absolute top-1.5 left-1.5 z-10 rounded bg-pulpitry-gold px-1.5 py-0.5 text-[10px] font-medium tracking-[0.12em] text-pulpitry-ink uppercase shadow">
+              In use
+            </span>
+          ) : null}
           {/*
             Moving here too, which is a deliberate exception to stills in a
             grid.
@@ -66,7 +87,6 @@ function Tile({
           }`}
         >
           {name}
-          {current ? " · in use" : ""}
         </span>
         {/* What it is for, which is what an operator actually chooses by:
             "built for a camera", "for a hall with sun in it". There was no
@@ -127,7 +147,14 @@ export function TemplateLibrary({
   theme: ProjectorTheme;
   /** Which desk this look is for, because each desk keeps its own. */
   deskLabel: string;
-  onApply: (theme: ProjectorTheme) => void;
+  /**
+   * Puts a look on this desk.
+   *
+   * `edited` says the theme came out of the editor rather than off the shelf,
+   * and is applied whole -- the switches in it were in front of the operator
+   * when they pressed Save. See `applyLook` in App.
+   */
+  onApply: (theme: ProjectorTheme, edited?: boolean) => void;
   onClose: () => void;
   onError: (message: string) => void;
 }) {
@@ -176,7 +203,7 @@ export function TemplateLibrary({
       );
       // Putting it straight on the projector: nobody builds a look in order to
       // not use it, and leaving the old one up reads as the save having failed.
-      onApply(editing.theme);
+      onApply(editing.theme, true);
       setEditing(null);
       await refresh();
     } catch (err) {
@@ -193,13 +220,23 @@ export function TemplateLibrary({
     }
   };
 
-  // Compared by value: a template applied and then nudged in Settings is no
-  // longer the one in use, and saying otherwise would be a small lie. Keys are
-  // sorted first — a plain stringify would quietly depend on Rust and
-  // TypeScript declaring the fields in the same order.
+  /*
+   * Compared by value: a template applied and then nudged in Settings is no
+   * longer the one in use, and saying otherwise would be a small lie. Keys are
+   * sorted first — a plain stringify would quietly depend on Rust and
+   * TypeScript declaring the fields in the same order.
+   *
+   * Every field but one. Whether a title shows under the words belongs to the
+   * desk rather than to the look -- picking a look off the shelf does not
+   * change it -- so a look that is otherwise exactly what is on screen is the
+   * one in use, and comparing it would mean no tile ever matched on the song
+   * desk, where the answer is no and every shipped look says yes.
+   */
   const stable = (candidate: ProjectorTheme) =>
     JSON.stringify(
-      Object.entries(candidate).sort(([a], [b]) => a.localeCompare(b)),
+      Object.entries(candidate)
+        .filter(([field]) => field !== "showReference")
+        .sort(([a], [b]) => a.localeCompare(b)),
     );
   const current = stable(theme);
   const isCurrent = (candidate: ProjectorTheme) =>
@@ -238,7 +275,8 @@ export function TemplateLibrary({
           <button
             type="button"
             onClick={() => {
-              onApply(editing.theme);
+              // Whole, switches included: it was just edited in front of them.
+              onApply(editing.theme, true);
               setEditing(null);
             }}
             title="Put it on the projector without keeping it"
