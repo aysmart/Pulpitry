@@ -978,6 +978,9 @@ export function SettingsDialog({
         // Carried through untouched: this dialogue does not edit the desks'
         // own looks, and writing the settings without them would wipe three.
         deskLooks: settings.deskLooks,
+        // A marker the backend sets once; sending it back is what stops the
+        // correction it records from running again on the next launch.
+        songTitlesQuieted: settings.songTitlesQuieted,
       });
 
       onSaved(next);

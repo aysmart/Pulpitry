@@ -1079,12 +1079,6 @@ impl Projector {
             .ok()
             .flatten()
             .and_then(|monitor| monitor.name().cloned());
-        // By name, not by index: the operator can drag their window to another
-        // screen and the list is read again every time the pane opens.
-        let desk = app
-            .get_webview_window(OPERATOR_LABEL)
-            .and_then(|window| window.current_monitor().ok().flatten())
-            .and_then(|monitor| monitor.name().cloned());
 
         Ok(requested
             .filter(|index| *index < monitors.len())

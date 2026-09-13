@@ -209,6 +209,16 @@ pub struct Settings {
     #[serde(default)]
     pub desk_looks: std::collections::HashMap<String, ProjectorTheme>,
 
+    /**
+     * Whether the song desk's titles have been turned off the once.
+     *
+     * A marker, not a preference: see `quiet_the_song_titles`. It exists so
+     * that correction happens exactly once, and a church that afterwards turns
+     * its set list back on keeps it.
+     */
+    #[serde(default)]
+    pub song_titles_quieted: bool,
+
     /// The congregation-facing outputs, beyond the first.
     ///
     /// Empty on every installation that predates this, which is the behaviour
@@ -601,6 +611,8 @@ impl Default for Settings {
             semantic_threshold: 0.70,
             projector: ProjectorTheme::default(),
             desk_looks: std::collections::HashMap::new(),
+            // Nothing to correct on an installation with no history.
+            song_titles_quieted: true,
             outputs: Vec::new(),
         }
     }
@@ -649,10 +661,49 @@ pub fn load(app: &AppHandle) -> Result<Settings> {
     correct_miscalibrated_threshold(&mut settings);
     retire_own_azure(app, &mut settings);
     seat_the_original_two(&mut settings);
-    if carry_the_old_feed(&mut settings) {
+    let mut moved = carry_the_old_feed(&mut settings);
+    moved |= quiet_the_song_titles(&mut settings);
+    if moved {
         let _ = save(app, &settings);
     }
     Ok(settings)
+}
+
+/// The song desk, by the name the frontend keys its look with.
+const SONGS_DESK: &str = "songs";
+
+/**
+ * Turns the title under a song's words off, once.
+ *
+ * A song desk has never wanted them: the line under the words is a reference
+ * under a verse and a *title* under a chorus, and only the first is
+ * information. Nobody singing needs to be told which song they are singing,
+ * and on a wall it reads as a caption on a photograph. The desk's default has
+ * said so for a while.
+ *
+ * A default only applies where nothing is stored, and something was: a look is
+ * applied wholesale, and every look in the library carries `show_reference`
+ * true, so choosing one on the song desk wrote the titles back on. Every church
+ * that has ever picked a look while looking at their songs has them.
+ *
+ * So the value is corrected where it was never really chosen, and a marker
+ * records that it has happened. Without the marker this would run at every
+ * launch, and a church that deliberately puts its set list on the wall would
+ * find it off again every Sunday morning -- which is a worse fault than the one
+ * being fixed. Applying a look no longer carries the switch either, so from
+ * here the only thing that turns titles on is the switch itself.
+ */
+fn quiet_the_song_titles(settings: &mut Settings) -> bool {
+    if settings.song_titles_quieted {
+        return false;
+    }
+    settings.song_titles_quieted = true;
+    if let Some(look) = settings.desk_looks.get_mut(SONGS_DESK) {
+        look.show_reference = false;
+    }
+    // True even when there was no stored look to correct: the marker itself has
+    // to reach the file, or this runs again on the next launch.
+    true
 }
 
 /// Moves the old Settings → Stage NDI switch onto the Projector output.
@@ -846,6 +897,53 @@ pub fn device_id(app: &AppHandle) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /**
+     * The song desk's titles go off once, and stay off until somebody says.
+     *
+     * The first half is the fault: a look applied on the song desk carried
+     * `show_reference` true, so the titles came back under the words and the
+     * desk's own default never got a look in. The second half is the part that
+     * makes it safe to correct at all -- a church that wants its set list on
+     * the wall turns it on, and finding it off again every Sunday morning
+     * would be a worse fault than the one being fixed.
+     */
+    #[test]
+    fn the_song_desk_loses_its_titles_once_and_not_twice() {
+        let mut settings = Settings::default();
+        settings.song_titles_quieted = false;
+        let mut look = ProjectorTheme::default();
+        look.show_reference = true;
+        settings.desk_looks.insert(SONGS_DESK.to_string(), look);
+
+        assert!(quiet_the_song_titles(&mut settings), "it had work to do");
+        assert!(
+            !settings.desk_looks[SONGS_DESK].show_reference,
+            "the titles a look wrote on are still there",
+        );
+
+        // The church turns their set list back on, deliberately.
+        settings
+            .desk_looks
+            .get_mut(SONGS_DESK)
+            .expect("the look is there")
+            .show_reference = true;
+
+        assert!(!quiet_the_song_titles(&mut settings), "it ran a second time");
+        assert!(
+            settings.desk_looks[SONGS_DESK].show_reference,
+            "a deliberate choice was overruled on the next launch",
+        );
+    }
+
+    /// Nothing stored still costs one write, or it runs at every launch.
+    #[test]
+    fn quieting_records_itself_even_with_no_look_to_correct() {
+        let mut settings = Settings::default();
+        settings.song_titles_quieted = false;
+        assert!(quiet_the_song_titles(&mut settings));
+        assert!(settings.song_titles_quieted);
+    }
 
     /// A theme saved before drawn backgrounds existed still loads.
     ///

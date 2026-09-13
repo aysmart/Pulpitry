@@ -122,6 +122,16 @@ export interface Settings {
    * its own background and is laid out against it.
    */
   deskLooks: Record<string, ProjectorTheme>;
+  /**
+   * Whether the song desk's titles have been turned off the once.
+   *
+   * A marker rather than a preference — see `quiet_the_song_titles` in
+   * settings.rs. Declared here because this object is spread and saved back,
+   * and a field this side does not know about is a field that gets written
+   * away: the correction would then run again on the next launch and undo a
+   * church that had deliberately turned its set list on.
+   */
+  songTitlesQuieted: boolean;
 }
 
 /** One whisper.cpp model the operator could transcribe with. */

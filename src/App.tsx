@@ -689,6 +689,26 @@ export default function App() {
     [settings, workspace, liveDesk],
   );
 
+  /**
+   * A look from the library, which does not carry the title switch.
+   *
+   * Every look in the library was saved with `showReference` true, so applying
+   * one wrote the titles back under the words -- on the song desk, where they
+   * are off by default and where nobody singing needs to be told which song
+   * they are singing. A church picked a look once and had them back for good,
+   * with nothing on the screen connecting the two.
+   *
+   * Whether a title shows is a decision about the desk, not about the look: it
+   * is the switch in the type controls, and it survives every look tried after
+   * it. Everything else about a look -- its colours, its type, its background
+   * -- is applied exactly as chosen.
+   */
+  const applyLook = useCallback(
+    (chosen: typeof DEFAULT_THEME) =>
+      applyTheme({ ...chosen, showReference: look.showReference }),
+    [applyTheme, look.showReference],
+  );
+
   /*
    * The wall wears the look of whichever desk put something on it.
    *
@@ -1741,7 +1761,7 @@ export default function App() {
         <TemplateLibrary
           theme={look}
           deskLabel={shape.label}
-          onApply={applyTheme}
+          onApply={applyLook}
           onClose={() => setLooksOpen(false)}
           onError={setError}
         />
