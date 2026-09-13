@@ -77,6 +77,92 @@ pub fn label_for(id: &str) -> String {
     }
 }
 
+/// The output a window label belongs to: `label_for` read backwards.
+///
+/// Wanted because a window sometimes has to act on itself -- Escape closing the
+/// screen it is drawn on -- and all it knows about itself is its label. Kept
+/// beside `label_for` and tested against it, because the two drifting apart
+/// would mean a window closing a different screen from the one in front of the
+/// person pressing the key.
+pub fn id_for(label: &str) -> String {
+    match label {
+        WINDOW_LABEL => MAIN_ID.to_string(),
+        SECOND_LABEL => SECOND_ID.to_string(),
+        other => other.strip_prefix("output-").unwrap_or(other).to_string(),
+    }
+}
+
+/// The label of the window the operator works in.
+pub const OPERATOR_LABEL: &str = "operator";
+
+/**
+ * Whether a window is sitting on the screen the desk is on.
+ *
+ * An output is a borderless window with no title bar, always on top, filling a
+ * screen, with the pointer hidden — which is exactly right on a wall and
+ * indistinguishable from a crash when it lands on the only screen the operator
+ * has. Opening one there is allowed on purpose: somebody setting this up at
+ * home has one screen and still wants to see what it looks like. What was
+ * missing is that the window knew nothing about where it had landed, so it
+ * behaved as though it were on a wall in a hall.
+ *
+ * By monitor rather than by index: the window was told an index when it opened,
+ * and screens are unplugged, rearranged and woken up in a different order. What
+ * matters is where it is now, which is a question only the window can answer.
+ */
+pub fn covers_desk(app: &AppHandle, label: &str) -> bool {
+    let Some(mine) = app.get_webview_window(label) else {
+        return false;
+    };
+
+    /*
+     * An output with no screen is never covering one.
+     *
+     * It is parked past the left edge of the leftmost monitor (see
+     * `PAST_THE_EDGE`) so nothing composites it away, and a window out there
+     * is still answered by `current_monitor` with the nearest screen -- which
+     * is usually the desk's. Taken at face value that would put a pointer and a
+     * "press Esc" chip into an NDI feed on its way to a switcher, which is the
+     * one place neither may ever appear. So the window's own corner is checked
+     * against the screens first: on none of them means on no screen.
+     */
+    let Ok(at) = mine.outer_position() else {
+        return false;
+    };
+    let on_a_screen = app.available_monitors().is_ok_and(|monitors| {
+        monitors.iter().any(|monitor| {
+            let corner = monitor.position();
+            let size = monitor.size();
+            at.x >= corner.x
+                && at.y >= corner.y
+                && at.x < corner.x + size.width as i32
+                && at.y < corner.y + size.height as i32
+        })
+    });
+    if !on_a_screen {
+        return false;
+    }
+
+    let screen = |window: tauri::WebviewWindow| {
+        window
+            .current_monitor()
+            .ok()
+            .flatten()
+            .and_then(|monitor| monitor.name().cloned())
+    };
+
+    match (
+        screen(mine),
+        app.get_webview_window(OPERATOR_LABEL).and_then(screen),
+    ) {
+        (Some(mine), Some(desk)) => mine == desk,
+        // Unknown is answered as "no": the pointer and the way out are worth
+        // showing where they are needed and not worth putting on a wall on a
+        // guess.
+        _ => false,
+    }
+}
+
 /// What the window is called in the title bar, and therefore to the capture.
 ///
 /// `ndi_capture` finds a window by title and process id, so this is not
@@ -363,6 +449,17 @@ pub struct Display {
     pub is_primary: bool,
     /// True when the projector window is currently on this display.
     pub in_use: bool,
+    /**
+     * True where the operator's own window is.
+     *
+     * Choosing this one is allowed and is sometimes exactly what is wanted --
+     * one laptop, nothing plugged in, setting the thing up at home. But an
+     * output covers the screen completely and always sits on top, so choosing
+     * it hides the desk, and an operator who did not know that has every reason
+     * to read it as the application having crashed. Said here so the pane can
+     * say it too.
+     */
+    pub is_desk: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -652,6 +749,12 @@ impl Projector {
             .ok()
             .flatten()
             .and_then(|monitor| monitor.name().cloned());
+        // By name, not by index: the operator can drag their window to another
+        // screen and the list is read again every time the pane opens.
+        let desk = app
+            .get_webview_window(OPERATOR_LABEL)
+            .and_then(|window| window.current_monitor().ok().flatten())
+            .and_then(|monitor| monitor.name().cloned());
 
         Ok(monitors
             .iter()
@@ -665,6 +768,7 @@ impl Projector {
                 Display {
                     index,
                     is_primary: primary.as_ref() == Some(&name),
+                    is_desk: desk.as_ref() == Some(&name),
                     name,
                     width: size.width,
                     height: size.height,
@@ -975,6 +1079,12 @@ impl Projector {
             .ok()
             .flatten()
             .and_then(|monitor| monitor.name().cloned());
+        // By name, not by index: the operator can drag their window to another
+        // screen and the list is read again every time the pane opens.
+        let desk = app
+            .get_webview_window(OPERATOR_LABEL)
+            .and_then(|window| window.current_monitor().ok().flatten())
+            .and_then(|monitor| monitor.name().cloned());
 
         Ok(requested
             .filter(|index| *index < monitors.len())
@@ -1057,6 +1167,19 @@ mod tests {
                 "window {} must start its webview exactly as the outputs do",
                 window["label"],
             );
+        }
+    }
+
+    /// A window can find its way back to the output it belongs to.
+    ///
+    /// Escape closes the screen in front of the person pressing it, and all a
+    /// window knows about itself is its label. If these two ever disagree, that
+    /// key closes some other screen and leaves the one covering the operator
+    /// exactly where it was -- which is the trap the key exists to open.
+    #[test]
+    fn a_label_leads_back_to_the_output_that_owns_it() {
+        for id in [MAIN_ID, SECOND_ID, "k3f9ab", "second-foyer"] {
+            assert_eq!(id_for(&label_for(id)), id, "{id} could not close itself");
         }
     }
 

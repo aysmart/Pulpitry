@@ -229,6 +229,21 @@ export function OutputsPanel({
       },
     ]);
 
+  /**
+   * Which output has been asked to cover the desk and not yet answered.
+   *
+   * One at a time, cleared as soon as the button loses focus: an armed button
+   * somebody walked away from should not still be armed when they come back to
+   * the pane looking for something else.
+   */
+  const [arming, setArming] = useState<string | null>(null);
+
+  /** Whether opening this output would cover the screen the desk is on. */
+  const coversDesk = (output: Output) =>
+    displays.some(
+      (display) => display.index === output.display && display.isDesk,
+    );
+
   const remove = (id: string) => {
     // Closed before it is forgotten: a window whose settings are gone can no
     // longer be reached from this pane and would sit on a screen for ever.
@@ -258,14 +273,55 @@ export function OutputsPanel({
                 <button
                   type="button"
                   onClick={() => {
-                    const command = state?.open ? "close_output" : "open_output";
-                    void invoke(command, { id: output.id })
+                    if (state?.open) {
+                      void invoke("close_output", { id: output.id })
+                        .then(refreshLive)
+                        .catch(() => undefined);
+                      return;
+                    }
+                    /*
+                      Asked before it happens, on the one screen where opening
+                      looks like a fault.
+
+                      An output is borderless, always on top and fills the
+                      display, and its pointer is hidden because nobody points
+                      at a projector. Sent to the operator's own screen -- the
+                      usual case on a laptop with nothing plugged into it --
+                      every one of those decisions reads as the application
+                      having frozen. The window itself now keeps its pointer and
+                      says how to leave; this is the half that can still be
+                      reconsidered.
+
+                      The button asks rather than a dialog box, because the
+                      question is about the button: two presses, and the second
+                      one is the answer.
+                    */
+                    if (coversDesk(output) && arming !== output.id) {
+                      setArming(output.id);
+                      return;
+                    }
+                    setArming(null);
+                    void invoke("open_output", { id: output.id })
                       .then(refreshLive)
                       .catch(() => undefined);
                   }}
-                  className="rounded border border-pulpitry-line px-2 py-1.5 text-[12px] text-pulpitry-text transition-colors hover:border-pulpitry-gold focus-visible:focus-ring"
+                  onBlur={() => setArming(null)}
+                  title={
+                    coversDesk(output)
+                      ? "This screen is the one you are working on. The output will cover it; press Esc on it to close it again."
+                      : undefined
+                  }
+                  className={`rounded border px-2 py-1.5 text-[12px] transition-colors focus-visible:focus-ring ${
+                    arming === output.id
+                      ? "border-pulpitry-gold text-pulpitry-gold"
+                      : "border-pulpitry-line text-pulpitry-text hover:border-pulpitry-gold"
+                  }`}
                 >
-                  {state?.open ? "Close" : "Open"}
+                  {state?.open
+                    ? "Close"
+                    : arming === output.id
+                      ? "Cover this screen?"
+                      : "Open"}
                 </button>
                 {RESERVED.includes(output.id) ? null : (
                   <button
@@ -335,6 +391,10 @@ export function OutputsPanel({
                     {displays.map((display) => (
                       <option key={display.index} value={String(display.index)}>
                         {display.name} ({display.width}×{display.height})
+                        {/* An output fills a screen and stays on top, so this
+                            one hides the desk. Allowed -- at home there is only
+                            this screen -- but never a surprise. */}
+                        {display.isDesk ? " — the screen you are working on" : ""}
                       </option>
                     ))}
                   </select>

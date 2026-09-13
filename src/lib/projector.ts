@@ -478,6 +478,14 @@ export interface Display {
   height: number;
   isPrimary: boolean;
   inUse: boolean;
+  /**
+   * The screen the operator's own window is on.
+   *
+   * An output fills a screen and sits on top of everything, so sending one
+   * here hides the desk: the pane says so before it happens, and the output
+   * itself keeps the pointer and says how to leave.
+   */
+  isDesk: boolean;
 }
 
 /** What the platform sees: the timer, and a line from the desk. */
@@ -538,6 +546,24 @@ export const openSecond = (display?: number) =>
 export const closeSecond = () => invoke<SecondState>("close_second");
 
 export const secondState = () => invoke<SecondState>("second_state");
+
+/**
+ * Closes the window this is called from, whichever output it is.
+ *
+ * What Escape does inside an output. Called without an id on purpose: a window
+ * knows its own label and nothing else, and working out which output that is on
+ * this side would be a second copy of a mapping that already exists in Rust.
+ */
+export const closeThisOutput = () => invoke<void>("close_this_output");
+
+/**
+ * Whether this output has landed on the screen the operator is working on.
+ *
+ * True on a laptop with one display, which is how most of this is set up and
+ * tested. The window uses it to stop behaving as though it were on a wall in a
+ * hall: it keeps the pointer, and says how to get out.
+ */
+export const coversDesk = () => invoke<boolean>("covers_desk");
 
 export const onLive = (
   handler: (content: LiveContent | null) => void,

@@ -11,8 +11,8 @@ import {
   backgroundOf,
   getStage,
   type StageState,
-  closeProjector,
-  closeSecond,
+  closeThisOutput,
+  coversDesk,
   getAudio,
   getLive,
   getMedia,
@@ -279,24 +279,34 @@ function Projector() {
     };
   }, [form]);
 
-  // A borderless always-on-top window covering the screen is a trap if there
-  // is only one display: the operator cannot reach the controls to close it.
-  // Escape is the way out.
-  //
-  // Which window to close is decided by which window this is. The same view
-  // serves both outputs -- a church with an overflow room wants the same
-  // content and the same theme there, and rendering it twice from one component
-  // is the only way the two cannot drift apart.
+  /*
+   * Escape closes the screen the key was pressed on.
+   *
+   * A borderless always-on-top window filling a display, with no title bar and
+   * no pointer, is a trap when it lands on the only screen the operator has:
+   * the desk is gone, the mouse is gone, and it reads as the application
+   * hanging. Escape is the way out of that.
+   *
+   * It used to close the second display if this was the second display and the
+   * projector otherwise -- so on any of the outputs a church adds for a foyer
+   * or a stream, that key closed a screen somewhere else in the building and
+   * left the one in front of them exactly where it was. The window now names
+   * itself and the backend maps its label back to the output, which is the one
+   * place that mapping lives.
+   */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      void (getCurrentWindow().label === "second"
-        ? closeSecond()
-        : closeProjector());
+      // Through the backend, which also stops the feed and forgets the window.
+      // If that cannot be reached at all, the window closes itself: this key is
+      // the way out of a screen with nothing else on it, and it has to work
+      // even when the thing it would normally ask does not answer.
+      void closeThisOutput().catch(() => getCurrentWindow().close());
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
 
   /*
    * The same passage, in this output's own Bible.
@@ -518,14 +528,92 @@ function Projector() {
   );
 }
 
+/**
+ * The way out, on the one screen where it is needed.
+ *
+ * # The fault this answers
+ *
+ * An output is a borderless window, always on top, filling a display, with the
+ * pointer hidden — because nobody points at a projector and a cursor sitting on
+ * a wall is a distraction in a service. Put that same window on the screen the
+ * operator is working on, which is what happens on a laptop with nothing
+ * plugged into it, and every one of those decisions reads as a crash: the desk
+ * vanishes, the mouse vanishes, and nothing answers. Escape has always closed
+ * it; nothing has ever said so.
+ *
+ * Opening an output there is allowed on purpose — somebody setting this up at
+ * home has one screen and still wants to see what it looks like — so the answer
+ * is not to refuse it but to stop the window pretending it is in a hall.
+ *
+ * # Why a congregation never sees this
+ *
+ * It is drawn only when this window is on the same screen as the desk, which is
+ * by definition not the screen anybody is watching. On a wall, a foyer panel or
+ * an NDI feed there is no pointer and no chip, exactly as before.
+ *
+ * Mounted beside the view rather than inside it because the view returns early
+ * for each of the shapes it draws, and a way out that appeared on some of them
+ * would be worse than none.
+ */
+function DeskHint() {
+  const [onDesk, setOnDesk] = useState(false);
+  const [fresh, setFresh] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    void coversDesk()
+      .then((covering) => active && setOnDesk(covering))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    // Nobody points at a projector, and the cursor would sit on the wall --
+    // but a hidden pointer on the operator's own screen is the single thing
+    // that makes this look like a hang rather than a window.
+    document.body.style.cursor = onDesk ? "default" : "none";
+  }, [onDesk]);
+
+  useEffect(() => {
+    if (!onDesk) return;
+    // Loud enough to be read, then out of the way: it stays as a chip rather
+    // than disappearing, because somebody who looked away for the first six
+    // seconds is exactly the person who needs it.
+    const timer = window.setTimeout(() => setFresh(false), 6000);
+    return () => window.clearTimeout(timer);
+  }, [onDesk]);
+
+  if (!onDesk) return null;
+
+  return (
+    <div
+      className="pointer-events-none fixed inset-x-0 top-0 flex justify-center"
+      style={{ zIndex: 2147483647 }}
+    >
+      <p
+        className="mt-3 rounded-full bg-black/75 text-white shadow-lg backdrop-blur transition-all duration-700"
+        style={
+          fresh
+            ? { padding: "0.5rem 1.1rem", fontSize: 14, opacity: 0.95 }
+            : { padding: "0.25rem 0.7rem", fontSize: 11, opacity: 0.35 }
+        }
+      >
+        {fresh
+          ? "This output is covering the screen you work on — press Esc to close it"
+          : "Esc closes this output"}
+      </p>
+    </div>
+  );
+}
+
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");
-
-// Nobody points at a projector, and the cursor would sit on the wall.
-document.body.style.cursor = "none";
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <Projector />
+    <DeskHint />
   </React.StrictMode>,
 );

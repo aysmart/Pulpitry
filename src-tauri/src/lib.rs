@@ -1970,6 +1970,48 @@ fn second_state(projector: State<'_, Arc<Projector>>) -> projector::SecondState 
     projector.second_state()
 }
 
+/**
+ * Closes the window this was called from, whichever one it is.
+ *
+ * Escape is the way out of an output that has landed on the operator's own
+ * screen: a borderless window, always on top, filling the display, with no
+ * title bar to close and no pointer. The window used to answer that key by
+ * closing the projector if it was not the second display — so on any other
+ * output, Escape closed a screen somewhere else in the building and left the
+ * one in front of the operator exactly where it was.
+ *
+ * The feed is stopped first, as closing from the desk does: a sender left
+ * publishing a window that has gone announces a dead source on the network.
+ */
+#[tauri::command]
+async fn close_this_output(
+    window: tauri::WebviewWindow,
+    projector: State<'_, Arc<Projector>>,
+    senders: State<'_, NdiOutputs>,
+) -> CommandResult<()> {
+    let id = projector::id_for(window.label());
+    senders.stop(&id);
+    match id.as_str() {
+        projector::MAIN_ID => {
+            projector.close();
+        }
+        projector::SECOND_ID => {
+            projector.close_second();
+        }
+        other => projector.close_output(other),
+    }
+    Ok(())
+}
+
+/// Whether the window this was called from is on the screen the desk is on.
+///
+/// Asked by the window, of itself, because it is the only one that knows where
+/// it ended up: see `projector::covers_desk`.
+#[tauri::command]
+fn covers_desk(app: AppHandle, window: tauri::WebviewWindow) -> bool {
+    projector::covers_desk(&app, window.label())
+}
+
 /// Reads the bundled hymn library and hands it to the catalog.
 /// Reads the looks that ship with the application and hands them to the catalogue.
 ///
@@ -2585,6 +2627,8 @@ pub fn run() {
             open_second,
             close_second,
             second_state,
+            close_this_output,
+            covers_desk,
             set_background,
             note,
             follow_deck,
