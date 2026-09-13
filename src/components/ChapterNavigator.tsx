@@ -17,9 +17,11 @@ import type { IndexStatus } from "../lib/useSemanticIndex";
  * Finding a verse, three ways.
  *
  * **Words** is one input doing two jobs: text that parses as a reference
- * ("Luke 3", "1 cor 13:4") navigates there, and anything else falls back to
- * full-text search. That much saves the operator from choosing a mode for the
- * commonest thing they do.
+ * ("Luke 3", "Jere 32 11", "1 cor 13:4") navigates there, and anything else
+ * falls back to full-text search. That much saves the operator from choosing a
+ * mode for the commonest thing they do. A reference with a verse in it is
+ * staged as it is found, so the whole act is: type what was announced, press
+ * Enter, press Display.
  *
  * **Meaning** is the third way and it cannot be folded into the other two,
  * because it answers a different question. "The one about the widow's offering"
@@ -305,7 +307,7 @@ export function ChapterNavigator({
                 [
                   "words",
                   "Words",
-                  "A reference or the words themselves: Luke 3, John 3:16-18, or “in the beginning”",
+                  "A reference or the words themselves: Jere 32 11, Luke 3, John 3:16-18, or “in the beginning”",
                 ],
                 [
                   "meaning",
@@ -368,9 +370,12 @@ export function ChapterNavigator({
           <input
             value={query}
             spellCheck={false}
+            /* The terse form first, because it is the one worth knowing: an
+               operator with a reading announced and four seconds types it the
+               way it was said. The colon still works and always did. */
             placeholder={
               mode === "words"
-                ? "Luke 3, John 3:16-18, or search…"
+                ? "Jere 32 11, John 3:16-18, or search…"
                 : "The one about the widow's offering…"
             }
             onChange={(event) => {

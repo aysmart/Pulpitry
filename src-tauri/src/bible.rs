@@ -1106,7 +1106,24 @@ fn parse_reference(input: &str, books: &[&str]) -> Option<ParsedReference> {
         return Some(ParsedReference { book, chapter: 1, verse: None, end_verse: None });
     }
 
-    let mut parts = numbers.split(|c| c == ':' || c == '.' || c == 'v');
+    /*
+     * Whatever the operator put between the chapter and the verse.
+     *
+     * A colon is what a printed Bible uses and almost nobody types under
+     * pressure: "Jere 32 11" is how it is said out loud and how it gets typed
+     * when a reading is announced and the desk has four seconds. That landed
+     * on Jeremiah 32 with no verse -- so the operator typed the reference in
+     * full and then scrolled a fifty-verse chapter to find the line they had
+     * already named. It was reported as "I should be able to just type Jere 32
+     * 11 and it should project it".
+     *
+     * A space, then, and the full stop and comma that come from other
+     * conventions and from pasted text. Empty pieces are dropped rather than
+     * counted, because the space before the chapter is a separator too.
+     */
+    let mut parts = numbers
+        .split(|c: char| matches!(c, ':' | '.' | ',' | 'v' | 'V') || c.is_whitespace())
+        .filter(|part| !part.is_empty());
     let chapter = leading_number(parts.next()?)?;
 
     // The verse part may be a range: "16-18", or with an en dash if it was
@@ -1374,8 +1391,8 @@ mod tests {
 
     const BOOKS: &[&str] = &[
         "Genesis", "Exodus", "Joshua", "Job", "Psalms", "Proverbs", "Song of Solomon",
-        "Isaiah", "Joel", "Jonah", "Matthew", "Mark", "Luke", "John", "Acts", "Romans",
-        "1 Corinthians", "2 Corinthians", "Philippians", "Philemon", "James",
+        "Isaiah", "Jeremiah", "Joel", "Jonah", "Matthew", "Mark", "Luke", "John", "Acts",
+        "Romans", "1 Corinthians", "2 Corinthians", "Philippians", "Philemon", "James",
         "1 John", "2 John", "3 John", "Revelation",
     ];
 
@@ -1416,6 +1433,48 @@ mod tests {
         assert_eq!(parse("John3:16").unwrap().book, "John");
         assert_eq!(parse("john 3.16").unwrap().verse, Some(16));
         assert_eq!(parse("  luke   3  ").unwrap().chapter, 3);
+    }
+
+    /**
+     * A reference as it is said out loud, which is how it is typed.
+     *
+     * Reported by an operator: "I should be able to just type Jere 32 11 and
+     * it should project it, but it needs me to type it fully then scroll for
+     * the verse." Nobody reaches for the colon with a reading announced and
+     * four seconds to find it -- and dropping the verse is the worst way to
+     * fail, because the desk lands on the right chapter and looks as though it
+     * worked.
+     */
+    #[test]
+    fn parses_a_reference_spoken_rather_than_printed() {
+        let parsed = parse("Jere 32 11").expect("a space separates them too");
+        assert_eq!(parsed.book, "Jeremiah");
+        assert_eq!(parsed.chapter, 32);
+        assert_eq!(parsed.verse, Some(11));
+
+        // The abbreviation, the ordinal and a range, all without a colon.
+        let cor = parse("1 cor 13 4-7").expect("should parse");
+        assert_eq!(cor.book, "1 Corinthians");
+        assert_eq!(cor.chapter, 13);
+        assert_eq!(cor.verse, Some(4));
+        assert_eq!(cor.end_verse, Some(7));
+
+        // A comma, which is the convention in several languages and what a
+        // paste from one of them carries.
+        assert_eq!(parse("John 3,16").expect("should parse").verse, Some(16));
+    }
+
+    /// A chapter on its own stays a chapter, spaces or not.
+    ///
+    /// The whole risk of treating a space as a separator: "Psalms 23" must not
+    /// become verse 23 of something, and a trailing space must not become an
+    /// empty verse that reads as verse 0.
+    #[test]
+    fn a_chapter_alone_is_still_a_chapter() {
+        let psalm = parse(" Psalms 23 ").expect("should parse");
+        assert_eq!(psalm.chapter, 23);
+        assert_eq!(psalm.verse, None);
+        assert_eq!(parse("3 John 1").expect("should parse").verse, None);
     }
 
     #[test]
