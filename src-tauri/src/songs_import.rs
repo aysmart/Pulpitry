@@ -361,6 +361,54 @@ pub fn from_plain(title: &str, text: &str) -> Result<Imported> {
 /// the chorus again*, and there is nothing to put on a screen for it: an empty
 /// part would be a blank projector in the middle of a song. The operator
 /// presses the chorus again instead, which is what they would do anyway.
+/**
+ * A line with a lyrics page's own furniture taken off the front of it.
+ *
+ * Church libraries are built by pasting, and what gets pasted carries the page
+ * it came from: "1 ContributorHow Great Thou Art Lyrics" arrives glued to the
+ * first word of the first verse, so the opening line of the song is a credit
+ * line with a song in it. There is no blank line to break on and no label, so
+ * every later rule -- the sectioner, the first line a search matches against,
+ * the words that go on a wall -- inherits it.
+ *
+ * Only the shapes that cannot be anything else: a count of contributors run
+ * into the word Lyrics, and the two banners that come with it. A line that
+ * merely mentions lyrics is somebody's song, and is left alone.
+ */
+fn shed_page_furniture(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    let lower = trimmed.to_lowercase();
+
+    if matches!(lower.as_str(), "you might also like" | "read more") {
+        return None;
+    }
+
+    /*
+     * "... a traditional gospel... Read More [Intro: Shirley Caesar]"
+     *
+     * A page's description of the song, run into the song itself on one line:
+     * where it came from, who remixed it, what year. It ends at Read More, and
+     * what follows is the first real thing. Cutting rather than dropping,
+     * because the label after it is the one the whole song hangs from.
+     */
+    if let Some(at) = lower.find("read more") {
+        let rest = trimmed[at + "read more".len()..].trim();
+        return (!rest.is_empty()).then(|| rest.to_string());
+    }
+
+    // "12 Contributors" ... "Lyrics", where the digits start the line.
+    let digits = trimmed.chars().take_while(char::is_ascii_digit).count();
+    if digits > 0 && lower[digits..].trim_start().starts_with("contributor") {
+        if let Some(at) = lower.find("lyrics") {
+            let rest = trimmed[at + "lyrics".len()..].trim();
+            return (!rest.is_empty()).then(|| rest.to_string());
+        }
+        return None;
+    }
+
+    Some(trimmed.to_string())
+}
+
 fn sections_from_text(text: &str) -> Vec<SongSection> {
     let mut sections: Vec<(String, Vec<String>)> = Vec::new();
     let mut current: Option<(String, Vec<String>)> = None;
@@ -376,8 +424,12 @@ fn sections_from_text(text: &str) -> Vec<SongSection> {
         }
     };
 
-    for line in text.replace("\r\n", "\n").lines() {
-        let line = line.trim();
+    for raw in text.replace("\r\n", "\n").lines() {
+        // Whatever page it was pasted from does not reach the wall.
+        let Some(line) = shed_page_furniture(raw) else {
+            continue;
+        };
+        let line = line.as_str();
 
         if line.is_empty() {
             flush(current.take(), &mut sections);
@@ -420,13 +472,29 @@ fn looks_like_label(line: &str) -> Option<String> {
      * Stripped before the name is read, because the brackets are punctuation
      * around the label rather than part of it.
      */
-    let bare = line
-        .trim()
+    let trimmed = line.trim();
+    let bracketed = trimmed.starts_with(['[', '(', '{']);
+    let bare = trimmed
         .trim_start_matches(['[', '(', '{'])
         .trim_end_matches([']', ')', '}'])
-        .trim()
-        .trim_end_matches([':', '.'])
         .trim();
+    /*
+     * Inside brackets, a colon separates the part from who sings it.
+     *
+     * "[Verse 1: BeBe & CeCe Winans, BeBe, CeCe]" is how a lyrics page marks a
+     * duet, and it is a label with an annotation on it rather than a line of a
+     * song. Read whole it is eight words long, so the length rule below
+     * refuses it and the heading becomes the first thing the congregation is
+     * shown -- which is how a song comes to open with a list of performers.
+     *
+     * Only inside brackets: "Jesus: my hope" is a line, and nothing about it
+     * says otherwise.
+     */
+    let bare = match bracketed {
+        true => bare.split_once(':').map_or(bare, |(name, _)| name.trim()),
+        false => bare,
+    };
+    let bare = bare.trim().trim_end_matches([':', '.']).trim();
     if bare.split_whitespace().count() > 2 || bare.len() > 16 {
         return None;
     }
@@ -834,6 +902,49 @@ fn cp1252(byte: u8) -> char {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A song pasted from a lyrics page keeps the song and loses the page.
+    ///
+    /// The credit line arrives glued to the first word of the first verse,
+    /// with no blank line and no label to break on -- so without this the
+    /// opening line of the song, which is what a search matches and what goes
+    /// on a wall, is a contributor count.
+    #[test]
+    fn page_furniture_does_not_reach_the_wall() {
+        let sections = sections_from_text(
+            "Verse 1\n1 ContributorBe Like Him LyricsKwaze kwabona\nSo fananaye\nYou might also like\nRead More\n\nChorus\nBe like Him",
+        );
+        assert_eq!(sections.len(), 2, "{sections:?}");
+        assert_eq!(sections[0].lines[0], "Kwaze kwabona");
+        assert_eq!(sections[0].lines.len(), 2, "the banners are gone");
+        assert_eq!(sections[1].label, "Chorus");
+    }
+
+    /// A lyrics page's own annotations are read as what they are.
+    ///
+    /// Both arrived with a real library: a duet marked with its singers, and a
+    /// page's description of the song run into the first line. Without these,
+    /// the song opens with a list of performers or with the sentence "On
+    /// November 12, 2016, DJ Suede published a remix on YouTube".
+    #[test]
+    fn an_annotated_heading_is_a_heading_and_a_blurb_is_not_a_line() {
+        let sections = sections_from_text(
+            "[Verse 1: BeBe & CeCe Winans, BeBe, CeCe]\nWelcomed in\n\nOn the heels of the challenge, a traditional gospel... Read More [Intro: Shirley Caesar]\nHold my mule",
+        );
+        assert_eq!(sections.len(), 2, "{sections:?}");
+        assert_eq!(sections[0].label, "Verse 1");
+        assert_eq!(sections[0].lines, vec!["Welcomed in"]);
+        assert_eq!(sections[1].label, "Intro");
+        assert_eq!(sections[1].lines, vec!["Hold my mule"]);
+    }
+
+    /// A song that simply says the word is left alone.
+    #[test]
+    fn a_song_may_mention_lyrics() {
+        let sections = sections_from_text("Verse 1\nLyrics and music by Fanny Crosby\nTo God be the glory");
+        assert_eq!(sections[0].lines.len(), 2);
+        assert_eq!(sections[0].lines[0], "Lyrics and music by Fanny Crosby");
+    }
 
     /// The fault every import had: the author was read and never shown.
     #[test]

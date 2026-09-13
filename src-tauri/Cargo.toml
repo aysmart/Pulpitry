@@ -1,6 +1,11 @@
 [package]
 name = "pulpitry"
 version = "0.9.0"
+# Which binary `cargo run` means. The pack builder lives in this crate so it
+# can section and embed exactly as the app does, and its arrival left `tauri
+# dev` with two candidates and no way to choose -- which stops the app rather
+# than the tool.
+default-run = "pulpitry"
 description = "Live speech transcription, Bible verse detection, and worship presentation."
 authors = ["Ayorinde G. Smart"]
 edition = "2021"

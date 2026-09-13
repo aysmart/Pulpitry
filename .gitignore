@@ -18,3 +18,9 @@ assets/generated/
 # 45 MB of weights does not belong in git.
 src-tauri/resources/embedder/
 src-tauri/.cargo/
+
+# The song bank: a library export and the pack built from it. Both are data
+# somebody assembled rather than source, and the export is 33 MB of lyrics.
+Songs.db
+songfinder.db
+*.review.txt

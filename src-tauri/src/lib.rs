@@ -19,7 +19,7 @@ use castavox_core::{audio, checkin, embed, exports, node, transcripts, whisper};
 
 mod assist;
 mod bible;
-mod catalog;
+pub mod catalog;
 mod detect;
 mod hosted;
 mod menu;
@@ -34,7 +34,7 @@ mod semantic;
 mod settings;
 mod slides;
 mod songfinder;
-mod songs_import;
+pub mod songs_import;
 mod speech;
 mod log;
 mod summarise;
