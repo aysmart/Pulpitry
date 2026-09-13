@@ -162,6 +162,7 @@ export function OutputPreview({
                 captions ? (drawn?.caption ?? null) : null,
               )}
               theme={theme}
+              uppercase={uppercase}
             />
           ) : (
             <p className="flex h-full items-center justify-center px-4 text-center text-[11px] text-pulpitry-muted">

@@ -403,6 +403,7 @@ function Projector() {
             captions ? (drawn?.caption ?? null) : null,
           )}
           theme={theme}
+          uppercase={uppercase}
         />
       </div>
     );

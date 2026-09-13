@@ -46,19 +46,36 @@ export function DesignedView({
   theme,
   /** Left undrawn, because the editor is drawing it as an editable box. */
   hide,
+  uppercase = false,
 }: {
   elements: SlideElement[];
   /** For anything an element chose to leave to the church's own look. */
   theme: ProjectorTheme;
   hide?: string | null;
+  /**
+   * This output's capitals switch, which is a fact about the screen rather
+   * than about the design.
+   *
+   * A stream feeding a broadcast overlay is often set in capitals while the
+   * hall's own projector is not, so it belongs to the output and overrides
+   * what any one element asked for -- the same way it does for a slide, where
+   * it is set once on the frame and everything inside it obeys. Taken as a
+   * prop rather than inherited from an ancestor's style so the slot below can
+   * measure again when it changes: capitals are wider, and words that fitted
+   * in sentence case need not fit in capitals.
+   */
+  uppercase?: boolean;
 }) {
   return (
-    <div className="absolute inset-0">
+    <div
+      className="absolute inset-0"
+      style={uppercase ? { textTransform: "uppercase" } : undefined}
+    >
       {elements
         .filter((element) => element.id !== hide)
         .map((element) => (
           <div key={element.id} className="absolute" style={boxStyle(element)}>
-            <Drawn element={element} theme={theme} />
+            <Drawn element={element} theme={theme} uppercase={uppercase} />
           </div>
         ))}
     </div>
@@ -243,9 +260,12 @@ function Table({
 function Drawn({
   element,
   theme,
+  uppercase,
 }: {
   element: SlideElement;
   theme: ProjectorTheme;
+  /** Passed on only so a slot can re-measure when it changes; see above. */
+  uppercase?: boolean;
 }) {
   if (element.kind === "shape") return <Shape element={element} />;
 
@@ -267,7 +287,7 @@ function Drawn({
   // A hole the service drops words into, rather than words somebody typed and
   // could see: it is sized to the box instead of the box to it.
   if (element.kind === "text" && element.slot) {
-    return <SlotText element={element} theme={theme} />;
+    return <SlotText element={element} theme={theme} uppercase={uppercase} />;
   }
 
   const style = typeStyle(element, theme);
@@ -338,9 +358,11 @@ const SLOT_FLOOR = 0.25;
 function SlotText({
   element,
   theme,
+  uppercase,
 }: {
   element: TextElement;
   theme: ProjectorTheme;
+  uppercase?: boolean;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const words = useRef<HTMLParagraphElement>(null);
@@ -404,6 +426,10 @@ function SlotText({
   }, [
     drawn,
     text,
+    // Capitals are wider and taller: the same words that fitted in sentence
+    // case can need another line in capitals, and the switch changes the
+    // drawing without changing a character of the text.
+    uppercase,
     element.font,
     element.lineHeight,
     element.letterSpacing,
