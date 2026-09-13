@@ -33,9 +33,16 @@
  *   what is live, and nothing about scripture detection.
  * - **Slides**: a deck read as thumbnails, which wants more room than anything
  *   else here.
+ * - **Media**: the pictures and clips, at the size they are actually chosen by,
+ *   beside the output that plays them.
  * - **Plan**: the running order, and what comes next.
  */
-export type Workspace = "scripture" | "songs" | "slides" | "plan";
+export type Workspace =
+  | "scripture"
+  | "songs"
+  | "slides"
+  | "media"
+  | "plan";
 
 /**
  * Every library the panel can show.
@@ -140,6 +147,15 @@ export interface WorkspaceShape {
    * the deck frame.
    */
   basis: string;
+  /**
+   * Whether the deck frame's upper row -- the strip of slides -- is there.
+   *
+   * Deck frame only, and true wherever it is not said. The media desk borrows
+   * this frame for its shape and has nothing to put in that row: pictures and
+   * clips are not stepped in order, so there is no "the one after this" to
+   * show, and the room goes to the library where it is read.
+   */
+  strip?: boolean;
 }
 
 export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
@@ -229,6 +245,40 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
     // numbers, and the rest belongs to the library.
     basis: "38%",
   },
+  media: {
+    label: "Media",
+    hint: "The pictures and the clips, and the output that plays them",
+    /*
+     * The deck frame, without the deck.
+     *
+     * A picture is chosen the way a slide is -- by looking at it, not by
+     * reading a name -- so the library wants the width, and what is live wants
+     * a tall pane beside it rather than a strip across the top. A clip makes
+     * that pane do real work: its transport lives under the live pane, so
+     * playing, pausing, seeking and looping are where the eye already is.
+     *
+     * The thumbnails are the only list here, so they take the whole column.
+     */
+    frame: "deck",
+    strip: false,
+    // One name, so the pane is the library and carries no tab strip. Media is
+    // still a tab on the song and slide desks: reaching a picture without
+    // leaving the desk you are running is the thing this window is for, and
+    // this arrangement is for when the pictures *are* the job -- importing a
+    // folder of them, sorting out which is which, running a loop.
+    tabs: ["Media"],
+    transcript: false,
+    detected: false,
+    feed: false,
+    queue: false,
+    original: false,
+    // The same split as the slide and song desks, so the pane an operator
+    // watches the congregation through does not move when they change desks.
+    columns: "minmax(0,1fr) minmax(340px,0.42fr)",
+    // Unused without a strip, and kept honest rather than left as a number
+    // that means nothing: the library is the whole column.
+    basis: "0",
+  },
   plan: {
     label: "Plan",
     hint: "The running order, and what comes next",
@@ -246,7 +296,13 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
 };
 
 /** Left to right, in the order a service is prepared and then run. */
-export const WORKSPACE_ORDER: Workspace[] = ["scripture", "songs", "slides", "plan"];
+export const WORKSPACE_ORDER: Workspace[] = [
+  "scripture",
+  "songs",
+  "slides",
+  "media",
+  "plan",
+];
 
 const KEY = "pulpitry.workspace";
 

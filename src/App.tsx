@@ -1293,22 +1293,30 @@ export default function App() {
             style={{ gridTemplateColumns: shape.columns }}
           >
             {/* Rows rather than a flex column: a grid child stretches to its
-                track, so the library fills whatever the deck strip leaves. */}
+                track, so the library fills whatever the deck strip leaves --
+                and the whole column where there is no strip. */}
             <div
               className="grid min-h-0 gap-2"
-              style={{ gridTemplateRows: `${shape.basis} minmax(0,1fr)` }}
+              style={{
+                gridTemplateRows:
+                  shape.strip === false
+                    ? "minmax(0,1fr)"
+                    : `${shape.basis} minmax(0,1fr)`,
+              }}
             >
-              <DeckStrip
-                deck={preview}
-                liveKey={liveKey}
-                keyOf={keyOf}
-                theme={look}
-                /* One click stages, two puts it up -- the same rule as every
-                   other list in the window. Built from the staged deck rather
-                   than through goToSlide, which keeps whatever was live live:
-                   right for a spoken instruction, wrong for a click. */
-                onSelect={chooseSection}
-              />
+              {shape.strip === false ? null : (
+                <DeckStrip
+                  deck={preview}
+                  liveKey={liveKey}
+                  keyOf={keyOf}
+                  theme={look}
+                  /* One click stages, two puts it up -- the same rule as every
+                     other list in the window. Built from the staged deck rather
+                     than through goToSlide, which keeps whatever was live live:
+                     right for a spoken instruction, wrong for a click. */
+                  onSelect={chooseSection}
+                />
+              )}
 
               <ScripturePanel
                 tab={shownTab}
