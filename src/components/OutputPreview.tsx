@@ -2,7 +2,14 @@ import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
 import { scriptureIn } from "../lib/bible";
+import type { SlideElement } from "../lib/design";
 import { plainText, type OverlayForm } from "../lib/overlays";
+import {
+  filled,
+  loadShape,
+  onShapeChanged,
+  shapeIdOf,
+} from "../lib/shapes";
 import {
   EVENT_STAGE,
   fillsFrame,
@@ -14,6 +21,7 @@ import {
 } from "../lib/projector";
 import { referenceStyle, type ProjectorTheme } from "../lib/theme";
 import { Backdrop } from "./Backdrop";
+import { DesignedView } from "./DesignedView";
 import { LiveBodyView } from "./LiveBodyView";
 import { OverlayView } from "./OverlayView";
 import { StageView } from "./StageView";
@@ -48,6 +56,7 @@ import { TickerBand } from "./TickerBand";
 export function OutputPreview({
   form,
   theme,
+  captions,
   translation,
   uppercase,
   stageClock,
@@ -57,6 +66,17 @@ export function OutputPreview({
 }: {
   form: OverlayForm;
   theme: ProjectorTheme;
+  /**
+   * Whether a caption exists at all, which the desk decides rather than this
+   * output's look.
+   *
+   * An output pointed at a template draws with that template's theme, so
+   * reading `showReference` from it would answer with a decision somebody made
+   * about a look months ago -- while the operator's "show the title under the
+   * words" switch, sitting on the desk that is live, said the opposite. The
+   * window splits the same two questions this way.
+   */
+  captions: boolean;
   /** Empty follows the Scripture panel, exactly as the window does. */
   translation: string;
   uppercase: boolean;
@@ -67,6 +87,38 @@ export function OutputPreview({
 }) {
   const drawn = useDrawn(live ?? SAMPLE, translation);
   const stage = useStage(form === "stage");
+
+  /*
+   * The church's own furniture, where this output names some.
+   *
+   * Read here rather than passed in: the pane already knows which output it is
+   * drawing, and an output's shape changes from the picker three inches above
+   * it -- so it has to follow that rather than a prop threaded from a dialogue.
+   */
+  const [shape, setShape] = useState<SlideElement[] | null>(null);
+  useEffect(() => {
+    if (shapeIdOf(form) === null) {
+      setShape(null);
+      return;
+    }
+
+    let watching = true;
+    const read = () =>
+      void loadShape(form).then((drawn) => watching && setShape(drawn));
+
+    read();
+    // The library sits one button away from this pane, so a shape can be
+    // redrawn while its preview is on screen. Told, rather than re-read when
+    // the dialog happens to re-render.
+    const stop = onShapeChanged((id) => {
+      if (id === shapeIdOf(form)) read();
+    });
+
+    return () => {
+      watching = false;
+      void stop.then((unlisten) => unlisten());
+    };
+  }, [form]);
 
   return (
     <div
@@ -86,12 +138,38 @@ export function OutputPreview({
         <StageView
           stage={stage}
           theme={theme}
-          reference={drawn?.caption ?? null}
+          reference={captions ? (drawn?.caption ?? null) : null}
           text={plainText(drawn)}
           uppercase={uppercase}
           showClock={stageClock}
           showLive={stageLive}
         />
+      ) : shapeIdOf(form) !== null ? (
+        /*
+          A shape the church drew, on the same chequer.
+
+          This pane rendered it through `OverlayView`, which knows the six
+          built-in forms and ends in a lower third -- so every shape previewed
+          as the thing it was drawn to replace, and the row said one thing while
+          the output sent another.
+        */
+        <div className="absolute inset-0" style={CHEQUER}>
+          {shape ? (
+            <DesignedView
+              elements={filled(
+                shape,
+                plainText(drawn),
+                captions ? (drawn?.caption ?? null) : null,
+              )}
+              theme={theme}
+            />
+          ) : (
+            <p className="flex h-full items-center justify-center px-4 text-center text-[11px] text-pulpitry-muted">
+              This shape is no longer in the library, so this output draws
+              nothing.
+            </p>
+          )}
+        </div>
       ) : form !== "none" ? (
         /* The chequerboard says what the window cannot: this output draws
            furniture on nothing at all, and the camera behind it at the far
@@ -104,6 +182,7 @@ export function OutputPreview({
             reference={drawn?.caption ?? null}
             text={plainText(drawn)}
             uppercase={uppercase}
+            captions={captions}
           />
         </div>
       ) : (
@@ -119,7 +198,7 @@ export function OutputPreview({
             {drawn ? (
               <>
                 <PreviewBody body={drawn.body} theme={theme} progress={drawn.progress} />
-                {theme.showReference && drawn.caption ? (
+                {captions && drawn.caption ? (
                   <p
                     className="mt-[4cqh] text-center tracking-wide opacity-60"
                     style={referenceStyle(theme)}

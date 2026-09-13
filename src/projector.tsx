@@ -40,8 +40,12 @@ import { Backdrop } from "./components/Backdrop";
 import { OverlayView } from "./components/OverlayView";
 import { StageView } from "./components/StageView";
 import { plainText, type OverlayForm } from "./lib/overlays";
-import { filled, shapeIdOf } from "./lib/shapes";
-import { catalogGet } from "./lib/catalog";
+import {
+  filled,
+  loadShape,
+  onShapeChanged,
+  shapeIdOf,
+} from "./lib/shapes";
 import type { SlideElement } from "./lib/design";
 import { DesignedView } from "./components/DesignedView";
 import { scriptureIn } from "./lib/bible";
@@ -74,20 +78,6 @@ function titledItself(body: LiveBody): boolean {
       (component) => component.kind === "text" && component.level === "title",
     )
   );
-}
-
-/** The shape an output names, or null where it names a built-in form. */
-async function loadShape(form: string): Promise<SlideElement[] | null> {
-  const id = shapeIdOf(form || "");
-  if (id === null) return null;
-  try {
-    const item = await catalogGet(id);
-    return item?.body.kind === "overlay" ? item.body.elements : null;
-  } catch {
-    // A shape that cannot be read is a shape that is not drawn. The window
-    // stays empty rather than falling back to furniture nobody chose.
-    return null;
-  }
 }
 
 function Projector() {
@@ -197,7 +187,6 @@ function Projector() {
         if (!active) return;
         setTheme(look.theme);
         setForm(look.overlay as OverlayForm);
-        void loadShape(look.overlay).then((drawn) => active && setShape(drawn));
         setTranslation(look.translation);
         setUppercase(look.uppercase);
         setStageClock(look.stageClock);
@@ -239,9 +228,6 @@ function Projector() {
             if (!active) return;
             setTheme(look.theme);
             setForm(look.overlay as OverlayForm);
-            void loadShape(look.overlay).then(
-              (drawn) => active && setShape(drawn),
-            );
             setTranslation(look.translation);
             setUppercase(look.uppercase);
             setStageClock(look.stageClock);
@@ -262,6 +248,36 @@ function Projector() {
       stops.forEach((stop) => stop());
     };
   }, []);
+
+  /*
+   * The furniture this window draws, read whenever it could have changed.
+   *
+   * Two moments, not one. The form changes when the operator points this output
+   * at a different shape -- a settings save, which the look above answers. The
+   * shape itself changes when they draw on it in the studio, which saves a
+   * catalog row and nothing else: read once at startup, this window went on
+   * drawing the version it opened with while the studio showed the new one.
+   */
+  useEffect(() => {
+    if (shapeIdOf(form || "") === null) {
+      setShape(null);
+      return;
+    }
+
+    let active = true;
+    const read = () =>
+      void loadShape(form).then((drawn) => active && setShape(drawn));
+
+    read();
+    const stop = onShapeChanged((id) => {
+      if (id === shapeIdOf(form || "")) read();
+    });
+
+    return () => {
+      active = false;
+      void stop.then((unlisten) => unlisten());
+    };
+  }, [form]);
 
   // A borderless always-on-top window covering the screen is a trap if there
   // is only one display: the operator cannot reach the controls to close it.
@@ -352,20 +368,29 @@ function Projector() {
   }
 
   /*
-   * An overlay draws its furniture and nothing else.
+   * A shape the church drew, filled with what is live -- and answered by that
+   * shape or by nothing.
    *
-   * No backdrop, no ticker band, no 16:9 letterboxing -- every one of those
-   * paints across the frame, and a frame painted across is a picture rather
-   * than something a switcher can key. The container query unit still works,
-   * so a form drawn at 1280 and at 3840 is the same design.
-   */
-  /*
-   * A shape the church drew, filled with what is live.
+   * `overlayPlan` ends in `default: lower-third`, so "shape:14" -- which is not
+   * one of the six -- drew a lower third. Every shape a church made therefore
+   * came out looking like the one they were trying to replace, on the wall and
+   * over NDI, and the studio looked as though it had not saved anything.
    *
-   * The same renderer a designed slide uses, on nothing: an overlay is keyed,
-   * so the frame stays transparent and only the furniture is drawn.
+   * Nothing is also the right answer while it is still being read, and for a
+   * shape that has since been deleted: a switcher keying an empty frame shows
+   * the camera, and the operator sees the furniture is missing. Falling back to
+   * somebody else's furniture hides both.
    */
-  if (shape) {
+  if (shapeIdOf(form) !== null) {
+    if (!shape) {
+      return (
+        <div
+          className="relative h-full w-full overflow-hidden"
+          style={{ background: "transparent" }}
+        />
+      );
+    }
+
     return (
       <div
         className="relative h-full w-full overflow-hidden [container-type:size]"
@@ -383,6 +408,14 @@ function Projector() {
     );
   }
 
+  /*
+   * One of the shipped forms: furniture and nothing else.
+   *
+   * No backdrop, no ticker band, no 16:9 letterboxing -- every one of those
+   * paints across the frame, and a frame painted across is a picture rather
+   * than something a switcher can key. The container query unit still works,
+   * so a form drawn at 1280 and at 3840 is the same design.
+   */
   if (form !== "none") {
     return (
       <div

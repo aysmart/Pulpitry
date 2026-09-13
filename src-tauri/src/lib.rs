@@ -46,7 +46,7 @@ use std::sync::Arc;
 use audio::AudioDevice;
 use assist::Assistant;
 use bible::{Book, Library, LibraryStatus, Reference, Translation, Verse};
-use catalog::{Catalog, Item};
+use catalog::{Catalog, Item, ItemBody};
 use detect::Detector;
 use projector::{
     AudioState, Display, LiveContent, MediaCommand, MediaProgress, Projector, ProjectorState,
@@ -2191,7 +2191,17 @@ fn catalog_save(
     // Importing a picture is the moment the operator says this file may be
     // shown, so it is also the moment to let the webview read it.
     allow_asset(&app, item.path.as_deref());
-    catalog.save(&item).map_err(to_message)
+    let saved = catalog.save(&item).map_err(to_message)?;
+
+    // A shape is appearance stored as a catalog row, so saving one is a change
+    // no window would otherwise hear about. See projector::EVENT_SHAPE.
+    if matches!(saved.body, ItemBody::Overlay { .. }) {
+        if let Some(id) = saved.id {
+            let _ = app.emit(projector::EVENT_SHAPE, id);
+        }
+    }
+
+    Ok(saved)
 }
 
 #[tauri::command]
@@ -2200,8 +2210,23 @@ fn catalog_get(catalog: State<'_, Arc<Catalog>>, id: i64) -> CommandResult<Optio
 }
 
 #[tauri::command]
-fn catalog_remove(catalog: State<'_, Arc<Catalog>>, id: i64) -> CommandResult<()> {
-    catalog.remove(id).map_err(to_message)
+fn catalog_remove(
+    app: tauri::AppHandle,
+    catalog: State<'_, Arc<Catalog>>,
+    id: i64,
+) -> CommandResult<()> {
+    // Read before removing, because afterwards there is nothing left to say
+    // what kind of thing it was. An output pointed at a deleted shape has to
+    // stop drawing it rather than keep the copy it is holding.
+    let was_shape = matches!(
+        catalog.get(id).ok().flatten().map(|item| item.body),
+        Some(ItemBody::Overlay { .. })
+    );
+    catalog.remove(id).map_err(to_message)?;
+    if was_shape {
+        let _ = app.emit(projector::EVENT_SHAPE, id);
+    }
+    Ok(())
 }
 
 #[tauri::command]

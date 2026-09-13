@@ -21,6 +21,20 @@ pub const EVENT_MEDIA: &str = "media:command";
 pub const EVENT_MEDIA_PROGRESS: &str = "media:progress";
 pub const EVENT_THEME: &str = "theme:changed";
 pub const EVENT_STAGE: &str = "stage:changed";
+/**
+ * A display shape was drawn over or deleted; payload is its library id.
+ *
+ * Appearance is otherwise *fetched* by each window rather than pushed to it,
+ * which is right for a look: a window asks after a settings save and the answer
+ * depends on which output it is. A shape is the one piece of appearance that
+ * changes without the settings changing at all — the studio writes a catalog
+ * row — so an output drawing it went on drawing the version it read when it
+ * opened, and an operator moving the band watched nothing happen on the wall.
+ *
+ * The id rather than the elements: the window already knows how to read one,
+ * and the ones that do not name this shape then do nothing at all.
+ */
+pub const EVENT_SHAPE: &str = "shape:changed";
 pub const WINDOW_LABEL: &str = "projector";
 /**
  * A second congregation-facing display.

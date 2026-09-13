@@ -625,6 +625,7 @@ export function OutputsPanel({
               <OutputPreview
                 form={(output.overlay || "none") as OverlayForm}
                 theme={themeFor(output)}
+                captions={theme.showReference}
                 translation={output.translation}
                 uppercase={output.uppercase}
                 stageClock={output.stageClock}

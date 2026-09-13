@@ -1,4 +1,6 @@
-import { catalogList, type Item } from "./catalog";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+
+import { catalogGet, catalogList, type Item } from "./catalog";
 import {
   newShape as newBlock,
   newText,
@@ -54,6 +56,43 @@ export function formFor(id: number): string {
 export function listShapes(): Promise<Item[]> {
   return catalogList("overlay", 100);
 }
+
+/**
+ * The shape a form names, or null where it names one of the shipped forms.
+ *
+ * Null is also the answer for a shape that has been deleted or cannot be read,
+ * and every surface that draws one treats that as *draw nothing*. Falling back
+ * to a built-in form would put furniture nobody chose on a wall, and — because
+ * the built-in the fallback lands on is a lower third — it looked exactly like
+ * the studio had saved nothing at all.
+ */
+export async function loadShape(form: string): Promise<SlideElement[] | null> {
+  const id = shapeIdOf(form || "");
+  if (id === null) return null;
+  try {
+    const item = await catalogGet(id);
+    return item?.body.kind === "overlay" ? item.body.elements : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A shape was drawn over or deleted; the payload is its library id. */
+export const EVENT_SHAPE = "shape:changed";
+
+/**
+ * Told when a shape changes, because a shape is appearance kept in the catalog.
+ *
+ * Every other piece of appearance travels on a settings save, which each window
+ * answers by re-asking for its own look. A shape is written by the studio
+ * instead — so without this, an output went on drawing the version it read when
+ * it opened, and moving a band did nothing to the wall until something else
+ * happened to be saved.
+ */
+export const onShapeChanged = (
+  handler: (id: number) => void,
+): Promise<UnlistenFn> =>
+  listen<number>(EVENT_SHAPE, (event) => handler(event.payload));
 
 /**
  * The shape with its holes filled.
