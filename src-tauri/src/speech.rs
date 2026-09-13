@@ -673,6 +673,21 @@ impl SpeechManager {
                 );
             }
             "recognized" if !text.is_empty() => {
+                /*
+                 * A result is proof the session is live.
+                 *
+                 * The bridge says "reconnecting" for things that do not stop
+                 * the audio -- a heartbeat that could not reach the broker,
+                 * most of all -- and only a socket opening ever said
+                 * "listening" again. That left the desk reading Reconnecting
+                 * while every word was being transcribed. The bridge now takes
+                 * its own notice back, and this is the second answer: words are
+                 * arriving, so whatever it was has passed.
+                 */
+                if self.status.lock().state == "reconnecting" {
+                    let device = self.status.lock().device.clone();
+                    self.set_status("listening", None, device);
+                }
                 // Kept before anything else touches it. Detection can fail, the
                 // window can close, the model can be wrong -- none of that
                 // should cost the operator the record of what was said.
