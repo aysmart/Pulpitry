@@ -408,7 +408,7 @@ export function StagePanel({
   });
 
   return (
-    <div className="flex min-h-0 flex-col gap-2">
+    <div className="flex min-h-0 flex-col gap-2" data-own-enter>
       <div className="flex shrink-0 items-center gap-2">
         <button
           type="button"
@@ -820,7 +820,7 @@ export function MainOutput({
       {/* Winding, and only when there is something to wind: a table of figures
           or a lexicon entry taller than the wall. */}
       {transport.screenfuls > 1 ? (
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5" data-own-enter>
           <span className="min-w-0 flex-1 truncate text-[11px] text-pulpitry-muted">
             Taller than the screen — wind it as you read.
           </span>
@@ -851,7 +851,11 @@ export function MainOutput({
         Display is the middle and the loudest: on a slide desk it is pressed
         once per slide, which is more often than anything else in the window.
       */}
-      <div className="flex shrink-0 items-center gap-1.5">
+      {/* These act on the wall rather than on a list, so Enter on one means
+          what the button says and the desk's "Enter twice puts it up" rule
+          steps around them: two presses on Clear would otherwise take a verse
+          off the screen and put it straight back. */}
+      <div className="flex shrink-0 items-center gap-1.5" data-own-enter>
         <button
           type="button"
           onClick={() => onStep(false)}
@@ -888,7 +892,7 @@ export function MainOutput({
         spoken are the same argument -- so it stays, kept small, rather than
         being dropped for a tidier column.
       */}
-      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5" data-own-enter>
         {own ? (
           <button
             type="button"

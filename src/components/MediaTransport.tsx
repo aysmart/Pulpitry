@@ -45,7 +45,13 @@ export function MediaTransport({
   const ended = progress.ended && !command.looping;
 
   return (
-    <div className="flex shrink-0 items-center gap-2 rounded-md border border-pulpitry-line bg-pulpitry-surface px-2 py-1.5">
+    <div
+      className="flex shrink-0 items-center gap-2 rounded-md border border-pulpitry-line bg-pulpitry-surface px-2 py-1.5"
+      // Play, pause and seek act on the clip that is already on the wall, so
+      // Enter here means the button rather than the desk's "Enter twice puts
+      // it up".
+      data-own-enter
+    >
       <button
         type="button"
         onClick={ended ? onRestart : command.playing ? onPause : onPlay}

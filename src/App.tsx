@@ -736,6 +736,81 @@ export default function App() {
       .catch((err) => setError(describeError(err)));
   }, [liveDesk, settings]);
 
+  /*
+   * Enter stages. Enter again puts it up.
+   *
+   * # Why the keyboard needed its own answer
+   *
+   * Every list in this window follows one rule: a click stages, a double-click
+   * goes live. The keyboard only ever had half of it. Enter on a row is the
+   * browser's own way of pressing a button, so staging worked; there is no
+   * keyboard event for a double-click, so an operator working by keyboard
+   * staged and then had to find Display -- and the operator who reported this
+   * was typing a reference with a reading announced and four seconds to find
+   * it, which is exactly when a hand does not want to leave the keys.
+   *
+   * So a second Enter is the double-click: same key, same gesture, same rule
+   * everywhere, and it puts up whatever is staged on the desk in front of
+   * them.
+   *
+   * # What it will not do
+   *
+   * It is one keystroke from a wall, so the guards matter more than the
+   * feature:
+   *
+   * - **Not while a dialog is open.** The studios, the libraries and the
+   *   settings own the keyboard while they are up, and they mark themselves.
+   * - **Not while typing.** A textarea, anything editable, and every text box
+   *   except one that stages on Enter -- a service being renamed and a song
+   *   being searched for both take Return without meaning anything by it.
+   * - **Not unless both presses are on the same thing.** Enter on one row and
+   *   Enter on the next is two intentions, and treating them as one would put
+   *   the first row live while the operator was looking at the second.
+   * - **Not on a held key.** Autorepeat is not a decision.
+   */
+  const goLive = useRef(display);
+  goLive.current = display;
+
+  useEffect(() => {
+    /** As long as a double-click, so one hand learns one timing. */
+    const DOUBLE = 450;
+    let at = 0;
+    let where: EventTarget | null = null;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Enter" || event.repeat) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+        return;
+      }
+      if (document.querySelector("[data-dialog]")) return;
+
+      const target = event.target as HTMLElement | null;
+      const typing =
+        target?.isContentEditable ||
+        target?.tagName === "TEXTAREA" ||
+        (target?.tagName === "INPUT" && !target.hasAttribute("data-stages"));
+      if (typing) return;
+      // The controls that act on the wall keep their own meaning: Clear
+      // clears, and two presses on it must not put the verse back up.
+      if (target?.closest("[data-own-enter]")) return;
+
+      const now = Date.now();
+      const again = target === where && now - at < DOUBLE;
+      at = now;
+      where = target;
+
+      if (!again) return;
+      goLive.current();
+      // A third press starts over rather than sending again: holding a rhythm
+      // on the key should not keep firing at the wall.
+      at = 0;
+      where = null;
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const selectDevice = useCallback(
     async (id: string | null) => {
       if (!settings) return;

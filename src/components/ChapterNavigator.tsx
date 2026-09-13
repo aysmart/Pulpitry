@@ -370,6 +370,14 @@ export function ChapterNavigator({
           <input
             value={query}
             spellCheck={false}
+            /*
+              Enter here stages, so Enter twice puts it up -- the same rule as
+              a double-click on a row. Marked rather than assumed, because
+              every other box on these desks takes Return without meaning
+              anything by it: a service being renamed, a song being looked for.
+              See the Enter handler in App.
+            */
+            data-stages
             /* The terse form first, because it is the one worth knowing: an
                operator with a reading announced and four seconds types it the
                way it was said. The colon still works and always did. */
