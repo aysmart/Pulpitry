@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type { Item, SongRights, SongSection } from "./catalog";
 
@@ -11,17 +12,14 @@ import type { Item, SongRights, SongSection } from "./catalog";
 /**
  * Whether the catalogue is actually being served yet.
  *
- * False until the songs are in it. Everything on this side is finished and
- * tested -- the search, the rights, previewing a song before it is added, the
- * subscription gate -- and the one thing missing is the catalogue itself,
- * which is assembled and hosted rather than shipped. A pane that searched it
- * anyway would answer every church with an error they cannot act on, which is
- * a worse first impression than saying plainly that it is not open yet.
+ * False while the songs were still being assembled: a pane that searched an
+ * empty catalogue would answer every church with an error they cannot act on,
+ * which is a worse first impression than saying plainly that it is not open.
  *
- * One constant, read in one place. When the catalogue is served this becomes
- * true and nothing else changes.
+ * One constant, read in one place, and it is true now. What gates it from here
+ * is the subscription, which is the broker's business rather than this file's.
  */
-export const CATALOGUE_OPEN = false;
+export const CATALOGUE_OPEN = true;
 
 export interface SongFinderHit {
   id: string;
@@ -43,6 +41,41 @@ export interface SongFinderSong {
 
 export const songFinderSearch = (query: string, limit = 40) =>
   invoke<SongFinderHit[]>("songfinder_search", { query, limit });
+
+/**
+ * What this machine holds of the catalogue.
+ *
+ * The catalogue is pulled once and searched locally from then on, so this is
+ * the difference between a pane that can answer and one that has nothing to
+ * answer from. `ready` is false on a machine that has never downloaded it and
+ * on one where the file has been removed.
+ */
+export interface SongFinderStatus {
+  ready: boolean;
+  /** The bank this copy came from, so a newer one can be offered later. */
+  version: string;
+  songs: number;
+}
+
+export const songFinderStatus = () =>
+  invoke<SongFinderStatus>("songfinder_status");
+
+/** Downloads the catalogue. The one thing here that needs the network. */
+export const songFinderPull = () =>
+  invoke<SongFinderStatus>("songfinder_pull");
+
+/**
+ * How far the download has got: songs held, and songs expected.
+ *
+ * Fourteen megabytes on church wifi is a minute or two, and a button that does
+ * nothing visible for two minutes is a button somebody presses again.
+ */
+export const onSongFinderPull = (
+  handler: (held: number, expected: number) => void,
+): Promise<UnlistenFn> =>
+  listen<[number, number]>("songfinder:pull", (event) =>
+    handler(event.payload[0], event.payload[1]),
+  );
 
 export const songFinderGet = (id: string) =>
   invoke<SongFinderSong>("songfinder_get", { id });

@@ -372,11 +372,77 @@ fn search(pack: &Path, model: &Path, query: &str) -> Result<()> {
     Ok(())
 }
 
+/**
+ * The pack as one JSON object a line, for carrying it to the broker.
+ *
+ * The site has no SQLite reader and should not grow a native dependency to
+ * gain one for a job that runs when the bank is rebuilt. A line of JSON is
+ * read by anything, streams without loading the whole bank into memory, and
+ * shows what is being uploaded when something goes wrong.
+ *
+ * Vectors are base64: half-precision floats are arbitrary bytes, which JSON
+ * has no way to carry.
+ */
+fn export(pack: &Path, out: &Path) -> Result<()> {
+    const B64: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    fn base64(bytes: &[u8]) -> String {
+        let mut text = String::with_capacity(bytes.len().div_ceil(3) * 4);
+        for chunk in bytes.chunks(3) {
+            let (a, b, c) = (
+                chunk[0] as u32,
+                *chunk.get(1).unwrap_or(&0) as u32,
+                *chunk.get(2).unwrap_or(&0) as u32,
+            );
+            let block = (a << 16) | (b << 8) | c;
+            for shift in [18, 12, 6, 0] {
+                text.push(B64[((block >> shift) & 0x3f) as usize] as char);
+            }
+            let padding = 3 - chunk.len();
+            text.truncate(text.len() - padding);
+            text.push_str(&"=".repeat(padding));
+        }
+        text
+    }
+
+    let connection = Connection::open(pack)?;
+    let mut statement = connection
+        .prepare("SELECT id, title, author, opening, terms, ccli, sections, vector FROM song ORDER BY id")?;
+    let mut file = std::io::BufWriter::new(std::fs::File::create(out)?);
+    let mut written = 0usize;
+
+    let mut rows = statement.query([])?;
+    while let Some(row) = rows.next()? {
+        let vector: Vec<u8> = row.get(7)?;
+        let line = serde_json::json!({
+            "id": row.get::<_, String>(0)?,
+            "title": row.get::<_, String>(1)?,
+            "author": row.get::<_, String>(2)?,
+            "opening": row.get::<_, String>(3)?,
+            "terms": row.get::<_, String>(4)?,
+            "ccli": row.get::<_, String>(5)?,
+            "sections": row.get::<_, String>(6)?,
+            "vector": base64(&vector),
+        });
+        writeln!(file, "{line}")?;
+        written += 1;
+    }
+    file.flush()?;
+    eprintln!("wrote {} songs to {}", written, out.display());
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
     let first = args
         .next()
         .ok_or_else(|| anyhow!("usage: songbank <library.db> <pack.db> [embedder] [keep.txt]\n       songbank --search <pack.db> <embedder> <question>"))?;
+
+    if first == "--export" {
+        let pack = PathBuf::from(args.next().unwrap_or_else(|| "songfinder.db".into()));
+        let out = PathBuf::from(args.next().unwrap_or_else(|| "songfinder.jsonl".into()));
+        return export(&pack, &out);
+    }
 
     if first == "--search" {
         let pack = PathBuf::from(args.next().unwrap_or_else(|| "songfinder.db".into()));

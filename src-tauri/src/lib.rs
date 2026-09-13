@@ -426,17 +426,44 @@ pub struct WindowLook {
 /// Blocking work on a worker thread: it is a network call, and a search box
 /// that froze the desk while somebody typed would be worse than no search.
 #[tauri::command]
-async fn songfinder_search(query: String, limit: Option<usize>) -> CommandResult<Vec<songfinder::Hit>> {
-    tauri::async_runtime::spawn_blocking(move || songfinder::search(&query, limit.unwrap_or(40)))
+async fn songfinder_search(
+    app: AppHandle,
+    semantic: State<'_, Arc<Semantic>>,
+    query: String,
+    limit: Option<usize>,
+) -> CommandResult<Vec<songfinder::Hit>> {
+    let semantic = Arc::clone(&semantic);
+    tauri::async_runtime::spawn_blocking(move || {
+        songfinder::search(&app, &semantic, &query, limit.unwrap_or(40))
+    })
+    .await
+    .map_err(|err| err.to_string())?
+    .map_err(to_message)
+}
+
+/// One song's words, for the pane that shows what would be added.
+#[tauri::command]
+async fn songfinder_get(app: AppHandle, id: String) -> CommandResult<songfinder::Song> {
+    tauri::async_runtime::spawn_blocking(move || songfinder::song(&app, &id))
         .await
         .map_err(|err| err.to_string())?
         .map_err(to_message)
 }
 
-/// One song's words, for the pane that shows what would be added.
+/// What this machine holds of the catalogue, and whether it can be searched.
 #[tauri::command]
-async fn songfinder_get(id: String) -> CommandResult<songfinder::Song> {
-    tauri::async_runtime::spawn_blocking(move || songfinder::song(&id))
+fn songfinder_status(app: AppHandle) -> songfinder::Status {
+    songfinder::status(&app)
+}
+
+/// Downloads the catalogue, which is the one thing here that needs the network.
+///
+/// Blocking on a worker thread and reported as it goes: fourteen megabytes on
+/// church wifi is a minute or two, and a button that does nothing visible for
+/// two minutes is a button somebody presses again.
+#[tauri::command]
+async fn songfinder_pull(app: AppHandle) -> CommandResult<songfinder::Status> {
+    tauri::async_runtime::spawn_blocking(move || songfinder::pull(&app))
         .await
         .map_err(|err| err.to_string())?
         .map_err(to_message)
@@ -450,10 +477,11 @@ async fn songfinder_get(id: String) -> CommandResult<songfinder::Song> {
 /// renting.
 #[tauri::command]
 async fn songfinder_add(
+    app: AppHandle,
     catalog: State<'_, Arc<Catalog>>,
     id: String,
 ) -> CommandResult<Item> {
-    let song = tauri::async_runtime::spawn_blocking(move || songfinder::song(&id))
+    let song = tauri::async_runtime::spawn_blocking(move || songfinder::song(&app, &id))
         .await
         .map_err(|err| err.to_string())?
         .map_err(to_message)?;
@@ -2606,6 +2634,8 @@ pub fn run() {
             list_fonts,
             songfinder_search,
             songfinder_get,
+            songfinder_status,
+            songfinder_pull,
             songfinder_add,
             get_live,
             set_live,

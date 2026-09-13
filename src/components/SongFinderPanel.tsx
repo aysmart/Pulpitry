@@ -4,8 +4,12 @@ import { describeError } from "../lib/api";
 import {
   CATALOGUE_OPEN,
   RIGHTS_LABEL,
+  onSongFinderPull,
+  songFinderPull,
   songFinderSearch,
+  songFinderStatus,
   type SongFinderHit,
+  type SongFinderStatus,
 } from "../lib/songfinder";
 import { EmptyState, Panel } from "./Panel";
 
@@ -66,6 +70,45 @@ export function SongFinderPanel({
   /** Opens Settings, which starts on the subscription. */
   onSubscribe?: () => void;
 }) {
+  /*
+   * What this machine holds of the catalogue.
+   *
+   * The pane has three shapes and this decides between two of them: a
+   * subscriber who has never downloaded it is offered the download, and one
+   * who has gets a search box that works with the network unplugged.
+   */
+  const [held, setHeld] = useState<SongFinderStatus | null>(null);
+  const [pulling, setPulling] = useState<{ held: number; of: number } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!CATALOGUE_OPEN || !subscribed) return;
+    let watching = true;
+    void songFinderStatus()
+      .then((found) => watching && setHeld(found))
+      .catch(() => watching && setHeld(null));
+    const stop = onSongFinderPull((at, of) =>
+      watching ? setPulling({ held: at, of }) : undefined,
+    );
+    return () => {
+      watching = false;
+      void stop.then((off) => off());
+    };
+  }, [subscribed]);
+
+  const getTheCatalogue = async () => {
+    setError(null);
+    setPulling({ held: 0, of: 0 });
+    try {
+      setHeld(await songFinderPull());
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setPulling(null);
+    }
+  };
+
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SongFinderHit[] | null>(null);
   const [looking, setLooking] = useState(false);
@@ -99,7 +142,7 @@ export function SongFinderPanel({
    * enough that nobody presses Enter wondering whether it is broken.
    */
   useEffect(() => {
-    if (!subscribed || !CATALOGUE_OPEN) return;
+    if (!subscribed || !CATALOGUE_OPEN || !held?.ready) return;
     const asked = query.trim();
     if (!asked) {
       setHits(null);
@@ -107,7 +150,7 @@ export function SongFinderPanel({
     }
     const timer = setTimeout(() => void look(asked), 300);
     return () => clearTimeout(timer);
-  }, [query, subscribed, look]);
+  }, [query, subscribed, held?.ready, look]);
 
   return (
     <Panel
@@ -126,6 +169,13 @@ export function SongFinderPanel({
         ) : hits && hits.length > 0 ? (
           <span className="text-[11px] text-pulpitry-muted tabular-nums">
             {hits.length}
+          </span>
+        ) : held?.ready ? (
+          <span
+            title={`Catalogue ${held.version}, on this machine`}
+            className="text-[11px] text-pulpitry-muted tabular-nums"
+          >
+            {held.songs.toLocaleString()}
           </span>
         ) : null
       }
@@ -203,6 +253,65 @@ export function SongFinderPanel({
           ) : (
             <p className="text-[11.5px] text-pulpitry-teal">
               Settings → Subscription
+            </p>
+          )}
+        </div>
+      ) : !held?.ready ? (
+        /*
+         * Subscribed, and the catalogue is not on this machine yet.
+         *
+         * It is pulled once rather than searched over the network, so this is
+         * a real step with a real wait, and saying what it costs -- how many
+         * songs, how big, and that it is once -- is the difference between a
+         * button somebody presses and one they wonder about. Afterwards it
+         * works with the network unplugged, which is worth saying here because
+         * it is the reason for the wait.
+         */
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+          <p className="max-w-[34ch] text-[13px] leading-relaxed text-pulpitry-muted">
+            The catalogue is downloaded once and searched on this machine after
+            that — by meaning, with the network unplugged, in the middle of a
+            service if it comes to it.
+          </p>
+
+          {pulling ? (
+            <>
+              <span className="h-1 w-40 overflow-hidden rounded-full bg-pulpitry-line">
+                <span
+                  className="block h-full rounded-full bg-pulpitry-gold transition-all"
+                  style={{
+                    width: `${
+                      pulling.of > 0
+                        ? Math.min(100, (pulling.held / pulling.of) * 100)
+                        : 4
+                    }%`,
+                  }}
+                />
+              </span>
+              <p className="text-[11.5px] text-pulpitry-muted tabular-nums">
+                {pulling.held.toLocaleString()}
+                {pulling.of > 0 ? ` of ${pulling.of.toLocaleString()}` : ""} songs
+              </p>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void getTheCatalogue()}
+              className="rounded border border-pulpitry-gold-dim bg-pulpitry-gold/10 px-3 py-1.5 text-[12.5px] text-pulpitry-gold transition-colors hover:bg-pulpitry-gold/15 focus-visible:focus-ring"
+            >
+              Download the catalogue
+            </button>
+          )}
+
+          {error ? (
+            <p className="max-w-[34ch] text-[11.5px] leading-relaxed text-pulpitry-gold">
+              {error}
+            </p>
+          ) : (
+            <p className="max-w-[34ch] text-[11.5px] leading-relaxed text-pulpitry-muted">
+              Every song carries what is known about its rights, including
+              “not established”, which is the honest answer for a great many of
+              them and is said rather than hidden.
             </p>
           )}
         </div>
