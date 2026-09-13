@@ -123,6 +123,7 @@ export function ScripturePanel({
 
   return (
     <Panel
+      tour="library"
       // The tabs say what this panel holds; a "LIBRARY" heading beside them
       // would only take width the seventh tab needs. With nothing to choose
       // between, the one name becomes the heading instead.
@@ -136,6 +137,7 @@ export function ScripturePanel({
             <button
               key={name}
               type="button"
+              data-tour={`tab-${name}`}
               onClick={() => onTab(name)}
               className={`rounded px-[2px] py-0.5 text-[10.5px] transition-colors focus-visible:focus-ring ${
                 tab === name

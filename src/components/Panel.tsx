@@ -19,6 +19,7 @@ export function Panel({
   children,
   className = "",
   bodyClassName = "",
+  tour,
 }: {
   title: string;
   accent?: Accent;
@@ -26,9 +27,19 @@ export function Panel({
   children: ReactNode;
   className?: string;
   bodyClassName?: string;
+  /**
+   * The name the tour points at this panel by.
+   *
+   * Here rather than on a wrapper around each panel, because a wrapper inside
+   * a grid track stops being the grid child and the layout moves -- and a
+   * layout that only moves while somebody is being shown around is the worst
+   * possible time for it.
+   */
+  tour?: string;
 }) {
   return (
     <section
+      data-tour={tour}
       className={`flex min-h-0 flex-col overflow-hidden rounded-md border border-pulpitry-line bg-pulpitry-surface ${className}`}
     >
       {/* min-h rather than h: the library's tab strip has outgrown one row

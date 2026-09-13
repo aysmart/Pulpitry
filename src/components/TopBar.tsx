@@ -70,6 +70,7 @@ export function TopBar({
       <div
         role="tablist"
         aria-label="Arrangement"
+        data-tour="desks"
         className="flex items-center gap-0.5 rounded border border-pulpitry-line bg-pulpitry-raised p-0.5"
       >
         {WORKSPACE_ORDER.map((id) => (
@@ -132,6 +133,7 @@ export function TopBar({
 
       <button
         type="button"
+        data-tour="listen"
         onClick={onToggleListening}
         disabled={busy}
         className={`rounded px-3.5 py-1.5 text-[12px] transition-colors disabled:opacity-50 focus-visible:focus-ring ${
@@ -148,6 +150,7 @@ export function TopBar({
           than before one. */}
       <button
         type="button"
+        data-tour="displays"
         onClick={onOpenOutputs}
         title="Which screens the congregation sees, and what each shows"
         className="rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-1.5 text-[12px] text-pulpitry-text transition-colors hover:border-pulpitry-gold focus-visible:focus-ring"
@@ -162,6 +165,7 @@ export function TopBar({
       {onOpenLooks ? (
         <button
           type="button"
+          data-tour="looks"
           onClick={onOpenLooks}
           aria-label="Looks"
           title="How this desk's words are set: the typeface, the colours, the background"

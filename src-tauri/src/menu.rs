@@ -138,6 +138,10 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         "Help",
         true,
         &[
+            // First, because it is the one thing that helps in the ten minutes
+            // somebody has before their first service -- and the only one of
+            // the three that does not need a browser or a connection.
+            &item("tour", "Show me around", None)?,
             &item("manual", "Pulpitry manual", None)?,
             &item("subscription", "Castavox subscription", None)?,
         ],

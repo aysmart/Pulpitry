@@ -366,7 +366,11 @@ export function ChapterNavigator({
           </select>
         </div>
 
-        <form onSubmit={submit} className="mt-1.5 flex gap-1.5">
+        <form
+          onSubmit={submit}
+          data-tour="bible"
+          className="mt-1.5 flex gap-1.5"
+        >
           <input
             value={query}
             spellCheck={false}

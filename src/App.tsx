@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, useRef } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { AboutDialog } from "./components/AboutDialog";
+import { Tour } from "./components/Tour";
 import { HistoryDialog } from "./components/HistoryDialog";
 import { DeckStrip } from "./components/DeckStrip";
 import { Detections } from "./components/Detections";
@@ -76,6 +77,7 @@ import { useUpdate } from "./lib/useUpdate";
 import { useAudio } from "./lib/useAudio";
 import { useMedia } from "./lib/useMedia";
 import { useAside } from "./lib/useAside";
+import { tourSeen } from "./lib/tour";
 import { useSchedule } from "./lib/useSchedule";
 import { useTicker } from "./lib/useTicker";
 import { useSemanticIndex } from "./lib/useSemanticIndex";
@@ -313,6 +315,14 @@ export default function App() {
   const [outputsOpen, setOutputsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  /*
+   * Being shown around, on the first launch and whenever it is asked for.
+   *
+   * Offered rather than imposed: it opens itself once on a machine that has
+   * never seen it, and every step is safe to read with a service running,
+   * because the first run of this is usually an hour before one.
+   */
+  const [tourOpen, setTourOpen] = useState(() => !tourSeen());
   const [slidesOpen, setSlidesOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -884,6 +894,9 @@ export default function App() {
       switch (event.payload) {
         case "about":
           setAboutOpen(true);
+          break;
+        case "tour":
+          setTourOpen(true);
           break;
         case "settings":
           setSettingsOpen(true);
@@ -1487,6 +1500,7 @@ export default function App() {
 
           {shape.detected ? (
           <Panel
+            tour="detected"
             title="Detected"
             actions={
               <PanelCount
@@ -1839,6 +1853,15 @@ export default function App() {
       ) : null}
 
       {aboutOpen ? <AboutDialog onClose={() => setAboutOpen(false)} /> : null}
+
+      {/* Last in the window, so it is drawn over everything it points at. */}
+      {tourOpen ? (
+        <Tour
+          from={workspace}
+          onDesk={chooseWorkspace}
+          onClose={() => setTourOpen(false)}
+        />
+      ) : null}
 
       {slidesOpen ? (
         <SlidesFromSermon onClose={() => setSlidesOpen(false)} />

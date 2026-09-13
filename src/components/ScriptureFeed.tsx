@@ -80,6 +80,7 @@ export function ScriptureFeed({
 
   return (
     <Panel
+      tour="feed"
       title=""
       accent="teal"
       actions={

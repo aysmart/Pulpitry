@@ -46,6 +46,7 @@ export function TranscriptPanel({
 
   return (
     <Panel
+      tour="transcript"
       title="Live Transcription"
       accent={status.state === "listening" ? "gold" : "neutral"}
       actions={

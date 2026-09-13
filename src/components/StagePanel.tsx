@@ -408,7 +408,7 @@ export function StagePanel({
   });
 
   return (
-    <div className="flex min-h-0 flex-col gap-2" data-own-enter>
+    <div className="flex min-h-0 flex-col gap-2" data-own-enter data-tour="output">
       <div className="flex shrink-0 items-center gap-2">
         <button
           type="button"
@@ -733,6 +733,7 @@ export function MainOutput({
 
   return (
     <Panel
+      tour="output"
       title="Main output"
       accent="gold"
       className="min-h-0"
