@@ -77,7 +77,7 @@ import { useUpdate } from "./lib/useUpdate";
 import { useAudio } from "./lib/useAudio";
 import { useMedia } from "./lib/useMedia";
 import { useAside } from "./lib/useAside";
-import { tourSeen } from "./lib/tour";
+import { rememberTour, tourSeen } from "./lib/tour";
 import { useSchedule } from "./lib/useSchedule";
 import { useTicker } from "./lib/useTicker";
 import { useSemanticIndex } from "./lib/useSemanticIndex";
@@ -323,6 +323,21 @@ export default function App() {
    * because the first run of this is usually an hour before one.
    */
   const [tourOpen, setTourOpen] = useState(() => !tourSeen());
+
+  /*
+   * Once per installation, and then only when asked.
+   *
+   * Written down as it opens rather than as it finishes: somebody who shuts it
+   * on the first card has answered the question, and an application that asked
+   * again every launch until they read to the end would be the kind of thing
+   * people learn to dismiss without looking. The button on the bar is how it
+   * comes back, for them and for whoever sits down next.
+   */
+  useEffect(() => {
+    if (tourOpen) rememberTour();
+    // Deliberately once, on the first render: this is about the launch, not
+    // about every time the tour is opened afterwards.
+  }, []);
   const [slidesOpen, setSlidesOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -1099,6 +1114,7 @@ export default function App() {
         /* Absent on the slide desk, where a deck carries its own background
            and a look over the top would be a second answer. */
         onOpenLooks={shape.frame === "deck" ? null : () => setLooksOpen(true)}
+        onStartTour={() => setTourOpen(true)}
         workspace={workspace}
         onWorkspace={chooseWorkspace}
       />
@@ -1238,6 +1254,7 @@ export default function App() {
                   and in the scripture feed's queue; this is what the band is
                   playing, in the order the worship leader put them. */}
               <Panel
+                tour="song-set"
                 title="Song set"
                 accent="teal"
                 actions={

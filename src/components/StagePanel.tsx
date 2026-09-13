@@ -978,7 +978,7 @@ export function PreviewPanel({
   theme: ProjectorTheme;
 }) {
   return (
-    <Panel title="Preview">
+    <Panel title="Preview" tour="staged">
       <Stage
         body={preview ? presentableText(preview) : null}
         asset={assetOf(preview)}

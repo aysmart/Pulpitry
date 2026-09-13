@@ -94,6 +94,7 @@ export function DeckStrip({
 
   return (
     <Panel
+      tour="deck-strip"
       title={isDeck ? deck.title : "No deck staged"}
       accent="teal"
       className="min-h-0"

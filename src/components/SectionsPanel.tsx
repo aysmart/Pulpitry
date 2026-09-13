@@ -52,6 +52,7 @@ export function SectionsPanel({
 
   return (
     <Panel
+      tour="song-parts"
       title="Sections"
       accent="teal"
       actions={

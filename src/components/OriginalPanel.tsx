@@ -216,6 +216,7 @@ export function OriginalPanel({
 
   return (
     <Panel
+      tour="original"
       title="Original"
       bodyClassName={tab === "Lexicon" ? "" : "overflow-auto"}
       actions={

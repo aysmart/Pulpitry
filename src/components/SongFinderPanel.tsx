@@ -89,6 +89,7 @@ export function SongFinderPanel({
 
   return (
     <Panel
+      tour="song-finder"
       title="Song Finder"
       accent="teal"
       actions={

@@ -179,21 +179,26 @@ export function Tour({
         aria-label="A look around Pulpitry"
       >
         <div className="flex items-center gap-2">
+          {/* The part of the service this belongs to, rather than the number
+              alone: thirty stops is a lot to hold, and "Songs, four of five"
+              is a place where "step nineteen" is a count. */}
           <span className="text-[10.5px] tracking-[0.14em] text-pulpitry-gold uppercase">
-            Step {index + 1} of {TOUR.length}
+            {step.group}
           </span>
-          {/* The dots say how much is left better than the number does, and
-              they are the one thing a person reads before deciding whether to
-              carry on. */}
-          <span className="flex flex-1 items-center gap-1" aria-hidden>
-            {TOUR.map((_, dot) => (
-              <span
-                key={dot}
-                className={`h-1 flex-1 rounded-full ${
-                  dot <= index ? "bg-pulpitry-gold/80" : "bg-pulpitry-line"
-                }`}
-              />
-            ))}
+          <span className="text-[10.5px] text-pulpitry-muted tabular-nums">
+            {index + 1}/{TOUR.length}
+          </span>
+          {/* How much is left, which is the one thing a person reads before
+              deciding whether to carry on. A bar rather than thirty dots: at
+              this length the dots stop being countable and become texture. */}
+          <span
+            className="ml-auto h-1 w-24 overflow-hidden rounded-full bg-pulpitry-line"
+            aria-hidden
+          >
+            <span
+              className="block h-full rounded-full bg-pulpitry-gold/80 transition-all duration-200"
+              style={{ width: `${((index + 1) / TOUR.length) * 100}%` }}
+            />
           </span>
         </div>
 

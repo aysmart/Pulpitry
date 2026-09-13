@@ -24,6 +24,7 @@ export function TopBar({
   busy,
   onOpenOutputs,
   onOpenLooks,
+  onStartTour,
   workspace,
   onWorkspace,
 }: {
@@ -43,6 +44,15 @@ export function TopBar({
    * dead control teaches an operator to stop reading this row.
    */
   onOpenLooks: (() => void) | null;
+  /**
+   * Starts the tour.
+   *
+   * On the bar rather than only in the Help menu, because the person who needs
+   * it is the one who has never opened a menu here -- a volunteer sitting down
+   * at somebody else's desk on a Sunday morning. It runs itself once on a new
+   * installation and is a button from then on.
+   */
+  onStartTour: () => void;
   workspace: Workspace;
   onWorkspace: (workspace: Workspace) => void;
 }) {
@@ -191,8 +201,38 @@ export function TopBar({
         </button>
       ) : null}
 
+      {/* Beside Settings and drawn the same way: both are opened rarely, and
+          neither belongs in the row a hand reaches for during a service. */}
       <button
         type="button"
+        data-tour="tour"
+        onClick={onStartTour}
+        aria-label="Show me around"
+        title="Show me around: a tour of the window"
+        className="rounded border border-pulpitry-line bg-pulpitry-raised p-1.5 text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+        >
+          <circle cx="12" cy="12" r="9" />
+          {/* A question mark: the one glyph everybody reads as "explain
+              this", and the only one that does not need a word beside it. */}
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M9.6 9.2a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.7-.9 1.3v.6"
+          />
+          <circle cx="12" cy="16.6" r="0.9" fill="currentColor" stroke="none" />
+        </svg>
+      </button>
+
+      <button
+        type="button"
+        data-tour="settings"
         onClick={onOpenSettings}
         aria-label="Settings"
         title="Settings"
