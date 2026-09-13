@@ -18,7 +18,7 @@ import type { Workspace } from "./workspaces";
  * nobody finds on their own are exactly the ones worth having: the lexicon
  * entry that can go on a wall, the shape studio, the set that is not the
  * service, the clip that keeps its place. Each stop is a sentence or two and
- * any of them can be the last one: the dots say how much is left, and nobody
+ * any of them can be the last one: the bar says how much is left, and nobody
  * is made to read to the end.
  *
  * # What it is not
@@ -27,9 +27,11 @@ import type { Workspace } from "./workspaces";
  * you would point at: this is where the words come from, this is what goes on
  * the wall, this is how you get it there.
  *
- * Nothing here acts on the app. The tour points and explains; every step is
- * safe to read with a congregation in the room, which matters because the
- * first place this will be run is a Sunday morning.
+ * It changes nothing. It moves between desks and opens the three screens it
+ * describes, and that is the whole of what it does: it presses nothing, stages
+ * nothing, saves nothing, and puts everything back as it found it. That is not
+ * tidiness -- the first place this will be run is an hour before a service, or
+ * during one.
  */
 export interface TourStep {
   /**
@@ -48,6 +50,20 @@ export interface TourStep {
    * them nothing.
    */
   desk?: Workspace;
+  /**
+   * A screen to open for this step, and to close when it moves off.
+   *
+   * The three screens that are not panels -- the outputs, the looks, the
+   * settings -- hold most of what a church sets up once and then relies on,
+   * and a tour that pointed at the buttons and said "there is a lot in here"
+   * would be describing the one part nobody can guess at. So it opens them.
+   *
+   * This is the only thing the tour does that the operator would not have done
+   * themselves, and it is safe: opening a screen changes nothing, the tour
+   * never presses anything inside one, and it closes again as the tour moves
+   * on or is stopped.
+   */
+  open?: "displays" | "looks" | "settings";
   /** Which part of the service this belongs to, so a long tour stays placed. */
   group: string;
   title: string;
@@ -266,23 +282,114 @@ export const TOUR: TourStep[] = [
     group: "The screens",
     title: "The screens",
     body:
-      "Every screen and feed the congregation sees: the projector, an overflow room, a stage display for the platform, a lower third keyed over a camera. Each with its own look, translation and format.",
+      "Everything the congregation sees is set up behind this button. Let us open it.",
   },
   {
-    at: "displays",
+    open: "displays",
+    at: "output-row",
+    desk: "scripture",
+    group: "The screens",
+    title: "One row per output",
+    body:
+      "The projector and the second display are always here; add a row for a foyer panel, a stage display, or a feed for the stream. Open and Close put each one up and take it down.",
+  },
+  {
+    open: "displays",
+    at: "output-screen",
+    desk: "scripture",
+    group: "The screens",
+    title: "Which screen it goes to",
+    body:
+      "Any monitor this machine can see — or none at all. An output with no screen is still drawn and still sent over the network, which is exactly what a switcher in another room wants.",
+  },
+  {
+    open: "displays",
+    at: "output-look",
+    desk: "scripture",
+    group: "The screens",
+    title: "Its own look, its own Bible",
+    body:
+      "Each output can draw in a look of its own and read a translation of its own. Every screen shows the same verse at the same moment — what differs is how, and in which words.",
+  },
+  {
+    open: "displays",
+    at: "output-shape",
+    desk: "scripture",
+    group: "The screens",
+    title: "A whole screen, or furniture",
+    body:
+      "Whole screen is a projector: a background with the words on it. A shape is drawn on nothing at all, for a switcher to key over a camera. Stage display is the platform's own screen, with the timer and the note from the desk.",
+  },
+  {
+    open: "displays",
+    at: "shapes-button",
     desk: "scripture",
     group: "The screens",
     title: "Display shapes",
     body:
-      "The furniture a stream draws around the words — a band, a rule, your own logo — drawn in a studio of its own rather than chosen from somebody else's six.",
+      "The furniture a stream draws around the words — a band, a rule, your own logo — drawn in a studio of its own and kept as a library, rather than chosen from somebody else's six.",
+  },
+  {
+    open: "displays",
+    at: "output-feed",
+    desk: "scripture",
+    group: "The screens",
+    title: "On the network",
+    body:
+      "An output can be published as an NDI source for a video switcher, with a transparent background so it keys cleanly. Check the network can see it answers the only question worth asking about a feed.",
+  },
+  {
+    open: "displays",
+    at: "output-preview",
+    desk: "scripture",
+    group: "The screens",
+    title: "What each one is drawing",
+    body:
+      "Drawn by the same renderer the output itself uses, in its own look, with whatever is live in it. An output with no screen of its own can be looked at here.",
+  },
+
+  {
+    at: "looks",
+    desk: "scripture",
+    group: "Themes",
+    title: "How the words are set",
+    body:
+      "The look is the typeface, the colours, the background and the motion behind them. It has a screen of its own, which this opens.",
+  },
+  {
+    open: "looks",
+    at: "looks-grid",
+    desk: "scripture",
+    group: "Themes",
+    title: "A library of looks",
+    body:
+      "Each one drawn at the size it will be read from, with real words in it, grouped by the room it was built for — a hall with sun in it, a camera, a dark auditorium. Clicking one applies it.",
+  },
+  {
+    open: "looks",
+    at: "looks-grid",
+    desk: "scripture",
+    group: "Themes",
+    title: "Motion behind the words",
+    body:
+      "Many of them move: a slow drift, ink in water, light through glass. They are drawn rather than played from a file, so they cost nothing to keep and never pixelate on a big wall.",
+  },
+  {
+    open: "looks",
+    at: "looks-header",
+    desk: "scripture",
+    group: "Themes",
+    title: "Making one your own",
+    body:
+      "Open a look to change it: the typeface and size, where the words sit, the weight, the case, the shadow, the colours with their transparency, and whether a title shows under the words. Save it and it joins the library.",
   },
   {
     at: "looks",
     desk: "scripture",
-    group: "The screens",
-    title: "How the words are set",
+    group: "Themes",
+    title: "One look per desk",
     body:
-      "The typeface, the colours, the background and the motion behind it. Each desk keeps its own look, because a verse and a chorus are not read the same way.",
+      "Each desk keeps its own, because a verse and a chorus are not read the same way — and the wall wears the look of whichever desk put something on it.",
   },
 
   {
@@ -291,15 +398,43 @@ export const TOUR: TourStep[] = [
     group: "Before a service",
     title: "Settings",
     body:
-      "Which engine listens and on what, the Bibles installed on this machine, the voice commands, and the index that makes paraphrase matching possible.",
+      "The things a church sets once. This opens it.",
   },
   {
-    at: "settings",
+    open: "settings",
+    at: "settings-rail",
+    desk: "scripture",
+    group: "Before a service",
+    title: "What is where",
+    body:
+      "Account is the subscription and the machines on it. Scripture is what the model may suggest and how sure it must be. Audio is where the words come from. Stage is where the picture goes and who else follows it. Usage, Help and Feedback are the rest.",
+  },
+  {
+    open: "settings",
+    at: "settings-rail",
+    desk: "scripture",
+    group: "Before a service",
+    title: "Which engine listens",
+    body:
+      "Under Audio: this machine, which needs a model downloaded once and then works with no connection at all, or a Castavox subscription, which is faster and needs one. The languages each can hear are not the same, and the picker says so.",
+  },
+  {
+    open: "settings",
+    at: "settings-rail",
+    desk: "scripture",
+    group: "Before a service",
+    title: "Bibles, and what the desk may suggest",
+    body:
+      "Under Scripture: the translations installed on this machine, and the index behind paraphrase matching — how sure it must be before a passage is offered at all.",
+  },
+  {
+    open: "settings",
+    at: "settings-rail",
     desk: "scripture",
     group: "Before a service",
     title: "Castavox",
     body:
-      "Pulpitry can mirror what is live to a paired Castavox stream, so the people watching at home read the same verse as the room.",
+      "Under Stage: Pulpitry can mirror what is live to a paired Castavox stream, so the people watching at home read the same verse as the room.",
   },
   {
     desk: "scripture",

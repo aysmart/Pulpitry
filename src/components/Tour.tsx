@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 
-import { rememberTour, TOUR } from "../lib/tour";
+import { rememberTour, TOUR, type TourStep } from "../lib/tour";
 import type { Workspace } from "../lib/workspaces";
 
 /** Room for the card, and how far it sits off the thing it points at. */
@@ -21,12 +21,18 @@ const EDGE = 16;
  * cannot drift -- and the thing being learned is *where*, which a picture of
  * somewhere else cannot say.
  *
- * # It never touches anything
+ * # It changes nothing
  *
- * Every step reads. Nothing stages, nothing goes live, nothing is saved, and
- * the desk it moves to is the only change it makes -- because the first run of
- * this will be on a Sunday morning with a congregation already in the room,
- * and a tour that pressed things would be unusable exactly when it is needed.
+ * Every step reads. Nothing is staged, nothing goes live, nothing is saved. It
+ * moves between desks and opens the three screens it describes -- the outputs,
+ * the looks, the settings -- because those hold what a church sets up once and
+ * cannot be explained by pointing at the button that opens them. It presses
+ * nothing inside them, and closes them again on the way past or on the way
+ * out.
+ *
+ * That is not tidiness. The first run of this will be on a Sunday morning with
+ * a congregation already in the room, and a tour that pressed things would be
+ * unusable exactly when it is needed.
  *
  * `data-dialog`, so the window's own keyboard rules stand down while it is up:
  * Enter here means the next step, not the wall.
@@ -34,12 +40,22 @@ const EDGE = 16;
 export function Tour({
   from,
   onDesk,
+  onScreen,
   onClose,
 }: {
   /** The desk this was opened from, which is where it puts them back. */
   from: Workspace;
   /** Moves the window to the desk a step is about, before it is pointed at. */
   onDesk: (desk: Workspace) => void;
+  /**
+   * Opens one of the screens a step is about, or closes them all.
+   *
+   * Three of them are not panels on a desk -- the outputs, the looks, the
+   * settings -- and they hold most of what a church sets up once and then
+   * relies on. Pointing at the button and saying "there is a lot behind here"
+   * would leave the one part nobody can guess at undescribed.
+   */
+  onScreen: (screen: TourStep["open"] | null) => void;
   onClose: () => void;
 }) {
   const [index, setIndex] = useState(0);
@@ -63,16 +79,26 @@ export function Tour({
      * somebody on the media library, three desks from the work they stopped
      * doing to read it. An interruption should put things back.
      */
+    onScreen(null);
     onDesk(started);
     rememberTour();
     onClose();
-  }, [started, onDesk, onClose]);
+  }, [started, onDesk, onScreen, onClose]);
 
   // The desk first: a step about the song library has nothing to point at
   // until the song desk is the one on screen.
   useEffect(() => {
     if (step.desk) onDesk(step.desk);
   }, [step, onDesk]);
+
+  /*
+   * And the screen, which closes itself again on the step that does not want
+   * it -- so walking forwards out of the outputs, or stopping in the middle of
+   * them, leaves the window as it was found.
+   */
+  useEffect(() => {
+    onScreen(step.open ?? null);
+  }, [step, onScreen]);
 
   useLayoutEffect(() => {
     if (!step.at) {
@@ -94,10 +120,15 @@ export function Tour({
      * second look costs nothing and is the difference between a light on the
      * panel and a light on where the panel used to be.
      */
-    const settle = window.setTimeout(find, 80);
+    const settle = window.setTimeout(find, 90);
+    // Twice, because a screen that has just opened is also fetching what goes
+    // in it -- the looks, the translations, the outputs' own state -- and a
+    // row that arrives after the first look would be lit at the wrong height.
+    const again = window.setTimeout(find, 400);
     window.addEventListener("resize", find);
     return () => {
       window.clearTimeout(settle);
+      window.clearTimeout(again);
       window.removeEventListener("resize", find);
     };
   }, [step]);

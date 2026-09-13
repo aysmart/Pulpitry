@@ -309,6 +309,7 @@ export function OutputsPanel({
         return (
           <div
             key={output.id}
+            data-tour="output-row"
             className="flex gap-3 rounded border border-pulpitry-line p-3"
           >
             <div className="flex min-w-0 flex-1 flex-col gap-2.5">
@@ -386,7 +387,10 @@ export function OutputsPanel({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <label className="flex min-w-[9rem] flex-1 flex-col gap-1">
+                <label
+                  data-tour="output-look"
+                  className="flex min-w-[9rem] flex-1 flex-col gap-1"
+                >
                   <span className="text-[11px] text-pulpitry-muted">Look</span>
                   <select
                     value={output.template}
@@ -424,7 +428,10 @@ export function OutputsPanel({
                   </select>
                 </label>
 
-                <label className="flex min-w-[9rem] flex-1 flex-col gap-1">
+                <label
+                  data-tour="output-screen"
+                  className="flex min-w-[9rem] flex-1 flex-col gap-1"
+                >
                   <span className="text-[11px] text-pulpitry-muted">Screen</span>
                   <select
                     value={output.display === null ? "" : String(output.display)}
@@ -453,7 +460,10 @@ export function OutputsPanel({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <label className="flex min-w-[11rem] flex-1 flex-col gap-1">
+                <label
+                  data-tour="output-shape"
+                  className="flex min-w-[11rem] flex-1 flex-col gap-1"
+                >
                   <span className="text-[11px] text-pulpitry-muted">Shape</span>
                   <select
                     value={output.overlay || "none"}
@@ -693,7 +703,7 @@ export function OutputsPanel({
                   : "Right for a screen carrying more than a line: capitals are slower to read in a paragraph."}
               </p>
 
-              <label className="flex items-center gap-2">
+              <label data-tour="output-feed" className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={output.ndiEnabled}
@@ -741,7 +751,7 @@ export function OutputsPanel({
             {/* Beside the controls rather than under them: it is what the
                 controls are for, and an operator changing a shape should see
                 the shape change without scrolling. */}
-            <div className="hidden w-[190px] shrink-0 sm:block">
+            <div data-tour="output-preview" className="hidden w-[190px] shrink-0 sm:block">
               <OutputPreview
                 form={(output.overlay || "none") as OverlayForm}
                 theme={themeFor(output)}

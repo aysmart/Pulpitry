@@ -460,7 +460,10 @@ function Rail({
   onChoose: (id: PaneId) => void;
 }) {
   return (
-    <nav className="flex w-[164px] shrink-0 flex-col gap-0.5 border-r border-pulpitry-line py-3">
+    <nav
+      data-tour="settings-rail"
+      className="flex w-[164px] shrink-0 flex-col gap-0.5 border-r border-pulpitry-line py-3"
+    >
       {PANES.map((pane) => {
         const chosen = pane.id === active;
         return (

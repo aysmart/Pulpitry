@@ -127,6 +127,7 @@ export function OutputsDialog({
                 nothing currently uses could not otherwise be found at all. */}
             <button
               type="button"
+              data-tour="shapes-button"
               onClick={() => setShapesOpen(true)}
               title="Draw and change the furniture an output puts around the words"
               className="shrink-0 rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-1.5 text-[12px] text-pulpitry-text transition-colors hover:border-pulpitry-gold-dim hover:text-pulpitry-gold focus-visible:focus-ring"

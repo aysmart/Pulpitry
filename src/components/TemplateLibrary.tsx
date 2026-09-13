@@ -309,7 +309,10 @@ export function TemplateLibrary({
       window costs nothing.
     */
     <div data-dialog className="fixed inset-0 z-50 flex flex-col bg-pulpitry-ink">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-pulpitry-line bg-pulpitry-surface px-3">
+      <header
+        data-tour="looks-header"
+        className="flex h-14 shrink-0 items-center gap-3 border-b border-pulpitry-line bg-pulpitry-surface px-3"
+      >
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] text-pulpitry-text">Looks</span>
           {/* Which desk, because each keeps its own: choosing here sets how the
@@ -404,7 +407,7 @@ export function TemplateLibrary({
         ) : null}
 
         {TEMPLATE_GROUPS.map((group) => (
-          <section key={group} className="mb-5 last:mb-0">
+          <section key={group} data-tour="looks-grid" className="mb-5 last:mb-0">
             <p className="mb-2 text-[11px] tracking-wide text-pulpitry-muted uppercase">
               {group}
             </p>

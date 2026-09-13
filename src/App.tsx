@@ -1876,6 +1876,13 @@ export default function App() {
         <Tour
           from={workspace}
           onDesk={chooseWorkspace}
+          /* The tour opens these and closes them again; it never presses
+             anything inside one. */
+          onScreen={(screen) => {
+            setOutputsOpen(screen === "displays");
+            setLooksOpen(screen === "looks");
+            setSettingsOpen(screen === "settings");
+          }}
           onClose={() => setTourOpen(false)}
         />
       ) : null}
