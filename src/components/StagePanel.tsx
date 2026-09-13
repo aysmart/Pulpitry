@@ -375,6 +375,7 @@ export function StagePanel({
   onTakeSuggestion,
   onWind,
   onAdd,
+  own,
   theme,
   canStepBack,
   canStepForward,
@@ -493,6 +494,23 @@ export function StagePanel({
           </button>
         ) : null}
 
+        {/*
+          This desk's own list, then the service. Two lists reachable from one
+          row, so each button says which one it fills: a button that said only
+          "Add" sent a verse somebody was putting aside for ten minutes' time
+          into next Sunday's running order, and nothing on the screen said so.
+        */}
+        {own ? (
+          <button
+            type="button"
+            onClick={own.add}
+            disabled={!preview}
+            title={own.hint}
+            className={CONTROL}
+          >
+            {own.label}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onAdd}
@@ -500,7 +518,7 @@ export function StagePanel({
           title="Add what is staged to the service plan"
           className={CONTROL}
         >
-          Add
+          Add to plan
         </button>
         <button
           type="button"

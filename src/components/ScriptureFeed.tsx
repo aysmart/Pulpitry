@@ -183,8 +183,8 @@ export function ScriptureFeed({
       ) : (
         aside.length === 0 ? (
         <EmptyState>
-          Put a passage aside with Set aside, for when the preacher says they
-          will come back to it.
+          Passages you add to the queue wait here, for when the preacher says
+          they will come back to something.
         </EmptyState>
       ) : (
         <ol className="flex flex-col p-1">

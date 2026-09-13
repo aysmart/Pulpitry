@@ -1469,8 +1469,8 @@ export default function App() {
             own={
               shape.feed
                 ? {
-                    label: "Set aside",
-                    hint: "Keep it to hand for later in this service, in the Queue",
+                    label: "Add to queue",
+                    hint: "Keep it to hand for later in this service — it waits in the Queue beside the history",
                     add: () => preview && aside.add(preview),
                   }
                 : undefined
