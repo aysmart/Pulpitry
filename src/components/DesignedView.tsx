@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 import {
@@ -8,6 +9,7 @@ import {
   type ShapeKind,
   type SlideElement,
   type TableElement,
+  type TextElement,
   type Typeset,
 } from "../lib/design";
 import {
@@ -262,6 +264,12 @@ function Drawn({
     );
   }
 
+  // A hole the service drops words into, rather than words somebody typed and
+  // could see: it is sized to the box instead of the box to it.
+  if (element.kind === "text" && element.slot) {
+    return <SlotText element={element} theme={theme} />;
+  }
+
   const style = typeStyle(element, theme);
 
   return (
@@ -285,6 +293,149 @@ function Drawn({
           {cased(element.text, element.textCase)}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * How small a slot's words may be set before the box wins and clips.
+ *
+ * A share of the size the shape was drawn at rather than a fixed number: a
+ * caption designed at 30 and a lower third designed at 68 are different
+ * decisions about how this church's screen reads, and shrinking both to the
+ * same floor would throw one of them away. A quarter is far enough to take a
+ * whole psalm into a band built for one line, and near enough the drawn size
+ * that what is on the wall is still recognisably the shape somebody made.
+ */
+const SLOT_FLOOR = 0.25;
+
+/**
+ * A slot's words, set as large as its box will hold.
+ *
+ * # Why this one is measured and the rest are not
+ *
+ * Every other element in a design was typed by the person who drew it, in front
+ * of the box it sits in: if it is too big they can see that and make it
+ * smaller, and quietly resizing what they chose would be overruling them.
+ *
+ * A slot is the opposite. Nobody has seen what goes in it -- it is whatever is
+ * live at that moment, one line of a chorus or the whole of Genesis 1:26 -- and
+ * the size in the file is the designer's wish for the short case. Left alone it
+ * spills out of the band, over the camera, off the bottom of the frame, and the
+ * words a congregation is reading are the ones lost at the edge.
+ *
+ * So the box is fixed and the type gives way: the largest size that fits, found
+ * by measuring, because whether words fit depends on the typeface, the width
+ * and where the lines break, and none of that can be counted from characters.
+ *
+ * # Why it is binary search and not a loop that steps down
+ *
+ * Each try costs a layout. Ten tries land within a thousandth of the answer
+ * whatever the range, where stepping down by a point can take fifty for a long
+ * verse in a small band -- at which point a wall full of words takes a visible
+ * moment to settle.
+ */
+function SlotText({
+  element,
+  theme,
+}: {
+  element: TextElement;
+  theme: ProjectorTheme;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const words = useRef<HTMLParagraphElement>(null);
+  const text = cased(element.text, element.textCase);
+  // Authored in the 1920-wide frame, drawn as a share of whatever the frame
+  // happens to be: the same arithmetic as `typeStyle`, held here because this
+  // one is searched over rather than set once.
+  const drawn = (element.size / CANVAS.width) * 100;
+
+  useLayoutEffect(() => {
+    const node = box.current;
+    const line = words.current;
+    if (!node || !line) return;
+
+    const apply = (size: number) =>
+      node.style.setProperty("--slot", `${size.toFixed(3)}cqw`);
+    /*
+     * The words' own height against the hole's, and not `scrollHeight`.
+     *
+     * A flex column only scrolls downwards: words ranged to the bottom of their
+     * box overflow off the *top*, where `scrollHeight` cannot see them and
+     * reports a perfect fit while a verse runs up over the camera. Every
+     * citation slot is ranged to the bottom, so that is not a corner case.
+     *
+     * Half a pixel of slack: a box and its contents can round apart, and
+     * shrinking a line that already fits is worse than the rounding.
+     */
+    const fits = () =>
+      line.getBoundingClientRect().height <= node.clientHeight + 0.5;
+
+    const fit = () => {
+      apply(drawn);
+      if (fits()) return;
+
+      const floor = drawn * SLOT_FLOOR;
+      let low = floor;
+      let high = drawn;
+      let best = floor;
+      for (let i = 0; i < 10; i += 1) {
+        const mid = (low + high) / 2;
+        apply(mid);
+        if (fits()) {
+          best = mid;
+          low = mid;
+        } else {
+          high = mid;
+        }
+      }
+      apply(best);
+    };
+
+    fit();
+
+    // The same design is drawn at a dozen sizes -- a thumbnail, a preview pane,
+    // a wall -- and `cqw` keeps the proportions but not the line breaks, which
+    // depend on the real width. So it is measured again whenever the box
+    // changes size, not only when the words change.
+    const observer = new ResizeObserver(fit);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [
+    drawn,
+    text,
+    element.font,
+    element.lineHeight,
+    element.letterSpacing,
+    element.weight,
+    theme.fontFamily,
+  ]);
+
+  return (
+    <div
+      ref={box}
+      // Clipped, because the floor is a floor: a reading long enough to defeat
+      // even the smallest size stops at the edge of the band it was given
+      // rather than running across a camera shot.
+      className="flex h-full w-full flex-col overflow-hidden"
+      style={{
+        justifyContent: PLACE[element.vertical],
+        // The fallback is what it was drawn at, so the first paint is the
+        // designer's size and the measurement only ever takes it down.
+        ["--slot" as string]: `${drawn.toFixed(3)}cqw`,
+      }}
+    >
+      <p
+        ref={words}
+        // `anywhere` as well as the operator's own breaks: a single unbroken
+        // word longer than the box -- a hyphenated compound, a URL in a notice
+        // -- has nowhere to wrap and would run out of the side of the band
+        // however small the type were set.
+        className="whitespace-pre-wrap [overflow-wrap:anywhere]"
+        style={{ ...typeStyle(element, theme), fontSize: "var(--slot)" }}
+      >
+        {text}
+      </p>
     </div>
   );
 }
