@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { catalogList, catalogRemove, catalogSave, newItem, type Item } from "../lib/catalog";
 import {
@@ -13,6 +13,7 @@ import { presentableFor } from "../lib/schedule";
 import type { ProjectorTheme } from "../lib/theme";
 import type { Presentable } from "../lib/usePresentation";
 import { EmptyState } from "./Panel";
+import { useKeepInView } from "../lib/useKeepInView";
 import { SlideCanvas } from "./SlideCanvas";
 
 const FIELD =
@@ -154,6 +155,14 @@ export function SlideLibrary({
   onError: (message: string) => void;
 }) {
   const [slides, setSlides] = useState<Item[]>([]);
+  const scroller = useRef<HTMLDivElement>(null);
+  /*
+   * What is staged and what is live, kept in view as they move -- from the
+   * plan, a voice command -- rather than marked below the fold. See
+   * lib/useKeepInView.ts.
+   */
+  useKeepInView(scroller, "live", liveKey);
+  useKeepInView(scroller, "preview", previewKey);
   const [shelf, setShelf] = useState<Shelf>("all");
   const [query, setQuery] = useState("");
   /** The deck open in the designer, if any. */
@@ -501,7 +510,7 @@ export function SlideLibrary({
       {found === 0 && needle ? (
         <EmptyState>Nothing in the library matches “{query}”.</EmptyState>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto p-2">
+        <div ref={scroller} className="min-h-0 flex-1 overflow-auto p-2">
           {showMine ? (
             <>
               {shelf === "all" && templates.length > 0 ? (
@@ -555,6 +564,8 @@ export function SlideLibrary({
                   return (
                     <div
                       key={item.id}
+                      data-live={state === "live"}
+                      data-preview={state === "preview"}
                       className="group relative flex flex-col gap-1"
                     >
                       <button

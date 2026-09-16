@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { useKeepInView } from "../lib/useKeepInView";
 import type { PlanEntry } from "../lib/catalog";
 import { EmptyState } from "./Panel";
 
@@ -40,6 +42,13 @@ export function QueueRail({
   /** What is on screen, so the entry matching it can be marked. */
   activeLabel: string | null;
 }) {
+  /*
+   * The selection kept in view as it moves from outside this list -- Next, a
+   * voice command, a step, a detection -- rather than marked below the fold.
+   * See lib/useKeepInView.ts.
+   */
+  const list = useRef<HTMLOListElement>(null);
+  useKeepInView(list, "live", activeLabel);
   if (entries.length === 0) {
     return (
       <EmptyState>
@@ -51,7 +60,7 @@ export function QueueRail({
   }
 
   return (
-    <ol className="flex flex-col gap-1 p-1">
+    <ol ref={list} className="flex flex-col gap-1 p-1">
       {entries.map((entry, index) => {
         /*
          * Matched on the label rather than an id, because a plan entry holds a
@@ -76,6 +85,7 @@ export function QueueRail({
           >
             <button
               type="button"
+              data-live={isLive}
               onClick={() => onStage(index)}
               onDoubleClick={() => onStage(index, true)}
               title="Click to stage, double-click to put it on screen"

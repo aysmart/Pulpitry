@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { useKeepInView } from "../lib/useKeepInView";
 import { componentText, type LiveBody } from "../lib/projector";
 import type { SongSection } from "../lib/catalog";
 import { elementsText, type Background } from "../lib/design";
@@ -82,6 +84,14 @@ export function DeckStrip({
   onSelect: (index: number, andShow?: boolean) => void;
 }) {
   /*
+   * The selection kept in view as it moves from outside this list -- Next, a
+   * voice command, a step, a detection -- rather than marked below the fold.
+   * See lib/useKeepInView.ts.
+   */
+  const strip = useRef<HTMLDivElement>(null);
+  useKeepInView(strip, "live", liveKey);
+  useKeepInView(strip, "preview", deck ? keyOf(deck) : null);
+  /*
    * A deck, and not a song that happens to share its shape.
    *
    * A song staged while the operator was on the slide desk appeared here as a
@@ -120,7 +130,7 @@ export function DeckStrip({
          * near the end" moves in one direction to find it. A wrapping grid puts
          * it somewhere that depends on the width of the window.
          */
-        <div className="flex h-full min-h-0 items-start gap-2 overflow-x-auto p-2">
+        <div ref={strip} className="flex h-full min-h-0 items-start gap-2 overflow-x-auto p-2">
           {sections.map((section, index) => {
             const at = { ...deck, index };
             const isLive = keyOf(at) === liveKey;
@@ -131,6 +141,8 @@ export function DeckStrip({
               <button
                 key={`${section.label}-${index}`}
                 type="button"
+                data-live={isLive}
+                data-preview={isStaged}
                 onClick={() => onSelect(index)}
                 onDoubleClick={() => onSelect(index, true)}
                 title={`${section.label || `Slide ${index + 1}`} — ${words} ${

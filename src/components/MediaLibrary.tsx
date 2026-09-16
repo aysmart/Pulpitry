@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 import { catalogList, catalogRemove, catalogSave, type Item } from "../lib/catalog";
@@ -6,6 +6,7 @@ import { importAssets } from "../lib/pictures";
 import { presentableFor } from "../lib/schedule";
 import type { Presentable } from "../lib/usePresentation";
 import { EmptyState } from "./Panel";
+import { useKeepInView } from "../lib/useKeepInView";
 
 const VIEW_KEY = "pulpitry.media.view";
 
@@ -45,6 +46,14 @@ export function MediaLibrary({
   const [filter, setFilter] = useState<Filter>("image");
   const [view, setView] = useState<View>(storedView);
   const [busy, setBusy] = useState(false);
+  const scroller = useRef<HTMLDivElement & HTMLUListElement>(null);
+  /*
+   * What is staged and what is live, kept in view as they move -- from the
+   * plan, a voice command, a step -- rather than marked below the fold. See
+   * lib/useKeepInView.ts.
+   */
+  useKeepInView(scroller, "live", liveKey);
+  useKeepInView(scroller, "preview", previewKey);
 
   const fail = useCallback(
     (err: unknown) => onError(err instanceof Error ? err.message : String(err)),
@@ -196,12 +205,14 @@ export function MediaLibrary({
             : "No clips yet. Press Add to bring some in — they stay where they are on disk."}
         </EmptyState>
       ) : view === "thumbnails" ? (
-        <div className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] content-start gap-1.5 overflow-auto p-2">
+        <div ref={scroller} className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] content-start gap-1.5 overflow-auto p-2">
           {items.map((item) => {
             const state = stateOf(item);
             return (
               <div
                 key={item.id}
+                data-live={state === "live"}
+                data-preview={state === "preview"}
                 className={`group relative aspect-video overflow-hidden rounded border transition-colors ${
                   state === "live"
                     ? "border-pulpitry-gold"
@@ -291,11 +302,16 @@ export function MediaLibrary({
           })}
         </div>
       ) : (
-        <ul className="min-h-0 flex-1 overflow-auto p-1">
+        <ul ref={scroller} className="min-h-0 flex-1 overflow-auto p-1">
           {items.map((item) => {
             const state = stateOf(item);
             return (
-              <li key={item.id} className="flex items-center gap-1">
+              <li
+                key={item.id}
+                data-live={state === "live"}
+                data-preview={state === "preview"}
+                className="flex items-center gap-1"
+              >
                 <button
                   type="button"
                   onClick={() => choose(item)}

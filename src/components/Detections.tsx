@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { useKeepInView } from "../lib/useKeepInView";
 import { formatReference, type Verse } from "../lib/bible";
 import type { Detection } from "../lib/useDetections";
 import type { SpokenReference } from "../lib/useSpokenReferences";
@@ -75,6 +77,14 @@ export function Detections({
   index: IndexStatus;
   assistEnabled: boolean;
 }) {
+  /*
+   * The selection kept in view as it moves from outside this list -- Next, a
+   * voice command, a step, a detection -- rather than marked below the fold.
+   * See lib/useKeepInView.ts.
+   */
+  const list = useRef<HTMLDivElement>(null);
+  useKeepInView(list, "live", liveVerseId);
+  useKeepInView(list, "preview", previewVerseId);
   const rows: Row[] = [
     ...references.map((reference) => ({
       kind: "announced" as const,
@@ -142,7 +152,7 @@ export function Detections({
   }
 
   return (
-    <div className="flex flex-col gap-1 p-1">
+    <div ref={list} className="flex flex-col gap-1 p-1">
       {rows.map((row) => {
         const isLive = row.verse.id === liveVerseId;
         const isPreview = row.verse.id === previewVerseId;
@@ -152,6 +162,8 @@ export function Detections({
           <button
             key={row.key}
             type="button"
+            data-live={isLive}
+            data-preview={isPreview}
             onClick={() => onPreview(row.verse)}
             onDoubleClick={() => onPreview(row.verse, true)}
             className={`flex w-full flex-col gap-1 rounded border px-2.5 py-2 text-left transition-colors focus-visible:focus-ring ${

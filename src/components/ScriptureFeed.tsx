@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { useKeepInView } from "../lib/useKeepInView";
 
 import {
   presentableLabel,
@@ -71,6 +72,14 @@ export function ScriptureFeed({
   liveKey: string | null;
 }) {
   const [feed, setFeed] = useState<Feed>("history");
+  /*
+   * The selection kept in view as it moves from outside this list -- Next, a
+   * voice command, a step, a detection -- rather than marked below the fold.
+   * See lib/useKeepInView.ts.
+   */
+  const list = useRef<HTMLOListElement>(null);
+  useKeepInView(list, "live", liveKey ? `${liveKey}@${feed}` : null);
+  useKeepInView(list, "preview", previewKey ? `${previewKey}@${feed}` : null);
 
   const verses = history.filter((shown) => shown.item.kind === "scripture");
   const counts: Record<Feed, number> = {
@@ -140,7 +149,7 @@ export function ScriptureFeed({
             Verses you put on the screen collect here, newest first.
           </EmptyState>
         ) : (
-          <ol className="flex flex-col p-1">
+          <ol ref={list} className="flex flex-col p-1">
             {verses.map((shown) => {
               const key = keyOf(shown.item);
               const isLive = key === liveKey;
@@ -149,6 +158,8 @@ export function ScriptureFeed({
                 <li key={`${key}-${shown.at}`}>
                   <button
                     type="button"
+                    data-live={isLive}
+                    data-preview={isPreview}
                     onClick={() => onPreviewItem(shown.item)}
                     onDoubleClick={() => onPreviewItem(shown.item, true)}
                     title="Click to stage it again, double-click to put it back on screen"
@@ -188,7 +199,7 @@ export function ScriptureFeed({
           they will come back to something.
         </EmptyState>
       ) : (
-        <ol className="flex flex-col p-1">
+        <ol ref={list} className="flex flex-col p-1">
           {aside.map((item, index) => {
             const key = keyOf(item);
             const isLive = key === liveKey;
@@ -201,6 +212,8 @@ export function ScriptureFeed({
               <li key={`${key}-${index}`} className="group flex items-stretch gap-1">
                 <button
                   type="button"
+                  data-live={isLive}
+                  data-preview={isPreview}
                   onClick={() => onPreviewItem(item)}
                   onDoubleClick={() => onPreviewItem(item, true)}
                   title="Click to stage it, double-click to put it on screen"

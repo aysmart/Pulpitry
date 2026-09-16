@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { useKeepInView } from "../lib/useKeepInView";
 
 import type { Item, PlanEntry } from "../lib/catalog";
 import type { Presentable } from "../lib/usePresentation";
@@ -64,6 +65,13 @@ export function SchedulePanel({
   // Where the operator is in the plan. Local because it means "what I last
   // put up from this list", which no other part of the app can know.
   const [active, setActive] = useState<number | null>(null);
+  /*
+   * The selection kept in view as it moves from outside this list -- Next, a
+   * voice command, a step, a detection -- rather than marked below the fold.
+   * See lib/useKeepInView.ts.
+   */
+  const list = useRef<HTMLOListElement>(null);
+  useKeepInView(list, "selected", active);
   const [missing, setMissing] = useState<number[]>([]);
 
   // Headings structure the plan without being steps in it, so they take no
@@ -147,14 +155,14 @@ export function SchedulePanel({
             sessions, so Sunday’s plan can be made on Saturday.
           </EmptyState>
         ) : (
-          <ol className="flex flex-col">
+          <ol ref={list} className="flex flex-col">
             {entries.map((entry, index) => {
               const note = entry.body.kind === "note";
               const isActive = active === index;
               const lost = missing.includes(index);
 
               return (
-                <li key={index} className="flex items-center gap-1">
+                <li key={index} data-selected={isActive} className="flex items-center gap-1">
                   {note ? (
                     // A heading structures the plan rather than being part of
                     // it, so it is editable in place and never stages.

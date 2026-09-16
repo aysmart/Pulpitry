@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   catalogList,
@@ -18,6 +18,7 @@ import { parseSections, screensOf } from "../lib/lyrics";
 import { presentableFor } from "../lib/schedule";
 import type { Presentable } from "../lib/usePresentation";
 import { EmptyState } from "./Panel";
+import { useKeepInView } from "../lib/useKeepInView";
 import { SongEditor } from "./SongEditor";
 import { SongImport } from "./SongImport";
 
@@ -149,6 +150,8 @@ function SongSections({
           <li key={index}>
             <button
               type="button"
+              data-live={state === "live"}
+              data-preview={state === "preview"}
               onClick={() => onPreview(item)}
               onDoubleClick={() => onPreview(item, true)}
               title="Click to stage, double-click to put it on screen"
@@ -212,6 +215,15 @@ export function SongLibrary({
   const [songs, setSongs] = useState<Item[]>([]);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Item | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  /*
+   * What is staged and what is live, kept in view as they move -- from the
+   * plan, a voice command, a step -- rather than marked below the fold. See
+   * lib/useKeepInView.ts.
+   */
+  useKeepInView(scroller, "live", liveKey);
+  useKeepInView(scroller, "preview", previewKey);
+  useKeepInView(scroller, "selected", selected?.id ?? null);
   const [editing, setEditing] = useState<{
     title: string;
     subtitle: string;
@@ -342,12 +354,12 @@ export function SongLibrary({
             : "No songs yet. Press Import to bring a library over from EasyWorship, OpenLP or OpenSong, or New to add one — paste the lyrics and blank lines will split them into slides."}
         </EmptyState>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div ref={scroller} className="min-h-0 flex-1 overflow-auto">
           <ul className="flex flex-col p-1">
             {songs.map((song) => {
               const open = selected?.id === song.id;
               return (
-                <li key={song.id}>
+                <li key={song.id} data-selected={open}>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"

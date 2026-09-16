@@ -11,6 +11,7 @@ import {
   type Verse,
 } from "../lib/bible";
 import { describeError } from "../lib/api";
+import { useKeepInView } from "../lib/useKeepInView";
 import type { IndexStatus } from "../lib/useSemanticIndex";
 
 /**
@@ -267,6 +268,17 @@ export function ChapterNavigator({
 
   const rows = results ?? verses;
 
+  /*
+   * The verse on the wall, and the one staged, kept in view as they move.
+   *
+   * Next verse, a voice command and a detection all move them from outside
+   * this list. Keyed on the first row as well, so a step into the next chapter
+   * scrolls once that chapter's rows exist rather than before.
+   */
+  const shown = rows[0]?.id ?? "";
+  useKeepInView(listRef, "live", liveVerseIds.length ? `${liveVerseIds.join(",")}@${shown}` : null);
+  useKeepInView(listRef, "preview", previewVerseIds.length ? `${previewVerseIds.join(",")}@${shown}` : null);
+
   /**
    * Plain click stages one verse; shift-click extends from the last plain
    * click to here, which is how a preacher reads a passage rather than a line.
@@ -495,6 +507,8 @@ export function ChapterNavigator({
               key={verse.id}
               type="button"
               data-verse={verse.verse}
+              data-live={isLive}
+              data-preview={isPreview}
               onClick={(event) => choose(verse, event.shiftKey)}
               onDoubleClick={() => onPreview(verse, true)}
               className={`flex w-full gap-2 rounded px-2 py-1.5 text-left transition-colors focus-visible:focus-ring ${

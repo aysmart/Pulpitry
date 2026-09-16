@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
+import { useKeepInView } from "../lib/useKeepInView";
 
 import { describeError } from "../lib/api";
 import {
@@ -110,6 +111,13 @@ export function SongFinderPanel({
   };
 
   const [query, setQuery] = useState("");
+  /*
+   * The selection kept in view as it moves from outside this list -- Next, a
+   * voice command, a step, a detection -- rather than marked below the fold.
+   * See lib/useKeepInView.ts.
+   */
+  const results = useRef<HTMLDivElement>(null);
+  useKeepInView(results, "selected", chosen);
   const [hits, setHits] = useState<SongFinderHit[] | null>(null);
   const [looking, setLooking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -341,7 +349,7 @@ export function SongFinderPanel({
             </p>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-auto p-1">
+          <div ref={results} className="min-h-0 flex-1 overflow-auto p-1">
             {!hits && !looking && !error ? (
               <EmptyState>
                 Describe it. A line you half-remember, what the chorus is
@@ -368,6 +376,7 @@ export function SongFinderPanel({
               <button
                 key={hit.id}
                 type="button"
+                data-selected={hit.id === chosen}
                 onClick={() => onChoose(hit)}
                 title="Look at it before adding it"
                 className={`w-full rounded border px-2 py-1.5 text-left transition-colors focus-visible:focus-ring ${

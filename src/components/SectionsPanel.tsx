@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { useKeepInView } from "../lib/useKeepInView";
 import {
   LINE_CHOICES,
   storedLines,
@@ -43,6 +45,14 @@ export function SectionsPanel({
   onLinesChange: (lines: LinesPerScreen) => void;
 }) {
   /*
+   * The selection kept in view as it moves from outside this list -- Next, a
+   * voice command, a step, a detection -- rather than marked below the fold.
+   * See lib/useKeepInView.ts.
+   */
+  const list = useRef<HTMLOListElement>(null);
+  useKeepInView(list, "live", liveKey);
+  useKeepInView(list, "preview", song ? keyOf(song) : null);
+  /*
    * A song, and not a deck that shares its shape. A deck's slides belong to
    * the slide desk's strip, where they are drawn; listing them here as words
    * would be the same mistake in the other direction.
@@ -85,7 +95,7 @@ export function SectionsPanel({
           Choose a song and its parts appear here, each one a press away.
         </EmptyState>
       ) : (
-        <ol className="flex flex-col gap-0.5 p-1">
+        <ol ref={list} className="flex flex-col gap-0.5 p-1">
           {sections.map((section, index) => {
             const at = { ...song, index };
             const isLive = keyOf(at) === liveKey;
@@ -94,6 +104,8 @@ export function SectionsPanel({
               <li key={`${section.label}-${index}`}>
                 <button
                   type="button"
+                  data-live={isLive}
+                  data-preview={isStaged}
                   onClick={() => onSelect(index)}
                   onDoubleClick={() => onSelect(index, true)}
                   title="Click to stage, double-click to put it on screen"
