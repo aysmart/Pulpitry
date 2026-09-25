@@ -277,6 +277,82 @@ fn keep_painting(window: &tauri::WebviewWindow) {
     }
 }
 
+/**
+ * Where a window with no screen belongs, in physical pixels.
+ *
+ * Past the left edge of the leftmost monitor, far enough that none of it
+ * overlaps: drawn and captured, on no screen, seen by nobody.
+ *
+ * Physical throughout, because that is the only space the answer is unambiguous
+ * in. A monitor reports itself in physical pixels and a window is built in
+ * logical ones, so a Retina Mac has two coordinate systems at two scales, and
+ * the park was computed by subtracting one from the other. It came out
+ * off-screen anyway -- twice as far out as intended, which hid the mistake.
+ */
+fn parking_space(window: &tauri::WebviewWindow) -> Option<tauri::PhysicalPosition<i32>> {
+    let monitors = window.available_monitors().ok()?;
+    let (left, top) = monitors
+        .iter()
+        .map(|monitor| (monitor.position().x, monitor.position().y))
+        .reduce(|a, b| (a.0.min(b.0), a.1.min(b.1)))?;
+
+    let width = window.outer_size().map(|size| size.width as i32).unwrap_or(1920);
+    let clear = (PAST_THE_EDGE * window.scale_factor().unwrap_or(1.0)) as i32;
+    Some(tauri::PhysicalPosition::new(left - width - clear, top))
+}
+
+/// Whether any part of the window is on a monitor.
+fn on_a_screen(window: &tauri::WebviewWindow) -> bool {
+    let (Ok(at), Ok(size), Ok(monitors)) =
+        (window.outer_position(), window.outer_size(), window.available_monitors())
+    else {
+        return false;
+    };
+
+    monitors.iter().any(|monitor| {
+        let corner = monitor.position();
+        let of = monitor.size();
+        at.x < corner.x + of.width as i32
+            && at.x + size.width as i32 > corner.x
+            && at.y < corner.y + of.height as i32
+            && at.y + size.height as i32 > corner.y
+    })
+}
+
+/**
+ * Keeps an output with no screen off every screen, for as long as it is open.
+ *
+ * Parking a window is not the same as it staying parked. macOS moves windows it
+ * considers off-screen back onto a valid one whenever the arrangement changes
+ * -- a monitor unplugged, a projector waking, a resolution change, sometimes a
+ * sleep -- and what it rescues is an output meant for a switcher, landing on
+ * the one screen the operator is working on. They reported exactly that.
+ *
+ * So the window says when it has been moved, and if it has been moved onto a
+ * screen it goes straight back out. Only then: a park that fired on every move
+ * would fight itself, since setting the position is a move.
+ */
+fn keep_parked(window: &tauri::WebviewWindow) {
+    let watched = window.clone();
+    window.on_window_event(move |event| {
+        if !matches!(event, tauri::WindowEvent::Moved(_)) {
+            return;
+        }
+        if !on_a_screen(&watched) {
+            return;
+        }
+        if let Some(back) = parking_space(&watched) {
+            crate::log_line!(
+                "[projector] {} was moved onto a screen; parking it again at {},{}",
+                watched.label(),
+                back.x,
+                back.y
+            );
+            let _ = watched.set_position(back);
+        }
+    });
+}
+
 /// What the platform sees, and only the platform.
 ///
 /// # Why this is not the congregation's screen with extras on it
@@ -928,8 +1004,30 @@ impl Projector {
         // just as occluded, and its network feed would freeze just the same.
         #[cfg(target_os = "macos")]
         keep_painting(&window);
-        #[cfg(not(target_os = "macos"))]
-        let _ = window;
+
+        /*
+         * Parked in physical pixels, once the window exists and can be measured.
+         *
+         * The builder places it in logical ones against a monitor measured in
+         * physical: off-screen either way on the arrangements we had, and wrong
+         * arithmetic on any of them. Now it is put where it belongs by its own
+         * size, and kept there.
+         */
+        if landed.is_none() {
+            if let Some(space) = parking_space(&window) {
+                let _ = window.set_position(space);
+            }
+            if let Ok(at) = window.outer_position() {
+                crate::log_line!(
+                    "[projector] {} has no screen; parked at {},{}{}",
+                    label,
+                    at.x,
+                    at.y,
+                    if on_a_screen(&window) { " -- which is on a screen" } else { "" }
+                );
+            }
+            keep_parked(&window);
+        }
 
         self.windows.lock().insert(id.to_string(), landed);
         self.keyable.lock().insert(id.to_string(), overlay);
@@ -959,8 +1057,14 @@ impl Projector {
             let _ = window.set_position(tauri::PhysicalPosition::new(position.0, position.1));
             let _ = window.set_size(tauri::PhysicalSize::new(extent.0, extent.1));
         } else {
-            let _ = window.set_position(tauri::LogicalPosition::new(position.0, position.1));
+            // The size in the units it was built in; the position in physical
+            // ones, where a monitor's own edges are stated. See `parking_space`.
             let _ = window.set_size(tauri::LogicalSize::new(extent.0, extent.1));
+            if let Some(space) = parking_space(window) {
+                let _ = window.set_position(space);
+            } else {
+                let _ = window.set_position(tauri::LogicalPosition::new(position.0, position.1));
+            }
         }
         let _ = window.set_skip_taskbar(landed.is_none());
         // Not focused when it has no screen: taking the operator's focus to
@@ -1021,6 +1125,30 @@ impl Projector {
         }
         self.windows.lock().remove(id);
         self.keyable.lock().remove(id);
+    }
+
+    /**
+     * Every congregation-facing window, closed.
+     *
+     * For quitting. A church that closes the desk has finished, and a projector
+     * that outlived it is a wall nobody at the machine can reach any more --
+     * the desk is gone, and with it every control that could take it down.
+     *
+     * Asked of the windows rather than of what we remember, and by label rather
+     * than by id, because an output removed from the settings while its window
+     * was open is exactly the one that would be left behind.
+     */
+    pub fn close_all(&self) {
+        for window in self.app.webview_windows().values() {
+            if window.label() == OPERATOR_LABEL {
+                continue;
+            }
+            let _ = window.close();
+        }
+        self.windows.lock().clear();
+        self.keyable.lock().clear();
+        *self.display.lock() = None;
+        *self.second.lock() = None;
     }
 
     /// Whether an output's window is open.
