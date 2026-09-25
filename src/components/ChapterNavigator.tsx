@@ -203,7 +203,7 @@ export function ChapterNavigator({
   const currentBook = books.find((book) => book.number === bookNumber);
 
   const submit = useCallback(
-    async (event: React.FormEvent) => {
+    async (event: React.FormEvent, andShow = false) => {
       event.preventDefault();
       const text = query.trim();
       if (!text) {
@@ -253,8 +253,8 @@ export function ChapterNavigator({
             const passage = chapterVerses.filter(
               (item) => item.verse >= reference.verse! && item.verse <= last,
             );
-            if (passage.length > 1) onPreviewRange(passage);
-            else if (passage[0]) onPreview(passage[0]);
+            if (passage.length > 1) onPreviewRange(passage, andShow);
+            else if (passage[0]) onPreview(passage[0], andShow);
           }
           return;
         }
@@ -379,7 +379,7 @@ export function ChapterNavigator({
         </div>
 
         <form
-          onSubmit={submit}
+          onSubmit={(event) => void submit(event)}
           data-tour="bible"
           className="mt-1.5 flex gap-1.5"
         >
@@ -393,7 +393,18 @@ export function ChapterNavigator({
               anything by it: a service being renamed, a song being looked for.
               See the Enter handler in App.
             */
+            data-search
             data-stages
+            /*
+              Enter stages what was typed; the same press with the command or
+              control key puts it up. A reading is announced and the desk has
+              four seconds: this is that, in one press rather than three.
+            */
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey))
+                return;
+              void submit(event, true);
+            }}
             /* The terse form first, because it is the one worth knowing: an
                operator with a reading announced and four seconds types it the
                way it was said. The colon still works and always did. */

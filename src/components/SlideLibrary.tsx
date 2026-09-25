@@ -467,6 +467,7 @@ export function SlideLibrary({
         <input
           value={query}
           spellCheck={false}
+          data-search
           placeholder="Search decks, templates and slide text…"
           aria-label="Search the slide library"
           onChange={(event) => setQuery(event.target.value)}

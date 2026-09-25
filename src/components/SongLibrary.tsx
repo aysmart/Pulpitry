@@ -320,6 +320,7 @@ export function SongLibrary({
       <div className="flex shrink-0 gap-1.5 border-b border-pulpitry-line px-2.5 py-2">
         <input
           value={query}
+          data-search
           placeholder="Search titles and lyrics…"
           onChange={(event) => setQuery(event.target.value)}
           className={`min-w-0 flex-1 ${FIELD}`}

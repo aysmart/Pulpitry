@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, useRef } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { AboutDialog } from "./components/AboutDialog";
+import { ShortcutsSheet } from "./components/ShortcutsSheet";
 import { Tour } from "./components/Tour";
 import { HistoryDialog } from "./components/HistoryDialog";
 import { DeckStrip } from "./components/DeckStrip";
@@ -77,6 +78,7 @@ import { useUpdate } from "./lib/useUpdate";
 import { useAudio } from "./lib/useAudio";
 import { useMedia } from "./lib/useMedia";
 import { useAside } from "./lib/useAside";
+import { useShortcuts } from "./lib/shortcuts";
 import { rememberTour, tourSeen } from "./lib/tour";
 import { useSchedule } from "./lib/useSchedule";
 import { useTicker } from "./lib/useTicker";
@@ -442,6 +444,54 @@ export default function App() {
    * keeps whatever was live live: right for a spoken instruction, wrong for a
    * click somebody may have meant as a look.
    */
+  /*
+   * The keys this window answers, beyond the transport's arrows.
+   *
+   * Written as actions rather than as key names: the keys themselves are in
+   * lib/shortcuts.ts, beside the sheet that lists them, so a key cannot come
+   * to do one thing and be described as another.
+   */
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  /*
+   * What was on the screen before it was blanked.
+   *
+   * Blanking is not clearing: an operator pressing B over a prayer means "not
+   * this, for a moment", and what comes back has to be what went away. The
+   * session's history holds it -- it is the last thing that went live -- so
+   * nothing new is remembered here.
+   */
+  const blank = useCallback(() => {
+    if (live) {
+      clearLive();
+      return;
+    }
+    const last = history[0]?.item;
+    if (last) showItem(last);
+  }, [live, clearLive, history, showItem]);
+
+  useShortcuts({
+    display,
+    blank,
+    part: (nth) => chooseSection(nth - 1),
+    desk: (delta) => {
+      const at = WORKSPACE_ORDER.indexOf(workspace);
+      const next = WORKSPACE_ORDER[at + delta];
+      if (next) chooseWorkspace(next);
+    },
+    /*
+     * The desk's own search box, wherever this arrangement keeps it. Marked
+     * on the input rather than found by shape: a query selector that matched
+     * "the first text box" would land in a service's name the week somebody
+     * added one above it.
+     */
+    search: () => {
+      const box = document.querySelector<HTMLInputElement>("[data-search]");
+      box?.focus();
+      box?.select();
+    },
+    help: () => setShortcutsOpen(true),
+  });
+
   const chooseSection = useCallback(
     (index: number, andShow?: boolean) => {
       if (preview?.kind !== "lyric") return;
@@ -1899,6 +1949,10 @@ export default function App() {
       ) : null}
 
       {aboutOpen ? <AboutDialog onClose={() => setAboutOpen(false)} /> : null}
+
+      {shortcutsOpen ? (
+        <ShortcutsSheet onClose={() => setShortcutsOpen(false)} />
+      ) : null}
 
       {/* Last in the window, so it is drawn over everything it points at. */}
       {tourOpen ? (
