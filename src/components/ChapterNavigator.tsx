@@ -11,6 +11,7 @@ import {
   type Verse,
 } from "../lib/bible";
 import { describeError } from "../lib/api";
+import { ComboBox } from "./ComboBox";
 import { useKeepInView } from "../lib/useKeepInView";
 import type { IndexStatus } from "../lib/useSemanticIndex";
 
@@ -295,6 +296,30 @@ export function ChapterNavigator({
    */
   const reach = useRef<number | null>(null);
 
+  /*
+   * Books that answer to what is being typed, offered under the box.
+   *
+   * Only books, and only until a number is typed. What is worth suggesting is
+   * the part an operator half-remembers -- "Zeph", "1 Thes" -- and the moment
+   * they reach a chapter they know what they are doing. Words are never
+   * suggested: guessing at the rest of a search would be putting phrases in
+   * the mouth of somebody looking for what a preacher actually said.
+   *
+   * The chapter count comes with each, because the next keystroke is a number
+   * and this is the one moment it is useful to know there are only three.
+   */
+  const asked = query.trim();
+  const hints =
+    mode === "words" && asked.length >= 2 && !/\d/.test(asked)
+      ? books
+          .filter((book) => {
+            const plain = (text: string) =>
+              text.toLowerCase().replace(/[^a-z0-9]/g, "");
+            return plain(book.name).includes(plain(asked));
+          })
+          .slice(0, 6)
+      : [];
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
@@ -421,27 +446,22 @@ export function ChapterNavigator({
 
           <span className="flex-1" />
 
-          <select
+          <ComboBox
+            label="Translation"
             value={viewing}
-            onChange={(event) => {
+            choices={translations.map((entry) => ({
+              value: entry.id,
+              label: entry.id,
+              hint: entry.name,
+            }))}
+            onChoose={(picked) => {
               // A deliberate pick is both: it is what to read and what to
               // detect in. Only following a staged verse is view-only.
-              setViewing(event.target.value);
-              onSelectTranslation(event.target.value);
+              setViewing(picked);
+              onSelectTranslation(picked);
             }}
-            aria-label="Translation"
-            className="rounded border border-pulpitry-line bg-pulpitry-raised px-1.5 py-1.5 text-[12px] text-pulpitry-text outline-none focus-visible:focus-ring"
-          >
-            {translations.map((entry) => (
-              <option
-                key={entry.id}
-                value={entry.id}
-                title={`${entry.name} (${entry.year})`}
-              >
-                {entry.id}
-              </option>
-            ))}
-          </select>
+            className="w-[7.5rem] shrink-0"
+          />
         </div>
 
         <form
@@ -504,6 +524,35 @@ export function ChapterNavigator({
           </button>
         </form>
 
+        {hints.length > 0 ? (
+          <ul className="mt-1 flex flex-wrap gap-1">
+            {hints.map((book) => (
+              <li key={book.number}>
+                <button
+                  type="button"
+                  /* Fills the box rather than going there: the operator is
+                     mid-reference, and the next thing they type is the
+                     chapter. Taking them to chapter one would be answering a
+                     question they have not finished asking. */
+                  onClick={() => {
+                    setQuery(`${book.name} `);
+                    const box = document.querySelector<HTMLInputElement>(
+                      "[data-stages]",
+                    );
+                    box?.focus();
+                  }}
+                  className="flex items-baseline gap-1.5 rounded border border-pulpitry-line bg-pulpitry-raised px-1.5 py-0.5 text-[11.5px] text-pulpitry-text transition-colors hover:border-pulpitry-gold-dim hover:text-pulpitry-gold focus-visible:focus-ring"
+                >
+                  {book.name}
+                  <span className="text-[10.5px] text-pulpitry-muted tabular-nums">
+                    {book.chapters}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
         {/* Why the Meaning button cannot answer, when it cannot. The index is
             paraphrase matching's, so a church that has it switched off has
             nothing to search -- said here, with the fix in it. */}
@@ -523,23 +572,24 @@ export function ChapterNavigator({
         ) : null}
 
         <div className="mt-1.5 flex gap-1.5">
-          <select
-            value={bookNumber}
-            aria-label="Book"
-            onChange={(event) => {
-              setBookNumber(Number(event.target.value));
+          {/* Typed at rather than scrolled: sixty-six books in a dropdown is
+              a scrollbar dragged during a service. See ComboBox. */}
+          <ComboBox
+            label="Book"
+            value={String(bookNumber)}
+            choices={books.map((book) => ({
+              value: String(book.number),
+              label: book.name,
+              hint: `${book.chapters} ${book.chapters === 1 ? "chapter" : "chapters"}`,
+            }))}
+            onChoose={(picked) => {
+              setBookNumber(Number(picked));
               setChapter(1);
               setResults(null);
               setScores(new Map());
             }}
-            className="min-w-0 flex-1 truncate rounded border border-pulpitry-line bg-pulpitry-raised px-1.5 py-1.5 text-[12px] text-pulpitry-text outline-none focus-visible:focus-ring"
-          >
-            {books.map((book) => (
-              <option key={book.number} value={book.number}>
-                {book.name}
-              </option>
-            ))}
-          </select>
+            className="min-w-0 flex-1"
+          />
           <select
             value={chapter}
             aria-label="Chapter"
