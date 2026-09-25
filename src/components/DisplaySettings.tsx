@@ -205,6 +205,28 @@ export function DisplaySettings({
           </span>
         </label>
 
+        {/*
+          Beside the reference, because they are the same question asked twice:
+          what does the congregation need alongside the words to find their
+          place. One names the passage, the other names the lines within it.
+        */}
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={theme.showVerseNumbers}
+            onChange={(event) => set("showVerseNumbers", event.target.checked)}
+            className="h-3.5 w-3.5 accent-pulpitry-gold focus-visible:focus-ring"
+          />
+          <span className="text-[13px] text-pulpitry-text">
+            Number the verses in a passage
+          </span>
+        </label>
+        <p className="text-[11.5px] leading-snug text-pulpitry-muted">
+          {theme.showVerseNumbers
+            ? "Several verses shown together are numbered, so a congregation reading along can find the line. A single verse never is — its reference is underneath it."
+            : "Verses run together as continuous prose. Right for a wall read at a glance; harder to follow along in a Bible."}
+        </p>
+
         {theme.showReference ? (
           <>
             <div className="flex gap-3">

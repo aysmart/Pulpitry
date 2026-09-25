@@ -7,6 +7,7 @@ import type { Workspace } from "./workspaces";
 import {
   componentText,
   getLive,
+  versesAsText,
   onLive,
   setLive,
   type LiveContent,
@@ -79,9 +80,12 @@ export function currentSection(item: Presentable): SongSection | null {
   return item.kind === "lyric" ? (item.sections[item.index] ?? null) : null;
 }
 
-export function presentableText(item: Presentable): string {
+export function presentableText(item: Presentable, numbered = false): string {
   if (item.kind === "scripture")
-    return item.verses.map((verse) => verse.text).join(" ");
+    return versesAsText(
+      item.verses.map((verse) => ({ number: verse.verse, text: verse.text })),
+      numbered,
+    );
   // A slide is already written out; joining it is how a list summarises it.
   if (item.kind === "slide")
     return item.components && item.components.length > 0

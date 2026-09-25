@@ -38,6 +38,13 @@ export interface ProjectorTheme {
   /** How strongly the texture reads, 0 to 1. */
   textureStrength: number;
   showReference: boolean;
+  /**
+   * Whether a passage of several verses is numbered.
+   *
+   * A single verse is never numbered whatever this says: its reference is
+   * underneath it, and a lone number in front of the words is furniture.
+   */
+  showVerseNumbers: boolean;
 
   /* -- the reference line, which is its own piece of typography -- */
 
@@ -129,6 +136,7 @@ export const DEFAULT_THEME: ProjectorTheme = {
   texture: "none",
   textureStrength: 0.35,
   showReference: true,
+  showVerseNumbers: true,
   // Empty and 1: the reference looks exactly as it did before it was
   // adjustable, so an existing theme is unchanged by this existing.
   referenceFontFamily: "",

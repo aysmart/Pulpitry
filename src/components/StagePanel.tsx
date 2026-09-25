@@ -582,7 +582,7 @@ export function StagePanel({
         bodyClassName="relative [container-type:size]"
       >
         <Stage
-          body={live ? bodyText(live.body) : null}
+          body={live ? bodyText(live.body, theme.showVerseNumbers) : null}
           asset={liveAsset(live?.body)}
           slide={liveSlide(live?.body, theme)}
           reference={live?.caption ?? null}
@@ -719,7 +719,7 @@ export function MainOutput({
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden rounded border border-pulpitry-line [container-type:size]">
         <Stage
-          body={preview ? presentableText(preview) : null}
+          body={preview ? presentableText(preview, theme.showVerseNumbers) : null}
           asset={assetOf(preview)}
           slide={slideOf(preview, theme)}
           reference={preview ? presentableLabel(preview) : null}
@@ -785,7 +785,7 @@ export function MainOutput({
         </div>
         <div className="relative min-h-0 flex-1 overflow-hidden rounded border border-pulpitry-gold-dim/40 [container-type:size]">
           <Stage
-            body={live ? bodyText(live.body) : null}
+            body={live ? bodyText(live.body, theme.showVerseNumbers) : null}
             asset={liveAsset(live?.body)}
             slide={liveSlide(live?.body, theme)}
             reference={live?.caption ?? null}
@@ -980,7 +980,7 @@ export function PreviewPanel({
   return (
     <Panel title="Preview" tour="staged">
       <Stage
-        body={preview ? presentableText(preview) : null}
+        body={preview ? presentableText(preview, theme.showVerseNumbers) : null}
         asset={assetOf(preview)}
         slide={slideOf(preview, theme)}
         reference={preview ? presentableLabel(preview) : null}

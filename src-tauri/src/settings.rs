@@ -445,6 +445,19 @@ pub struct ProjectorTheme {
     pub texture_strength: f32,
     pub show_reference: bool,
 
+    /**
+     * Whether a passage of several verses is numbered.
+     *
+     * On, which is what the wall has always drawn, so no church's screen
+     * changes under them by this existing. Defaulted rather than required: a
+     * look saved before the field did must keep the numbering it had.
+     *
+     * A single verse is never numbered whatever this says -- its reference is
+     * underneath it, and a lone "16" in front of the words is furniture.
+     */
+    #[serde(default = "yes")]
+    pub show_verse_numbers: bool,
+
     /// Typeface for the reference line. Empty follows the scripture's.
     ///
     /// Empty rather than a copy, so a theme that never touches this keeps
@@ -548,6 +561,7 @@ impl Default for ProjectorTheme {
             texture: "none".into(),
             texture_strength: 0.35,
             show_reference: true,
+            show_verse_numbers: yes(),
             // Empty and 1.0: the reference looks exactly as it did before it
             // was adjustable, so no existing theme is changed by this existing.
             reference_font_family: String::new(),

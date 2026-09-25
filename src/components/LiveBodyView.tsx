@@ -859,7 +859,7 @@ export function LiveBodyView({
    */
   const style = textStyle(
     theme,
-    bodyText(body),
+    bodyText(body, theme.showVerseNumbers),
     unit,
     outlineScale,
     // Written text is wound rather than shrunk: it is the one kind that is
@@ -892,7 +892,7 @@ export function LiveBodyView({
             <span key={line.number}>
               {/* Verse numbers only earn their place when several are shown
                   together; a single verse already has its reference beneath. */}
-              {body.lines.length > 1 ? (
+              {theme.showVerseNumbers && body.lines.length > 1 ? (
                 <sup className="mr-[0.25em] align-super text-[0.5em] opacity-55">
                   {line.number}
                 </sup>

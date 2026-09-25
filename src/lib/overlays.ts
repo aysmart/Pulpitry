@@ -1,4 +1,4 @@
-import { laidOut, type LiveContent } from "./projector";
+import { laidOut, versesAsText, type LiveContent } from "./projector";
 import type { ProjectorTheme } from "./theme";
 
 /**
@@ -327,6 +327,7 @@ export function plainText(
       | { kind: "composed"; components: unknown[] }
       | { kind: string };
   } | null,
+  numbered = false,
 ): string | null {
   if (!content) return null;
   const body = content.body as Record<string, unknown> & { kind: string };
@@ -334,9 +335,9 @@ export function plainText(
   const said = (() => {
     switch (body.kind) {
       case "scripture":
-        return (body.lines as Array<{ text: string }>)
-          .map((line) => line.text)
-          .join(" ");
+        // Numbered where the wall numbers it: a band carrying three verses is
+        // the case where a viewer most needs to know where one ends.
+        return versesAsText(body.lines as Array<{ number: number; text: string }>, numbered);
       /*
        * A lyric keeps its breaks, and a passage does not.
        *
@@ -406,7 +407,10 @@ export function plainText(
  * drew is furniture with holes in it, so a shape with nothing to put in its
  * holes is the same bug with their own logo on it.
  */
-export function overlayWords(content: LiveContent | null): string | null {
+export function overlayWords(
+  content: LiveContent | null,
+  numbered = false,
+): string | null {
   if (!content) return null;
-  return laidOut(content.body) ? null : plainText(content);
+  return laidOut(content.body) ? null : plainText(content, numbered);
 }

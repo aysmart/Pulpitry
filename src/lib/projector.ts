@@ -427,11 +427,43 @@ export interface LiveContent {
   progress: number;
 }
 
-/** Plain text, for sizing decisions and the operator's panes. */
-export function bodyText(body: LiveBody): string {
+/**
+ * A passage as one run of words, numbered where the wall numbers it.
+ *
+ * # Why this is shared rather than written where it is needed
+ *
+ * The wall has always numbered a passage of several verses. Nothing else did:
+ * the desk's own Preview and Live panes, the stage display, and a lower third
+ * each flattened the verses into a run of words, in three separate copies of
+ * the same two lines. So the operator read one thing on their desk and the
+ * congregation read another, which is what prompted an operator to ask for
+ * numbering that was already there.
+ *
+ * One rule, one place: a single verse is never numbered -- its reference is
+ * underneath it, and a lone number in front of the words is furniture -- and
+ * whether several are is the look's to say.
+ */
+export function versesAsText(
+  lines: { number: number; text: string }[],
+  numbered: boolean,
+): string {
+  const number = numbered && lines.length > 1;
+  return lines
+    .map((line) => (number ? `${line.number} ${line.text}` : line.text))
+    .join(" ");
+}
+
+/**
+ * Plain text, for sizing decisions and the operator's panes.
+ *
+ * Numbering is off unless asked for, because most callers are measuring or
+ * summarising rather than showing: a status line that says what is live does
+ * not want verse numbers in its first eighty characters.
+ */
+export function bodyText(body: LiveBody, numbered = false): string {
   switch (body.kind) {
     case "scripture":
-      return body.lines.map((line) => line.text).join(" ");
+      return versesAsText(body.lines, numbered);
     case "lyric":
       return body.lines.join("\n");
     case "richText":
