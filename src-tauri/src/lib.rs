@@ -1211,6 +1211,20 @@ impl NdiOutputs {
         }
     }
 
+    /// Every feed, stopped. For quitting: a sender outliving the application
+    /// announces a source on the network that answers with nothing.
+    fn stop_all(&self) {
+        let gone: Vec<Running> = self
+            .running
+            .lock()
+            .map(|mut running| running.drain().map(|(_, sender)| sender).collect())
+            .unwrap_or_default();
+        drop(gone);
+        if let Ok(mut problems) = self.problems.lock() {
+            problems.clear();
+        }
+    }
+
     /// Whether an output is on the network, and if it asked to be and is not, why.
     fn state(&self, id: &str) -> (bool, Option<String>) {
         let sending = self.running.lock().map(|running| running.contains_key(id)).unwrap_or(false);
@@ -2677,10 +2691,38 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building Pulpitry")
         .run(|app, event| {
-            // Never leave the sidecar or the microphone running behind us.
+            /*
+             * The desk closing is the application closing.
+             *
+             * An output is an ordinary window, so closing the operator's left
+             * the application running with a projector on the wall and nothing
+             * to reach it from: no desk, no menu, no way to take it down short
+             * of Force Quit. A church that closes Pulpitry has finished.
+             */
+            if let tauri::RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::CloseRequested { .. },
+                ..
+            } = &event
+            {
+                if label == projector::OPERATOR_LABEL {
+                    app.exit(0);
+                }
+            }
+
+            // Never leave the sidecar, the microphone, a feed or a screen
+            // running behind us.
             if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
                 if let Some(manager) = app.try_state::<Arc<SpeechManager>>() {
                     manager.stop();
+                }
+                // The feeds first: a sender publishing a window that is about to
+                // go announces a dead source to every switcher watching for it.
+                if let Some(senders) = app.try_state::<NdiOutputs>() {
+                    senders.stop_all();
+                }
+                if let Some(projector) = app.try_state::<Arc<Projector>>() {
+                    projector.close_all();
                 }
             }
         });
