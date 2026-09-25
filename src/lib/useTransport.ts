@@ -68,6 +68,14 @@ export function useTransport({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (handsAreBusy(event)) return;
+      /*
+       * A held Shift is somebody extending a passage, not winding one.
+       *
+       * The chapter list answers Shift with the arrows by adding the verse
+       * above or below to what is staged; winding at the same time would move
+       * the screen under an operator who is still choosing what goes on it.
+       */
+      if (event.shiftKey) return;
 
       switch (event.key) {
         case "ArrowLeft":

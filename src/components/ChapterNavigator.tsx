@@ -279,6 +279,71 @@ export function ChapterNavigator({
   useKeepInView(listRef, "live", liveVerseIds.length ? `${liveVerseIds.join(",")}@${shown}` : null);
   useKeepInView(listRef, "preview", previewVerseIds.length ? `${previewVerseIds.join(",")}@${shown}` : null);
 
+  /*
+   * Shift and an arrow adds the verse above or below to what is staged.
+   *
+   * Shift-click has always extended a passage; there was no way to do it from
+   * the keyboard, and an operator asked for one. The same modifier, because it
+   * is the same act -- and Control as well, where the system leaves it alone:
+   * they asked for Control, and on macOS Control with the arrows is Mission
+   * Control's, which is not an argument this application can win.
+   *
+   * It moves the end that moved last and leaves the other where it is, so
+   * pressing back the other way gives the verse up again rather than jumping
+   * the passage somewhere new. Where the staged passage is not in this list --
+   * a different chapter, a search away -- the keys keep their own meaning.
+   */
+  const reach = useRef<number | null>(null);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+      if (!event.shiftKey && !event.ctrlKey) return;
+      if (event.metaKey || event.altKey) return;
+
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable ||
+        document.querySelector("[data-dialog]")
+      )
+        return;
+
+      const source = results ?? verses;
+      const staged = source
+        .map((verse, index) => (previewVerseIds.includes(verse.id) ? index : -1))
+        .filter((index) => index >= 0);
+      if (staged.length === 0) return;
+
+      event.preventDefault();
+      const first = staged[0]!;
+      const last = staged[staged.length - 1]!;
+
+      /*
+       * The anchor is whichever end the operator did not move last. Taken from
+       * the passage itself rather than trusted from a click that may have been
+       * chapters ago: a detection can stage something else entirely between
+       * one press and the next.
+       */
+      const held = anchor.current === last ? last : first;
+      const moving = held === first ? last : first;
+      anchor.current = held;
+
+      const wanted = (reach.current === first || reach.current === last ? reach.current : moving) +
+        (event.key === "ArrowDown" ? 1 : -1);
+      const landed = Math.min(Math.max(wanted, 0), source.length - 1);
+      reach.current = landed;
+
+      const from = Math.min(held, landed);
+      const to = Math.max(held, landed);
+      onPreviewRange(source.slice(from, to + 1));
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [results, verses, previewVerseIds, onPreviewRange]);
+
   /**
    * Plain click stages one verse; shift-click extends from the last plain
    * click to here, which is how a preacher reads a passage rather than a line.
@@ -295,6 +360,7 @@ export function ChapterNavigator({
     }
 
     anchor.current = index >= 0 ? index : null;
+    reach.current = anchor.current;
     onPreview(verse);
   };
 
