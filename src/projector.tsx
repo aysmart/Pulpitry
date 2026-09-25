@@ -368,7 +368,7 @@ function Projector() {
           stage={stage}
           theme={theme}
           reference={drawn?.caption ?? null}
-          text={plainText(drawn)}
+          text={plainText(drawn, theme.showVerseNumbers)}
           uppercase={uppercase}
           showClock={stageClock}
           showLive={stageLive}
@@ -400,7 +400,7 @@ function Projector() {
      * furniture goes too -- a band with no words in it is not an overlay, it is
      * a bar across somebody's camera.
      */
-    const words = overlayWords(drawn);
+    const words = overlayWords(drawn, theme.showVerseNumbers);
     if (!shape || !words) {
       return (
         <div
@@ -448,7 +448,7 @@ function Projector() {
           reference={drawn?.caption ?? null}
           // A slide is not words: see `overlayWords`. Nothing here means this
           // output draws nothing, which leaves the camera showing.
-          text={overlayWords(drawn)}
+          text={overlayWords(drawn, theme.showVerseNumbers)}
           uppercase={uppercase}
           captions={captions}
         />
