@@ -7,6 +7,7 @@ import { ChapterNavigator } from "./ChapterNavigator";
 import type { ProjectorTheme } from "../lib/theme";
 import type { Ticker } from "../lib/projector";
 import type { ScheduleController } from "../lib/useSchedule";
+import { ComparePanel } from "./ComparePanel";
 import { MediaLibrary } from "./MediaLibrary";
 import { SchedulePanel } from "./SchedulePanel";
 import { SlideLibrary } from "./SlideLibrary";
@@ -42,6 +43,7 @@ export function ScripturePanel({
   onPreviewItem,
   keyOf,
   previewKey,
+  staged,
   liveKey,
   theme,
   onApplyTheme,
@@ -75,6 +77,9 @@ export function ScripturePanel({
   onPreviewItem: (item: Presentable, andShow?: boolean) => void;
   keyOf: (item: Presentable) => string;
   previewKey: string | null;
+  /** What this desk has staged, for the panes that work on it rather than
+   *  on a library: Compare reads the passage in other translations. */
+  staged: Presentable | null;
   liveKey: string | null;
   theme: ProjectorTheme;
   onApplyTheme: (theme: ProjectorTheme) => void;
@@ -179,6 +184,16 @@ export function ScripturePanel({
             follow={follow}
           />
         )
+      ) : null}
+
+      {tab === "Compare" ? (
+        <ComparePanel
+          staged={staged}
+          translations={translations}
+          reading={translation}
+          onPreviewItem={onPreviewItem}
+          onError={onError}
+        />
       ) : null}
 
       {tab === "Songs" ? (

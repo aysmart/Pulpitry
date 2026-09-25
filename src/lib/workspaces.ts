@@ -54,6 +54,7 @@ export type Workspace = "scripture" | "songs" | "slides" | "media";
  */
 export type LibraryTab =
   | "Scripture"
+  | "Compare"
   | "Songs"
   | "Media"
   | "Slides"
@@ -171,7 +172,7 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
      * their own in the row above. Neither is the look -- that is in the top
      * bar, where every desk can reach it.
      */
-    tabs: ["Scripture", "Schedule"],
+    tabs: ["Scripture", "Compare", "Schedule"],
     transcript: true,
     detected: true,
     feed: true,

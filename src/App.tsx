@@ -1391,6 +1391,7 @@ export default function App() {
                 }
                 keyOf={keyOf}
                 previewKey={preview ? keyOf(preview) : null}
+                staged={preview}
                 liveKey={liveKey}
                 theme={look}
                 onApplyTheme={applyTheme}
@@ -1530,6 +1531,7 @@ export default function App() {
                 }
                 keyOf={keyOf}
                 previewKey={preview ? keyOf(preview) : null}
+                staged={preview}
                 liveKey={liveKey}
                 theme={look}
                 onApplyTheme={applyTheme}
@@ -1750,6 +1752,7 @@ export default function App() {
             }
             keyOf={keyOf}
             previewKey={preview ? keyOf(preview) : null}
+            staged={preview}
             liveKey={liveKey}
             theme={look}
             onApplyTheme={applyTheme}
