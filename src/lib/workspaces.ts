@@ -235,7 +235,7 @@ export const WORKSPACES: Record<Workspace, WorkspaceShape> = {
      * be a second answer to a question the deck has already answered -- and the
      * operator would have two places to change the same thing, which is how a
      * deck comes to look different on the wall than it did while it was made.
-     * The top bar's Looks button is absent on this desk for the same reason.
+     * The top bar's Themes button is absent on this desk for the same reason.
      *
      * Media was a second tab here and is a desk now, for the same reason the
      * decks want this width: pictures are chosen by looking at them.

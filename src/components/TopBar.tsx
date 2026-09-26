@@ -120,12 +120,16 @@ export function TopBar({
 
       <div className="flex-1" />
 
-      <label className="flex items-center gap-2 text-[12px] text-pulpitry-muted">
+      {/* The one control here that may be squeezed. Everything to its right
+          is a button with a word in it, and a word half drawn is worse than a
+          microphone named in fewer characters -- so `min-w-0` lets this give
+          way first and the truncation lands on the device name. */}
+      <label className="flex min-w-0 items-center gap-2 text-[12px] text-pulpitry-muted">
         <span className="sr-only">Microphone</span>
         <select
           value={selectedDeviceId ?? ""}
           onChange={(event) => onSelectDevice(event.target.value || null)}
-          className="max-w-[240px] truncate rounded border border-pulpitry-line bg-pulpitry-raised px-2 py-1.5 text-[12px] text-pulpitry-text outline-none focus-visible:focus-ring"
+          className="min-w-[6rem] max-w-[240px] truncate rounded border border-pulpitry-line bg-pulpitry-raised px-2 py-1.5 text-[12px] text-pulpitry-text outline-none focus-visible:focus-ring"
         >
           <option value="">
             {(() => {
@@ -146,7 +150,7 @@ export function TopBar({
         data-tour="listen"
         onClick={onToggleListening}
         disabled={busy}
-        className={`rounded px-3.5 py-1.5 text-[12px] transition-colors disabled:opacity-50 focus-visible:focus-ring ${
+        className={`shrink-0 rounded px-3.5 py-1.5 text-[12px] whitespace-nowrap transition-colors disabled:opacity-50 focus-visible:focus-ring ${
           active
             ? "bg-pulpitry-gold text-pulpitry-ink hover:bg-pulpitry-gold/90"
             : "border border-pulpitry-line bg-pulpitry-raised text-pulpitry-text hover:border-pulpitry-gold-dim hover:text-pulpitry-gold"
@@ -158,101 +162,119 @@ export function TopBar({
       {/* Beside Settings, because it is opened the same way and for the same
           kind of reason -- but far more often, and during a service rather
           than before one. */}
-      <button
-        type="button"
-        data-tour="displays"
+      <DeskButton
+        tour="displays"
         onClick={onOpenOutputs}
+        label="Displays"
         title="Which screens the congregation sees, and what each shows"
-        className="rounded border border-pulpitry-line bg-pulpitry-raised px-3 py-1.5 text-[12px] text-pulpitry-text transition-colors hover:border-pulpitry-gold focus-visible:focus-ring"
       >
-        Displays
-      </button>
+        {/* A screen on a stand. */}
+        <rect x="3" y="4.5" width="18" height="12" rx="1.6" />
+        <path strokeLinecap="round" d="M9 20h6M12 16.5V20" />
+      </DeskButton>
 
       {/* Beside Displays, because it is the same kind of thing: how the
-          congregation's screen looks, rather than what is on it. Drawn as an
-          icon and not a word -- the row is already four controls long, and this
-          is pressed before a service rather than during one. */}
+          congregation's screen looks, rather than what is on it. */}
       {onOpenLooks ? (
-        <button
-          type="button"
-          data-tour="looks"
+        <DeskButton
+          tour="looks"
           onClick={onOpenLooks}
-          aria-label="Looks"
+          label="Themes"
           title="How this desk's words are set: the typeface, the colours, the background"
-          className="rounded border border-pulpitry-line bg-pulpitry-raised p-1.5 text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
         >
-          <svg
-            viewBox="0 0 24 24"
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-          >
-            {/* A palette: the one icon everybody reads as "how this looks". */}
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 3a9 9 0 1 0 0 18c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.5-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4-4-7.6-9-7.6Z"
-            />
-            <circle cx="7.5" cy="11" r="1.2" fill="currentColor" stroke="none" />
-            <circle cx="10.5" cy="7.2" r="1.2" fill="currentColor" stroke="none" />
-            <circle cx="15" cy="8" r="1.2" fill="currentColor" stroke="none" />
-          </svg>
-        </button>
+          {/* A palette: the one icon everybody reads as "how this looks". */}
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 3a9 9 0 1 0 0 18c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.5-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4-4-7.6-9-7.6Z"
+          />
+          <circle cx="7.5" cy="11" r="1.2" fill="currentColor" stroke="none" />
+          <circle cx="10.5" cy="7.2" r="1.2" fill="currentColor" stroke="none" />
+          <circle cx="15" cy="8" r="1.2" fill="currentColor" stroke="none" />
+        </DeskButton>
       ) : null}
 
-      {/* Beside Settings and drawn the same way: both are opened rarely, and
-          neither belongs in the row a hand reaches for during a service. */}
-      <button
-        type="button"
-        data-tour="tour"
+      {/* Beside Settings: both are opened rarely, and neither belongs in the
+          row a hand reaches for during a service. */}
+      <DeskButton
+        tour="tour"
         onClick={onStartTour}
-        aria-label="Show me around"
+        label="Tour"
         title="Show me around: a tour of the window"
-        className="rounded border border-pulpitry-line bg-pulpitry-raised p-1.5 text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
       >
-        <svg
-          viewBox="0 0 24 24"
-          className="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-        >
-          <circle cx="12" cy="12" r="9" />
-          {/* A question mark: the one glyph everybody reads as "explain
-              this", and the only one that does not need a word beside it. */}
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M9.6 9.2a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.7-.9 1.3v.6"
-          />
-          <circle cx="12" cy="16.6" r="0.9" fill="currentColor" stroke="none" />
-        </svg>
-      </button>
+        <circle cx="12" cy="12" r="9" />
+        {/* A question mark: the one glyph everybody reads as
+            "explain this". */}
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M9.6 9.2a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.7-.9 1.3v.6"
+        />
+        <circle cx="12" cy="16.6" r="0.9" fill="currentColor" stroke="none" />
+      </DeskButton>
 
-      <button
-        type="button"
-        data-tour="settings"
+      <DeskButton
+        tour="settings"
         onClick={onOpenSettings}
-        aria-label="Settings"
+        label="Settings"
         title="Settings"
-        className="rounded border border-pulpitry-line bg-pulpitry-raised p-1.5 text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
       >
-        <svg
-          viewBox="0 0 24 24"
-          className="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-        >
-          <circle cx="12" cy="12" r="3.2" />
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.09a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.03Z"
-          />
-        </svg>
-      </button>
+        <circle cx="12" cy="12" r="3.2" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.09a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.03Z"
+        />
+      </DeskButton>
     </header>
+  );
+}
+
+/**
+ * One of the four controls at the right-hand end of the row.
+ *
+ * Icon *and* word, because three of them used to be icons alone and an
+ * operator could not tell the palette from the gear without hovering each one.
+ * The row is longer for it; recognising a button at a glance during a service
+ * is worth more than the centimetre.
+ *
+ * The icon is passed as the body of the `svg`, so every one of them is drawn
+ * on the same grid, at the same weight, in the same colour as the word beside
+ * it -- four buttons that were styled four times are now styled once.
+ */
+function DeskButton({
+  tour,
+  onClick,
+  label,
+  title,
+  children,
+}: {
+  /** What the tour looks for when it points at this button. */
+  tour: string;
+  onClick: () => void;
+  label: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      data-tour={tour}
+      onClick={onClick}
+      title={title}
+      className="flex shrink-0 items-center gap-1.5 rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1.5 text-[12px] whitespace-nowrap text-pulpitry-text transition-colors hover:border-pulpitry-gold focus-visible:focus-ring"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="h-4 w-4 shrink-0 text-pulpitry-muted"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        aria-hidden="true"
+      >
+        {children}
+      </svg>
+      {label}
+    </button>
   );
 }

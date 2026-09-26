@@ -352,7 +352,7 @@ export function TemplateLibrary({
         className="flex h-14 shrink-0 items-center gap-3 border-b border-pulpitry-line bg-pulpitry-surface px-3"
       >
         <span className="min-w-0 flex-1">
-          <span className="block text-[15px] text-pulpitry-text">Looks</span>
+          <span className="block text-[15px] text-pulpitry-text">Themes</span>
           {/* Which desk, because each keeps its own: choosing here sets how the
               songs read, and leaves the scripture desk alone. */}
           <span className="block text-[11.5px] text-pulpitry-muted">
@@ -382,7 +382,7 @@ export function TemplateLibrary({
         <button
           type="button"
           onClick={() => setEditing({ id: null, name: "", theme })}
-          title="Change the look in use, keeping it or not"
+          title="Change the theme in use, keeping it or not"
           className="shrink-0 rounded border border-pulpitry-line bg-pulpitry-raised px-2.5 py-1.5 text-[12.5px] text-pulpitry-text hover:border-pulpitry-gold-dim hover:text-pulpitry-gold focus-visible:focus-ring"
         >
           Adjust

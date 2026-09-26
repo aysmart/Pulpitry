@@ -1361,7 +1361,7 @@ export function DeckEditor({
                       )
                     }
                     className={FIELD}
-                    inherit="The church's own look"
+                    inherit="The church's own theme"
                   />
 
                   <div className="flex gap-1.5">

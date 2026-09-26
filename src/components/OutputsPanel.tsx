@@ -391,7 +391,7 @@ export function OutputsPanel({
                   data-tour="output-look"
                   className="flex min-w-[9rem] flex-1 flex-col gap-1"
                 >
-                  <span className="text-[11px] text-pulpitry-muted">Look</span>
+                  <span className="text-[11px] text-pulpitry-muted">Theme</span>
                   <select
                     value={output.template}
                     onChange={(event) =>

@@ -149,7 +149,7 @@ export const TOUR: TourStep[] = [
     group: "Scripture",
     title: "What is staged",
     body:
-      "Drawn with the church's own look and background, in the shape the wall is, so what fits here is what fits there.",
+      "Drawn with the church's own theme and background, in the shape the wall is, so what fits here is what fits there.",
   },
   {
     at: "output",
@@ -307,9 +307,9 @@ export const TOUR: TourStep[] = [
     at: "output-look",
     desk: "scripture",
     group: "The screens",
-    title: "Its own look, its own Bible",
+    title: "Its own theme, its own Bible",
     body:
-      "Each output can draw in a look of its own and read a translation of its own. Every screen shows the same verse at the same moment — what differs is how, and in which words.",
+      "Each output can draw in a theme of its own and read a translation of its own. Every screen shows the same verse at the same moment — what differs is how, and in which words.",
   },
   {
     open: "displays",
@@ -345,7 +345,7 @@ export const TOUR: TourStep[] = [
     group: "The screens",
     title: "What each one is drawing",
     body:
-      "Drawn by the same renderer the output itself uses, in its own look, with whatever is live in it. An output with no screen of its own can be looked at here.",
+      "Drawn by the same renderer the output itself uses, in its own theme, with whatever is live in it. An output with no screen of its own can be looked at here.",
   },
 
   {
@@ -354,14 +354,14 @@ export const TOUR: TourStep[] = [
     group: "Themes",
     title: "How the words are set",
     body:
-      "The look is the typeface, the colours, the background and the motion behind them. It has a screen of its own, which this opens.",
+      "A theme is the typeface, the colours, the background and the motion behind them. It has a screen of its own, which this opens.",
   },
   {
     open: "looks",
     at: "looks-grid",
     desk: "scripture",
     group: "Themes",
-    title: "A library of looks",
+    title: "A library of themes",
     body:
       "Each one drawn at the size it will be read from, with real words in it, grouped by the room it was built for — a hall with sun in it, a camera, a dark auditorium. Clicking one applies it.",
   },
@@ -381,15 +381,15 @@ export const TOUR: TourStep[] = [
     group: "Themes",
     title: "Making one your own",
     body:
-      "Open a look to change it: the typeface and size, where the words sit, the weight, the case, the shadow, the colours with their transparency, and whether a title shows under the words. Save it and it joins the library.",
+      "Open a theme to change it: the typeface and size, where the words sit, the weight, the case, the shadow, the colours with their transparency, and whether a title shows under the words. Save it and it joins the library.",
   },
   {
     at: "looks",
     desk: "scripture",
     group: "Themes",
-    title: "One look per desk",
+    title: "One theme per desk",
     body:
-      "Each desk keeps its own, because a verse and a chorus are not read the same way — and the wall wears the look of whichever desk put something on it.",
+      "Each desk keeps its own, because a verse and a chorus are not read the same way — and the wall wears the theme of whichever desk put something on it.",
   },
 
   {
