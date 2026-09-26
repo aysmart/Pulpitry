@@ -303,16 +303,30 @@ different Bible from the desk.
 
 ### What to build
 
-A **Compare** view in the scripture pane: the staged passage in two or more
-translations at once, one column each, verse against verse.
+A **Compare** view in the scripture pane. Two comparisons, and the first draft
+of this plan only saw one of them:
+
+- **One passage, several translations** — does this one say servant or slave.
+- **Different passages beside each other** — John against Mark, a promise
+  against its fulfilment. Asked for as soon as the translations worked, and
+  it is most of what a preacher means by "compare".
+
+They are the same shape underneath — a column is a reference read in a
+translation — so the pane has no modes: picking a translation adds the staged
+passage again in it, typing a reference adds that passage.
 
 - **Reading**, first: an operator checking a wording before it goes up, and a
   preacher who asks "what does the NASB say there".
-- **Projecting**, second and deliberately separate: a column layout for the
-  wall, two translations side by side with the reference once underneath. It
-  reuses the designed-slide renderer rather than inventing a layout.
-- Which translations are compared is a setting, defaulting to the desk's own
-  plus the last one added.
+- **Projecting**, second and deliberately separate: staged as a **table**,
+  because a comparison is one and the wall already draws composed tables with
+  the church's own hairlines and type. No new layout, and every look a church
+  has set applies to it.
+- How the table is built depends on what is being compared: verse against
+  verse where every column is the same passage, passage against passage where
+  they are not. Lining up John 3:16 with Mark 10:45 by verse number would be
+  arithmetic pretending to be meaning.
+- Translations are remembered per machine; passages are not. A translation is
+  a habit, and "John beside Mark" is this morning's sermon.
 
 ### Decisions
 
