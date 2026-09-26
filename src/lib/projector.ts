@@ -5,7 +5,15 @@ import {
   elementsText,
   type Background,
   type SlideElement,
+  type VerseRun,
 } from "./design";
+
+/*
+ * `VerseRun` is declared beside the elements because a shape's slot carries
+ * runs, and design.ts must not import this module to say so. Re-exported here
+ * because this is where the rest of what a surface draws is named.
+ */
+export type { VerseRun };
 
 export const EVENT_LIVE = "live:changed";
 
@@ -447,10 +455,51 @@ export function versesAsText(
   lines: { number: number; text: string }[],
   numbered: boolean,
 ): string {
+  return runsText(versesAsRuns(lines, numbered));
+}
+
+/**
+ * A run of words, and the verse number that opens it where there is one.
+ *
+ * # Why the surfaces take this rather than the string above
+ *
+ * A number set in line with the words is a number the eye reads as part of
+ * the sentence: "16 For God so loved" begins with sixteen. Scripture has been
+ * set with the number raised for four hundred years, and the wall already did
+ * -- but the wall built its own `sup` from the verses while every other
+ * surface was handed the flattened string, so the operator's Live pane, the
+ * stage display and every lower third disagreed with the screen they were
+ * previewing.
+ *
+ * So the split happens once, here, and each surface draws the pieces in its
+ * own type. Anything that is not a passage is one run with no number, which
+ * is how one shape serves a chorus and a notice as well as a reading.
+ */
+export function versesAsRuns(
+  lines: { number: number; text: string }[],
+  numbered: boolean,
+): VerseRun[] {
   const number = numbered && lines.length > 1;
-  return lines
-    .map((line) => (number ? `${line.number} ${line.text}` : line.text))
+  return lines.map((line) => ({
+    number: number ? line.number : null,
+    text: line.text,
+  }));
+}
+
+/**
+ * The runs flattened back into words, for measuring and for anywhere that
+ * cannot draw a raised number -- a sizing pass, a status line, a tooltip.
+ */
+export function runsText(runs: VerseRun[]): string {
+  return runs
+    .map((run) => (run.number === null ? run.text : `${run.number} ${run.text}`))
     .join(" ");
+}
+
+/** A live body as runs: numbered verses, or one run of everything else. */
+export function bodyRuns(body: LiveBody, numbered = false): VerseRun[] {
+  if (body.kind === "scripture") return versesAsRuns(body.lines, numbered);
+  return [{ number: null, text: bodyText(body) }];
 }
 
 /**

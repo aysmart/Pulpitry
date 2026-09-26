@@ -39,7 +39,7 @@ import { withBackground } from "./lib/design";
 import { Backdrop } from "./components/Backdrop";
 import { OverlayView } from "./components/OverlayView";
 import { StageView } from "./components/StageView";
-import { overlayWords, plainText, type OverlayForm } from "./lib/overlays";
+import { overlayRuns, plainRuns, type OverlayForm } from "./lib/overlays";
 import {
   filled,
   loadShape,
@@ -368,7 +368,7 @@ function Projector() {
           stage={stage}
           theme={theme}
           reference={drawn?.caption ?? null}
-          text={plainText(drawn, theme.showVerseNumbers)}
+          text={plainRuns(drawn, theme.showVerseNumbers)}
           uppercase={uppercase}
           showClock={stageClock}
           showLive={stageLive}
@@ -400,7 +400,7 @@ function Projector() {
      * furniture goes too -- a band with no words in it is not an overlay, it is
      * a bar across somebody's camera.
      */
-    const words = overlayWords(drawn, theme.showVerseNumbers);
+    const words = overlayRuns(drawn, theme.showVerseNumbers);
     if (!shape || !words) {
       return (
         <div
@@ -446,9 +446,9 @@ function Projector() {
           form={form}
           theme={theme}
           reference={drawn?.caption ?? null}
-          // A slide is not words: see `overlayWords`. Nothing here means this
+          // A slide is not words: see `overlayRuns`. Nothing here means this
           // output draws nothing, which leaves the camera showing.
-          text={overlayWords(drawn, theme.showVerseNumbers)}
+          text={overlayRuns(drawn, theme.showVerseNumbers)}
           uppercase={uppercase}
           captions={captions}
         />

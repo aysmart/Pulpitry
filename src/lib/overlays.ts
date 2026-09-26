@@ -1,4 +1,10 @@
-import { laidOut, versesAsText, type LiveContent } from "./projector";
+import {
+  laidOut,
+  runsText,
+  versesAsRuns,
+  type LiveContent,
+  type VerseRun,
+} from "./projector";
 import type { ProjectorTheme } from "./theme";
 
 /**
@@ -318,7 +324,7 @@ export function chipStyle(theme: ProjectorTheme): React.CSSProperties {
  * all rather than an empty band. A band holding no verse is exactly the bug
  * worth not shipping.
  */
-export function plainText(
+export function plainRuns(
   content: {
     body:
       | { kind: "scripture"; lines: Array<{ number: number; text: string }> }
@@ -328,16 +334,24 @@ export function plainText(
       | { kind: string };
   } | null,
   numbered = false,
-): string | null {
+): VerseRun[] | null {
   if (!content) return null;
   const body = content.body as Record<string, unknown> & { kind: string };
 
+  // Numbered where the wall numbers it: a band carrying three verses is the
+  // case where a viewer most needs to know where one ends. Raised, too --
+  // every surface draws these runs, so they are raised everywhere at once.
+  if (body.kind === "scripture") {
+    return tidied(
+      versesAsRuns(
+        body.lines as Array<{ number: number; text: string }>,
+        numbered,
+      ),
+    );
+  }
+
   const said = (() => {
     switch (body.kind) {
-      case "scripture":
-        // Numbered where the wall numbers it: a band carrying three verses is
-        // the case where a viewer most needs to know where one ends.
-        return versesAsText(body.lines as Array<{ number: number; text: string }>, numbered);
       /*
        * A lyric keeps its breaks, and a passage does not.
        *
@@ -372,12 +386,34 @@ export function plainText(
    * other half of the same fault: a lyric could keep its breaks all the way to
    * here and still arrive as one line.
    */
-  const trimmed = said
-    .replace(/[^\S\n]+/g, " ")
-    .replace(/ *\n */g, "\n")
-    .replace(/\n{2,}/g, "\n")
-    .trim();
-  return trimmed ? trimmed : null;
+  return tidied([{ number: null, text: said }]);
+}
+
+/** Tidied as above, with anything left empty dropped; null if none survive. */
+function tidied(runs: VerseRun[]): VerseRun[] | null {
+  const kept = runs
+    .map((run) => ({
+      ...run,
+      text: run.text
+        .replace(/[^\S\n]+/g, " ")
+        .replace(/ *\n */g, "\n")
+        .replace(/\n{2,}/g, "\n")
+        .trim(),
+    }))
+    .filter((run) => run.text.length > 0);
+  return kept.length > 0 ? kept : null;
+}
+
+/**
+ * The same, flattened: for measuring, and for anywhere a raised number cannot
+ * be drawn.
+ */
+export function plainText(
+  content: Parameters<typeof plainRuns>[0],
+  numbered = false,
+): string | null {
+  const runs = plainRuns(content, numbered);
+  return runs ? runsText(runs) : null;
 }
 
 /**
@@ -407,10 +443,20 @@ export function plainText(
  * drew is furniture with holes in it, so a shape with nothing to put in its
  * holes is the same bug with their own logo on it.
  */
+export function overlayRuns(
+  content: LiveContent | null,
+  numbered = false,
+): VerseRun[] | null {
+  if (!content) return null;
+  return laidOut(content.body) ? null : plainRuns(content, numbered);
+}
+
+/** The same, flattened, for callers that only need to know whether there
+ *  are any words and how long they are. */
 export function overlayWords(
   content: LiveContent | null,
   numbered = false,
 ): string | null {
-  if (!content) return null;
-  return laidOut(content.body) ? null : plainText(content, numbered);
+  const runs = overlayRuns(content, numbered);
+  return runs ? runsText(runs) : null;
 }

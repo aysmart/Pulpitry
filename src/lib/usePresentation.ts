@@ -7,7 +7,9 @@ import type { Workspace } from "./workspaces";
 import {
   componentText,
   getLive,
+  versesAsRuns,
   versesAsText,
+  type VerseRun,
   onLive,
   setLive,
   type LiveContent,
@@ -78,6 +80,25 @@ export type Presentable =
 /** The section a lyric item currently points at. */
 export function currentSection(item: Presentable): SongSection | null {
   return item.kind === "lyric" ? (item.sections[item.index] ?? null) : null;
+}
+
+/**
+ * What is staged, as runs a surface can raise the verse numbers in.
+ *
+ * The Preview pane draws these rather than the flattened string below, so a
+ * passage reads on the desk exactly as it will read on the wall.
+ */
+export function presentableRuns(
+  item: Presentable,
+  numbered = false,
+): VerseRun[] {
+  if (item.kind === "scripture")
+    return versesAsRuns(
+      item.verses.map((verse) => ({ number: verse.verse, text: verse.text })),
+      numbered,
+    );
+  const text = presentableText(item, numbered);
+  return text ? [{ number: null, text }] : [];
 }
 
 export function presentableText(item: Presentable, numbered = false): string {

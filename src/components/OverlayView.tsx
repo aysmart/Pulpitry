@@ -1,5 +1,7 @@
 import { chipStyle, overlayPlan, type OverlayForm } from "../lib/overlays";
+import { runsText, type VerseRun } from "../lib/projector";
 import type { ProjectorTheme } from "../lib/theme";
+import { VerseRuns } from "./VerseRuns";
 
 /**
  * A scripture overlay, drawn on nothing.
@@ -24,7 +26,9 @@ export function OverlayView({
   form: OverlayForm;
   theme: ProjectorTheme;
   reference: string | null;
-  text: string | null;
+  /** The words in runs, so a passage's verse numbers are raised in the band
+   *  exactly as they are on the wall behind it. */
+  text: VerseRun[] | null;
   /** Whether this output sets its words in capitals. */
   uppercase: boolean;
   /**
@@ -42,7 +46,7 @@ export function OverlayView({
    */
   captions?: boolean;
 }) {
-  if (!text || !text.trim()) return null;
+  if (!text || !runsText(text).trim()) return null;
 
   const plan = overlayPlan(form, theme, uppercase);
   const showReference =
@@ -88,7 +92,7 @@ export function OverlayView({
         <span
           style={{ ...plan.body, display: "block", whiteSpace: "pre-line" }}
         >
-          {text}
+          <VerseRuns runs={text} />
         </span>
         {!plan.chip && !plan.inline && showReference ? (
           <span style={{ ...plan.reference, display: "block", opacity: 0.85 }}>

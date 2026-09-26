@@ -12,6 +12,7 @@ import {
   type TextElement,
   type Typeset,
 } from "../lib/design";
+import { VerseRuns } from "./VerseRuns";
 import {
   fontStack,
   referenceStyle,
@@ -367,6 +368,19 @@ function SlotText({
   const box = useRef<HTMLDivElement>(null);
   const words = useRef<HTMLParagraphElement>(null);
   const text = cased(element.text, element.textCase);
+  /*
+   * The verses, where a passage was dropped into this hole.
+   *
+   * Absent for a citation, for a chorus and for the placeholder an operator
+   * sees while drawing the shape -- all of which are one run of words with
+   * nothing to raise. The case is applied to each run rather than to the
+   * joined string, so a shape set in capitals still capitalises exactly what
+   * it did before.
+   */
+  const runs = element.runs?.map((run) => ({
+    ...run,
+    text: cased(run.text, element.textCase),
+  }));
   // Authored in the 1920-wide frame, drawn as a share of whatever the frame
   // happens to be: the same arithmetic as `typeStyle`, held here because this
   // one is searched over rather than set once.
@@ -460,7 +474,7 @@ function SlotText({
         className="whitespace-pre-wrap [overflow-wrap:anywhere]"
         style={{ ...typeStyle(element, theme), fontSize: "var(--slot)" }}
       >
-        {text}
+        {runs ? <VerseRuns runs={runs} /> : text}
       </p>
     </div>
   );

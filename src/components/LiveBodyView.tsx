@@ -10,6 +10,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 
 import {
   bodyText,
+  versesAsRuns,
   itemHeading,
   itemText,
   layoutOf,
@@ -29,6 +30,7 @@ import {
   type ProjectorTheme,
 } from "../lib/theme";
 import { DesignedView } from "./DesignedView";
+import { VerseRuns } from "./VerseRuns";
 import { VideoSurface } from "./VideoSurface";
 
 /**
@@ -888,19 +890,12 @@ export function LiveBodyView({
           className="w-full leading-[1.3] text-balance"
           style={{ ...style, ...alignOf(theme) }}
         >
-          {body.lines.map((line, index) => (
-            <span key={line.number}>
-              {/* Verse numbers only earn their place when several are shown
-                  together; a single verse already has its reference beneath. */}
-              {theme.showVerseNumbers && body.lines.length > 1 ? (
-                <sup className="mr-[0.25em] align-super text-[0.5em] opacity-55">
-                  {line.number}
-                </sup>
-              ) : null}
-              {line.text}
-              {index < body.lines.length - 1 ? " " : null}
-            </span>
-          ))}
+          {/* Verse numbers only earn their place when several are shown
+              together, which `versesAsRuns` decides; a single verse already
+              has its reference beneath. Drawn through the shared component so
+              the panes, the stage display and every overlay raise them the
+              same way. */}
+          <VerseRuns runs={versesAsRuns(body.lines, theme.showVerseNumbers)} />
         </p>
       );
 

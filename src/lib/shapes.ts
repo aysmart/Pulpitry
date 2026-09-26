@@ -6,7 +6,9 @@ import {
   newText,
   type SlideElement,
   type TextElement,
+  type VerseRun,
 } from "./design";
+import { runsText } from "./projector";
 
 /**
  * Display shapes: the furniture an overlay output draws around the words.
@@ -103,7 +105,11 @@ export const onShapeChanged = (
  */
 export function filled(
   elements: SlideElement[],
-  words: string | null,
+  /**
+   * What is live, split at each verse: the words slot keeps the runs so its
+   * renderer can raise the numbers, the same as the wall behind the camera.
+   */
+  words: VerseRun[] | null,
   reference: string | null,
 ): SlideElement[] {
   const out: SlideElement[] = [];
@@ -114,9 +120,17 @@ export function filled(
       continue;
     }
 
-    const text = element.slot === "words" ? words : reference;
+    if (element.slot === "reference") {
+      if (!reference || !reference.trim()) continue;
+      out.push({ ...element, text: reference, runs: undefined });
+      continue;
+    }
+
+    const text = words ? runsText(words) : null;
     if (!text || !text.trim()) continue;
-    out.push({ ...element, text });
+    // Both: `text` is what anything measuring or summarising the shape reads,
+    // and the runs are what it is drawn from.
+    out.push({ ...element, text, runs: words ?? undefined });
   }
 
   return out;
@@ -184,9 +198,16 @@ export function starterShape(): SlideElement[] {
   ];
 }
 
-/** What the studio shows in a slot while the shape is being designed. */
-export const SAMPLE = {
-  words: "Wait on the Lord\nand He will renew your strength",
+/**
+ * What the studio shows in a slot while the shape is being designed.
+ *
+ * The words are runs because that is what a slot is filled with at the moment
+ * it is drawn; one run with no number, which is what a single verse is.
+ */
+export const SAMPLE: { words: VerseRun[]; reference: string } = {
+  words: [
+    { number: null, text: "Wait on the Lord\nand He will renew your strength" },
+  ],
   reference: "Isaiah 40:31 (KJV)",
 };
 

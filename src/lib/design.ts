@@ -68,6 +68,27 @@ export interface Typeset {
 
 export type ElementKind = "text" | "scripture" | "shape" | "image";
 
+/**
+ * A run of words, and the verse number that opens it where there is one.
+ *
+ * # Why the surfaces take this rather than a flattened string
+ *
+ * A number set in line with the words is a number the eye reads as part of
+ * the sentence: "16 For God so loved" begins with sixteen. Scripture has been
+ * set with the number raised for four hundred years, and the wall already did
+ * -- but every other surface was handed the flattened string, so the
+ * operator's Live pane, the stage display and every lower third disagreed
+ * with the screen they were previewing.
+ *
+ * Declared here rather than beside the rest of what goes live, because a
+ * shape's slot carries runs and this file cannot import that one.
+ */
+export interface VerseRun {
+  /** Null where the words do not open a verse, which is most of them. */
+  number: number | null;
+  text: string;
+}
+
 export interface TextElement extends Box, Typeset {
   kind: "text";
   id: string;
@@ -88,6 +109,16 @@ export interface TextElement extends Box, Typeset {
    * shows something real rather than an empty rectangle.
    */
   slot?: "words" | "reference";
+  /**
+   * The same words, split at each verse, set by `filled` at the moment the
+   * shape is drawn and never saved.
+   *
+   * A slot's text is generated rather than typed, and a passage dropped into
+   * one is several verses: with the runs here the renderer can raise the verse
+   * numbers, exactly as the wall does. `text` above is kept in step with these
+   * so everything that measures or summarises a shape still works on a string.
+   */
+  runs?: VerseRun[];
 }
 
 /**

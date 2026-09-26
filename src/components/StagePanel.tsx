@@ -3,7 +3,7 @@ import { useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 import {
-  bodyText,
+  bodyRuns,
   laidOut,
   type AudioState,
   type LiveBody,
@@ -12,13 +12,14 @@ import {
   type MediaProgress,
   type TextBlock,
   type Ticker,
+  type VerseRun,
 } from "../lib/projector";
 import { fontStack, type ProjectorTheme } from "../lib/theme";
 import { useTransport } from "../lib/useTransport";
 import { Backdrop } from "./Backdrop";
 import {
   presentableLabel,
-  presentableText,
+  presentableRuns,
   toLiveContent,
   type Presentable,
 } from "../lib/usePresentation";
@@ -27,6 +28,7 @@ import { MediaTransport } from "./MediaTransport";
 import { SlideCanvas } from "./SlideCanvas";
 import type { Extent } from "./LiveBodyView";
 import { TickerBand } from "./TickerBand";
+import { VerseRuns } from "./VerseRuns";
 import { VideoSurface } from "./VideoSurface";
 
 function Stage({
@@ -43,7 +45,12 @@ function Stage({
   progress = 0,
   onExtent,
 }: {
-  body: string | null;
+  /**
+   * The words, in runs, so the verse numbers can be raised here exactly as
+   * they are on the wall. A flattened string cannot carry that, and these two
+   * panes are the wall in miniature.
+   */
+  body: VerseRun[] | null;
   /** A picture or clip, which fills the pane instead of the text layout. */
   asset?: {
     kind: "image" | "media";
@@ -139,7 +146,7 @@ function Stage({
     );
   }
 
-  if (!body) {
+  if (!body || body.length === 0) {
     return <EmptyState>{empty}</EmptyState>;
   }
 
@@ -175,7 +182,7 @@ function Stage({
               : undefined
           }
         >
-          {body}
+          <VerseRuns runs={body} />
         </p>
         {reference && (!theme || theme.showReference) ? (
           /*
@@ -582,7 +589,7 @@ export function StagePanel({
         bodyClassName="relative [container-type:size]"
       >
         <Stage
-          body={live ? bodyText(live.body, theme.showVerseNumbers) : null}
+          body={live ? bodyRuns(live.body, theme.showVerseNumbers) : null}
           asset={liveAsset(live?.body)}
           slide={liveSlide(live?.body, theme)}
           reference={live?.caption ?? null}
@@ -719,7 +726,7 @@ export function MainOutput({
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden rounded border border-pulpitry-line [container-type:size]">
         <Stage
-          body={preview ? presentableText(preview, theme.showVerseNumbers) : null}
+          body={preview ? presentableRuns(preview, theme.showVerseNumbers) : null}
           asset={assetOf(preview)}
           slide={slideOf(preview, theme)}
           reference={preview ? presentableLabel(preview) : null}
@@ -785,7 +792,7 @@ export function MainOutput({
         </div>
         <div className="relative min-h-0 flex-1 overflow-hidden rounded border border-pulpitry-gold-dim/40 [container-type:size]">
           <Stage
-            body={live ? bodyText(live.body, theme.showVerseNumbers) : null}
+            body={live ? bodyRuns(live.body, theme.showVerseNumbers) : null}
             asset={liveAsset(live?.body)}
             slide={liveSlide(live?.body, theme)}
             reference={live?.caption ?? null}
@@ -980,7 +987,7 @@ export function PreviewPanel({
   return (
     <Panel title="Preview" tour="staged">
       <Stage
-        body={preview ? presentableText(preview, theme.showVerseNumbers) : null}
+        body={preview ? presentableRuns(preview, theme.showVerseNumbers) : null}
         asset={assetOf(preview)}
         slide={slideOf(preview, theme)}
         reference={preview ? presentableLabel(preview) : null}

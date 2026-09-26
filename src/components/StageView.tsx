@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { baseSize, type ProjectorTheme } from "../lib/theme";
-import type { StageState } from "../lib/projector";
+import { runsText, type StageState, type VerseRun } from "../lib/projector";
+import { VerseRuns } from "./VerseRuns";
 
 /**
  * What the platform sees, and only the platform.
@@ -98,7 +99,8 @@ export function StageView({
   stage: StageState;
   theme: ProjectorTheme;
   reference: string | null;
-  text: string | null;
+  /** The words in runs, so a passage's verse numbers are raised here too. */
+  text: VerseRun[] | null;
   /** Whether this output sets its words in capitals. */
   uppercase: boolean;
   /** The wall clock beside the timer. */
@@ -151,10 +153,14 @@ export function StageView({
    * to start large and be measured down.
    */
   const liveBox = useRef<HTMLDivElement | null>(null);
+  // Flattened for the measuring, which counts characters and reflows a box:
+  // neither cares that a number is raised, and a size that changed with the
+  // numbering switch would be a second thing to explain.
+  const plain = text ? runsText(text) : null;
   const fitted = useFittedSize(
     liveBox,
-    text,
-    Math.min(baseSize(text ?? ""), 5.2),
+    plain,
+    Math.min(baseSize(plain ?? ""), 5.2),
   );
 
   if (timerOnly) {
@@ -270,7 +276,7 @@ export function StageView({
             </span>
           ) : null}
 
-          {text ? (
+          {text && text.length > 0 ? (
             <span
               style={{
                 fontSize: "var(--stage-size)",
@@ -279,7 +285,7 @@ export function StageView({
                 textTransform: uppercase ? "uppercase" : "none",
               }}
             >
-              {text}
+              <VerseRuns runs={text} />
             </span>
           ) : (
             /*

@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 
 import { scriptureIn } from "../lib/bible";
 import type { SlideElement } from "../lib/design";
-import { overlayWords, plainText, type OverlayForm } from "../lib/overlays";
+import { overlayRuns, plainRuns, type OverlayForm } from "../lib/overlays";
 import {
   filled,
   loadShape,
@@ -139,7 +139,7 @@ export function OutputPreview({
           stage={stage}
           theme={theme}
           reference={captions ? (drawn?.caption ?? null) : null}
-          text={plainText(drawn, theme.showVerseNumbers)}
+          text={plainRuns(drawn, theme.showVerseNumbers)}
           uppercase={uppercase}
           showClock={stageClock}
           showLive={stageLive}
@@ -154,11 +154,11 @@ export function OutputPreview({
           the output sent another.
         */
         <div className="absolute inset-0" style={CHEQUER}>
-          {shape && overlayWords(drawn, theme.showVerseNumbers) ? (
+          {shape && overlayRuns(drawn, theme.showVerseNumbers) ? (
             <DesignedView
               elements={filled(
                 shape,
-                overlayWords(drawn, theme.showVerseNumbers),
+                overlayRuns(drawn, theme.showVerseNumbers),
                 captions ? (drawn?.caption ?? null) : null,
               )}
               theme={theme}
@@ -186,7 +186,7 @@ export function OutputPreview({
             form={form}
             theme={theme}
             reference={drawn?.caption ?? null}
-            text={overlayWords(drawn, theme.showVerseNumbers)}
+            text={overlayRuns(drawn, theme.showVerseNumbers)}
             uppercase={uppercase}
             captions={captions}
           />
