@@ -207,6 +207,76 @@ fn reads_as_worship(song: &Imported) -> bool {
     WORDS.iter().any(|word| haystack.contains(word))
 }
 
+/**
+ * Whether a song carries language a congregation must not be shown.
+ *
+ * # Why this is here and not left to `reads_as_worship`
+ *
+ * That sieve asks whether a song is *about* God, and a great deal of explicit
+ * music is. A crawl that searched a lyrics site for the words "worship" and
+ * "praise" came back with 105,637 songs of which 8.8% carried explicit
+ * lyrics, and the worship sieve passed 6,073 of them -- because a rap record
+ * that mentions heaven reads as worship to a word list. One song in twelve in
+ * a shipped bank, surfacing when a volunteer searches a common phrase while
+ * preparing a service.
+ *
+ * So this is a second, separate question, asked of every song whatever else
+ * it looks like, and `keep.txt` does **not** override it. Keeping a song by
+ * name is a judgement about whether a church sings it; nobody building a bank
+ * means it as permission for this.
+ *
+ * # What it is not
+ *
+ * Not a morality filter and not a complete one. A short list of unambiguous
+ * words, matched whole, so "assassin" and "Scunthorpe" survive and nothing
+ * here depends on cleverness. What slips past it is caught by the person
+ * reading the review file, which is the point of writing one.
+ */
+fn is_explicit(song: &Imported) -> bool {
+    const WORDS: &[&str] = &[
+        "fuck", "fucks", "fucked", "fucking", "fuckin", "motherfucker",
+        "motherfuckers", "motherfucking", "shit", "shits", "shitty", "bitch",
+        "bitches", "nigga", "niggas", "niggaz", "nigger", "niggers", "pussy",
+        "cunt", "whore", "whores", "slut", "sluts",
+    ];
+
+    let mut haystack = String::from(" ");
+    haystack.push_str(&song.title.to_lowercase());
+    for section in &song.sections {
+        for line in &section.lines {
+            haystack.push(' ');
+            haystack.push_str(&line.to_lowercase());
+        }
+    }
+    haystack.push(' ');
+
+    /*
+     * Whole words only.
+     *
+     * A substring test fails in both directions and the embarrassing one is
+     * the false positive: "shiitake", "Scunthorpe", "assassin" are the
+     * standing examples, and a bank that silently drops a hymn because of a
+     * letter sequence inside a longer word is a fault nobody would ever find.
+     */
+    /*
+     * An apostrophe is a boundary, which took a test to get right.
+     *
+     * Treating it as part of a word -- the obvious choice, so that "don't"
+     * stays one word -- means "bitch's" and "fuckin'" do not match, and those
+     * are commoner in lyrics than the bare forms. Nothing on the list gains a
+     * false positive from the plain rule: "Scunthorpe", "shiitake" and
+     * "bewitched" are still untouched because the words are matched whole.
+     */
+    let boundary = |c: char| !c.is_alphanumeric();
+    WORDS.iter().any(|word| {
+        haystack.match_indices(word).any(|(at, _)| {
+            let before = haystack[..at].chars().next_back().map_or(true, boundary);
+            let after = haystack[at + word.len()..].chars().next().map_or(true, boundary);
+            before && after
+        })
+    })
+}
+
 /// One name as it is matched: letters and digits, lower case.
 fn keyed(text: &str) -> String {
     normalised(text)
@@ -519,13 +589,35 @@ fn main() -> Result<()> {
      * that song.
      */
     let keep = read_keep(&kept_list);
-    let (songs, left_out): (Vec<Imported>, Vec<Imported>) = all.into_iter().partition(|song| {
+    /*
+     * Explicit first, and keep.txt does not reach it.
+     *
+     * A name in keep.txt says "this church sings this", which is a judgement
+     * about repertoire. It is not permission to put explicit language on a
+     * wall, and treating it as both would mean one list doing two jobs with
+     * no way to say yes to one and no to the other.
+     */
+    let (explicit, rest): (Vec<Imported>, Vec<Imported>) =
+        all.into_iter().partition(is_explicit);
+
+    let (songs, unwanted): (Vec<Imported>, Vec<Imported>) = rest.into_iter().partition(|song| {
         reads_as_worship(song)
             || keep.contains(&keyed(&song.rights.author))
             || keep.contains(&keyed(&song.title))
     });
+
+    let left_out: Vec<Imported> = unwanted;
     let review = output.with_extension("review.txt");
     write_review(&review, &left_out.iter().collect::<Vec<_>>())?;
+    if !explicit.is_empty() {
+        let dropped = output.with_extension("explicit.txt");
+        write_review(&dropped, &explicit.iter().collect::<Vec<_>>())?;
+        eprintln!(
+            "  {} dropped for explicit language — the list is in {}",
+            explicit.len(),
+            dropped.display()
+        );
+    }
     eprintln!(
         "  {} kept, {} left out — the list is in {}",
         songs.len(),
