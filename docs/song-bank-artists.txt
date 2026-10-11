@@ -1,0 +1,676 @@
+# The artists the Song Finder's pack is built from.
+#
+# Derived from gospel_artists.txt by keeping only those whose catalogue
+# actually is Christian: of their songs in the scrape, at least 70% name
+# God in some language (60% for an artist with fewer than twenty songs,
+# where the share is too noisy to cut hard on).
+#
+# That test exists because gospel_artists.txt mixes acts whose whole
+# catalogue is worship with artists who merely recorded some gospel --
+# Ella Fitzgerald, Dolly Parton, Aretha Franklin -- and the scraper took
+# everything by anyone on it.
+#
+# It reads a catalogue through an English-leaning word list, so an artist
+# singing in a language it barely covers scores low however plainly
+# Christian they are. Soweto Gospel Choir came out at 35% and is here by
+# hand. Expect more of those; they belong in this file, not in a cleverer
+# threshold.
+#
+116
+1K Phew
+4Him
+7eventh Time Down
+A-Star
+Aaron Cole
+Aaron Shust
+About a Mile
+Ada Ehi
+Adam Crabb
+Aha Gazelle
+Aline Barros
+All Sons & Daughters
+Allen Page
+Altar Boys
+Alvin Slaughter
+Amber Bullock
+Ana Nóbrega
+Ana Paula Valadão
+Andrea Helms
+Andrew Peterson
+André Valadão
+Andy Mineo
+Andy Park
+Angie Rose
+Anita Wilson
+Ann Downing
+Annatoria
+Anne Steele
+Anne Wilson
+Anointed
+Anthem Lights
+Anthony Brown & group therAPy
+Aodhan King
+Ascend the Hill
+Audrey Assad
+Augustus Toplady
+Austin French
+Austin Stone Worship
+Ayo Vincent
+B. J. Thomas
+BB Jay
+BJ Putnam
+Bart Millard
+Beautiful Eulogy
+Becca Folkes
+Ben Cantelon
+Benita Okojie
+Benita Washington
+Benjamin Dube
+Benjamin William Hastings
+Bernadette Farrell
+Bethany Dillon
+Bethel Music
+Betty Jean Robinson
+Beverly Crawford
+Bidemi Olaoba
+Big Daddy Weave
+Big Tent Revival
+Bill Moss Jr.
+Billy Funk
+Bishop Larry Trotter
+Bishop Paul S. Morton
+Bizzle
+Blanca
+Blind Willie Johnson
+Bluetree
+Bob Fitts
+Braille
+Brandon Hampton
+Brandon Heath
+Brandon Lake
+Brent Jones & The T.P. Mobb
+Brenton Brown
+Bri Babineaux
+Brian Courtney Wilson
+Brian Doerksen
+Brian Free & Assurance
+Brian Littrell
+Brooke Ligertwood
+Brother Joe May
+Brother Will Hairston
+Bryan & Katie Torwalt
+Buddy Greene
+Byron Cage
+CAIN
+Caleb Gordon
+CalledOut Music
+Canon
+Canton Jones
+Canyon Hills Worship
+Carman
+Casey J
+Cassiane
+Cassietta George
+Casting Crowns
+CeCe Winans
+Cecil Frances Alexander
+Celestine Donkor
+Central Live
+Chandler Moore
+Charity Gayle
+Charles Jenkins & Fellowship Chicago
+Cheneta Jones
+Chicago Mass Choir
+Chioma Jesus
+Chris Tomlin
+Christ Church Choir
+Christafari
+Christine D'Clario
+Christy Nockels
+Citipointe Worship
+CityAlight
+Clint Brown
+Cochren & Co.
+Cody Carnes
+Colorado Mass Choir
+Commissioned
+Consumed by Fire
+Corey Hicks
+Cornerstone Worship
+Cory Henry
+Courtland Urbano
+Cristina Mel
+Cross Point Music
+Crowder
+Crystal Aikin
+Crystal Lewis
+Cynthia Clawson
+DC Talk
+DOE
+Da' T.R.U.T.H.
+Dallas Fort Worth Mass Choir
+Dallas Holm
+Damares
+Damita
+Damon Little
+Daniel Spriggs
+Danilo Montero
+Danniebelle Hall
+Danny Gokey
+Darlene McCoy
+Darlene Zschech
+Darrell Mansfield
+Darwin Hobbs
+Daryl Coley
+Datin
+Davi Sacer
+David Phelps
+David and the Giants
+Davy Flowers
+DeGarmo and Key
+DeWayne Woods
+Dead Artist Syndrome
+Debra Killings
+Deepspace5
+Deitrick Haddon
+Del Delker
+Deleon Richards
+Delino Marçal
+Della Reese
+Deniece Williams
+Derek Minor
+Desperation Band
+Diana Hamilton
+Diante do Trono
+Disciple
+Don Moen
+Donald Lawrence
+Donnie McClurkin
+Doobie Powell
+Dorinda Clark-Cole
+Dorothy Love Coates
+Dorothy Norwood
+Dottie Peoples
+Doug Oldham
+Dr Tumi
+Dumi Mkokstad
+Dunsin Oyekan
+Earnest Pugh
+Eddie James
+Edward Caswall
+Edward Mote
+Edwin Hawkins
+Elevation Worship
+Eniola Abioye
+Erica Campbell
+Ericson Alexander Molano
+Ernest Phipps
+Ernie Haase
+Eshon Burgundy
+Eva Mae LeFevre
+Evan and Eris
+Evelyn Turrentine-Agee
+Evelyn Wanjiru
+Evvie McKinney
+Faith Child
+Fanny Crosby
+Fearless BND
+Fellowship Creative
+Fern
+Fernanda Brum
+Fernando Ortega
+Five Blind Boys of Mississippi
+Flame
+Folabi Nuel
+Frank Edwards
+Fred Hammond
+Gaither Vocal Band
+Gary Oliver
+Gatemouth Moore
+Gateway Worship
+Gemstones
+Geoff Bullock
+Geoffrey Golden
+George Beverly Shea
+Georgia Mass Choir
+Glenn Kaiser
+Gloria Gaither
+Gloria Spencer
+God's Property
+Gold City
+Gordon Mote
+Grace Church Worship
+Grace Idowu
+Greater Vision
+Greatman Takit
+Grits
+Group 1 Crew
+Guvna B
+Half Mile Home
+HeeSun Lee
+Helen Baylor
+Heritage Singers
+Hezekiah Walker
+Hillary Scott
+Hillsong UNITED
+Hillsong Worship
+Hillsong Young & Free
+Hlengiwe Mhlaba
+Hollyn
+Hope Darst
+Hope UC
+Housefires
+Howard McCrary
+Hulvey
+Hyper Static Union
+I Am Terrified
+I Am They
+Idle Cure
+Inez Andrews
+Influence Music
+Integrity's Hosanna! Music
+Isaac Carree
+Isaac Watts
+Isabel Davis
+Isadora Pompeo
+Israel & New Breed
+Israel Houghton
+Ivan Parker
+J. Monty
+J. Moss
+JJ Hairston & Youthful Praise
+Jaci Velasquez
+Jack Hayford
+Jackie Hill Perry
+Jacky Clark Chisholm
+Jahdiel
+Jake Hess
+James Blackwood
+James Cleveland
+James Fortune & FIYA
+Jamie Grace
+Jamie Owens-Collins
+Janet Paschal
+Janice Gaines
+Jars of Clay
+Jason Crabb
+Jason Nelson
+Jaye Thomas
+Jeff & Sheri Easter
+Jeff Deyo
+Jekalyn Carr
+Jeremy Camp
+Jeremy Riddle
+Jessica Reedy
+Jesus Culture
+JoAnn Rosario
+Jody McBrayer
+Joe L. Barnes
+Joe Mettle
+Joe Praize
+Joel Figueroa
+Joel Houston
+John Henry Newman
+John P. Kee
+Johnnie Frierson
+Johnny Cash
+Jon Buller
+Jon Egan
+Jon Keith
+Jon Reddick
+Jon Thurlow
+Jonathan McReynolds
+Joseph Habedank
+Josh Baldwin
+Josh Groban
+Josh White
+Josh Wilson
+Joyous Celebration
+Json
+Juan Winans
+Juanita Bynum
+Judikay
+Judith Christie McAllister
+Judy Jacobs
+Juliano Son
+Julie Meyer
+Julissa
+Justin Rizzo
+KB
+KJ-52
+Kaestrings
+Karen Clark Sheard
+Kari Jobe
+Katy Nichole
+Keedron Bryant
+Kefee
+Keith "Wonderboy" Johnson
+Keith & Kristyn Getty
+Keith Green
+Keith Pringle
+Kelly Price
+Kelly Willard
+Kelontae Gavin
+Kent Henry
+Kevin Prosch
+Khaya Mthethwa
+Kieran the Light
+Kierra Sheard
+Kim Burrell
+Kim Walker-Smith
+King's College Choir
+Kingdom Heirs
+Kirk Franklin
+Kristian Stanfill
+Kurt Carr
+Kutless
+Lakewood Music
+Lamar Campbell
+Lara George
+Laura Hackett Park
+Lauren Daigle
+Lawrence Oyor
+Lebo Sekgobela
+Lecrae
+Lee Vasi
+Lee Williams & The Spiritual QC's
+Legacy Five
+Legend Seven
+Lenny LeBlanc
+Levixone
+Life.Church Worship
+Light Headed
+Limoblaze
+Lincoln Brewster
+Lisa McClendon
+Lisa Page Brooks
+Little Johnny Taylor
+Lord's Child
+Lou Fellingham
+Love Song
+Ludmila Ferber
+Lust Control
+Luther Barnes
+Lynda Randle
+MC Hammer
+Mac Powell
+Mack Brock
+Mae
+Mag44
+Mahalia Jackson
+Mandisa
+Manfred Siebald
+Maranatha! Music
+Maranda Curtis
+Marc Martel
+Marco Barrientos
+Mariana Valadão
+Marilyn Sellars
+Mark Beswick
+Mark Hall
+Mark Trammell Quartet
+Mars ILL
+Marshall Hall
+Martha Bass
+Martha Munizzi
+Martin Smith
+Marty
+Marvin Sapp
+Marvin Winans
+Mary Alessi
+Mary Mary
+Maryanne J. George
+Matt Gilman
+Matt Hammitt
+Matt Maher
+Matt Redman
+Matthew West
+Mattie Moss Clark
+Maverick City Music
+Melvin Crispell III
+Men of Standard
+Mercy Chinwo
+Mercy Masika
+MercyMe
+Meredith Mauldin
+Micah Stampley
+Micah Tyler
+Michael Card
+Mike Real
+Miles Minnick
+Minister GUC
+Mitch Wong
+Morris Chapman
+Mortification
+Moses Bliss
+Myron Butler & Levi
+Naomi Raine
+Nate Moore
+Nathaniel Bassey
+Neon Adejo
+New Life Worship
+Newsboys
+Norman Hutchins
+North Point Worship
+Nqubeko Mbatha
+Ntokozo Mbambo
+Odd Thomas
+Ohemaa Mercy
+Out of Eden
+Panam Percy Paul
+Passion
+Pastor Mike Jr.
+Pat Barrett
+Patrick Mayberry
+Paul Baloche
+Paul McClure
+Paul Wilbur
+Phanatik
+Phatfish
+Phil Wickham
+Planetshakers
+Point of Grace
+Pompi
+Preye Odede
+Prinx Emmanuel
+Propaganda
+Prospa Ochimana
+Randall Goodgame
+Randy Rothwell
+Ray Boltz
+Ray Gene Wilson
+Reba McEntire
+Rebecca Malope
+Rebecca St. James
+Reconcile
+Red Rocks Worship
+Reuben Kigame
+Reuben Morgan
+Rhett Walker
+Rich Mullins
+Ricky Dillard & New G
+Riley Clemmons
+River Valley Worship
+Robin Mark
+Ron Kenoly
+Ryan Stevenson
+S.O.
+SEU Worship
+Sabine Baring-Gould
+Saddleback Worship
+Salvador
+Sammie Okposo
+Samsong
+Sandi Patty
+Sarah Reeves
+Sbu Noah
+Scootie Wop
+Scott Wesley Brown
+Scribe Music
+Sean Feucht
+Selah the Corner
+Sev Statik
+Sevin
+Shai Linne
+Shane & Shane
+Shawn McLemore
+Shirley Caesar
+Shirley Murdock
+Sho Baraka
+Shout
+Sidewalk Prophets
+Sinach
+Smokie Norful
+Social Club Misfits
+Sonicflood
+Sonnie Badu
+Sonseed
+Soraya Moraes
+Soul Survivor
+Sovereign Grace Music
+Soweto Gospel Choir
+Speer Family
+Spensha Baker
+Spirit of Praise
+St. Paul's Cathedral Choir
+Stacie Orrico
+Stephanie Mills
+Stephen Hurd
+Stephen the Levite
+Steve Camp
+Steve Crown
+Steve Green
+Steven Curtis Chapman
+Still Shadey
+Sunday Service Choir
+Swan Silvertones
+T-Bone
+TAYA
+TY Bello
+TaRanda Greene
+Tamela Mann
+Tanya Trotter
+Tasha Cobbs Leonard
+Tasha Layton
+Tasha Page-Lockhart
+Tauren Wells
+Ted & Sheri
+Tedashii
+Terry MacAlmon
+The Anointed Pace Sisters
+The Barrett Sisters
+The Belonging Co
+The Blackwood Brothers
+The Blind Boys of Alabama
+The Booth Brothers
+The Caravans
+The Cathedrals
+The City Harmonic
+The Clark Sisters
+The Coleman Brothers
+The Collingsworth Family
+The Cross Movement
+The Davis Sisters
+The Digital Age
+The Dixie Nightingales
+The Fairfield Four
+The Glorious Unseen
+The Gospel Stars
+The Highway Q.C.'s
+The Hoppers
+The Imperials
+The Isaacs
+The Jackson Southernaires
+The Jordanaires
+The Jubalaires
+The Katinas
+The Kry
+The Lewis Family
+The Martins
+The McKameys
+The Mighty Clouds of Joy
+The Nelons
+The O.C. Supertones
+The Perrys
+The Pilgrim Jubilees
+The Porter's Gate
+The Rance Allen Group
+The Roberta Martin Singers
+The Soul Stirrers
+The Statesmen Quartet
+The Talleys
+The Violinaires
+The Walls Group
+The Williams Brothers
+The Winans
+Theophilus Sunday
+Thi'sl
+Third Day
+Thomas Whitfield
+Tiffany Hudson
+Tim Godfrey
+Tim Hughes
+Tim Neufeld
+Timothy Brindle
+Timothy Dudley-Smith
+Timothy Wright
+Tina Campbell
+TobyMac
+Todd Dulaney
+Tomi Favored
+Tommy Walker
+Tonéx
+Tope Alabi
+Topsy Chapman
+Torey D'Shaun
+Tramaine Hawkins
+Travis Cottrell
+Travis Greene
+Tribl
+Tribute Quartet
+Trin-i-tee 5:7
+Trip Lee
+Triple O
+Triumphant Quartet
+Twila Paris
+Ty Brasel
+Tye Tribbett
+UPPERROOM
+Unspoken
+Vanessa Bell Armstrong
+Vashawn Mitchell
+Veda Brown
+Vengeance Rising
+Vernessa Mitchell
+Vertical Worship
+Vicki Yohe
+Vickie Winans
+Vicky Beeching
+Victoria Orenze
+Vineyard Worship
+Virtue
+Voices of Lee
+WHATUPRG
+Walter Hawkins
+Washington Phillips
+Wayne Watson
+We The Kingdom
+Wes Hampton
+Wes King
+Wess Morgan
+West Angeles COGIC Mass Choir
+William Billings
+William McDowell
+William Murphy
+Worship Central
+Wynona Carr
+Y'Anna Crawley
+YFriday
+Yolanda Adams
+Young Noah
+Young Oceans
+Youthful Praise
+Zacardi Cortez
+Zach Williams
+Zauntee
+nobigdyl.

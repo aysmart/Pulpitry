@@ -90,3 +90,7 @@ Truth (CCM)
 Carlene Davis
 Abels Worship
 Chris Morgan Ochogwu
+
+# Sings in Zulu and Xhosa, which the word sieve barely covers, so it reads
+# as 35% religious when it is a gospel choir. Kept by name instead.
+Soweto Gospel Choir
