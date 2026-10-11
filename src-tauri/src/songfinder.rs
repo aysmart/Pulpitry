@@ -323,6 +323,19 @@ pub fn latest() -> Result<Available> {
     let page: Page = response
         .json()
         .context("the Song Finder sent something unreadable")?;
+
+    /*
+     * Logged, because "my Song Finder never grew" is otherwise unanswerable.
+     *
+     * The check is quiet by design -- a failure says nothing to the operator,
+     * since what is on the machine still works -- and quiet failures are the
+     * ones that go unreported for a season. A line here is the difference
+     * between a support question with an answer and one without.
+     */
+    crate::log::line(&format!(
+        "[songfinder] the catalogue on offer is {} ({} songs)",
+        page.version, page.songs
+    ));
     Ok(Available { version: page.version, songs: page.songs })
 }
 
