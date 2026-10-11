@@ -126,6 +126,14 @@ pub struct Status {
     pub songs: i64,
 }
 
+/// What the broker is serving, without pulling any of it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Available {
+    pub version: String,
+    pub songs: i64,
+}
+
 /// One page of the catalogue, as the broker hands it over.
 #[derive(Debug, Deserialize)]
 struct Page {
@@ -272,6 +280,52 @@ const PACK: &str = "CREATE TABLE song (
  * minute or two, and a button that does nothing visible for two minutes is a
  * button somebody presses again.
  */
+/**
+ * Which catalogue the broker has, so a newer one can be offered.
+ *
+ * # Why this asks for a song it throws away
+ *
+ * Every page of the pack carries the bank's version and its total, so one
+ * page of one song answers the question. A route of its own would be a
+ * second thing to keep in step with the first, for a reply that is already
+ * being sent.
+ *
+ * The cost is about a kilobyte: a title, a few words and one song's vector.
+ * That is cheaper than the question being skipped, which is what happened
+ * before this existed -- a church that pulled the catalogue once kept
+ * whatever it got, and the bank growing from ten thousand songs to
+ * twenty-four did not reach a single machine that already had it.
+ */
+pub fn latest() -> Result<Available> {
+    let token = credential()?;
+    let client = castavox_core::tls::client()
+        .timeout(TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .context("could not start a secure connection")?;
+
+    let response = client
+        .get(format!("{}/api/v1/songfinder/pack?limit=1", broker_base()))
+        .bearer_auth(&token)
+        .send()
+        .context("could not reach the Song Finder")?;
+
+    let code = response.status();
+    if code == reqwest::StatusCode::UNAUTHORIZED || code == reqwest::StatusCode::FORBIDDEN {
+        return Err(anyhow!(
+            "This subscription does not include the Song Finder, or it has ended. Settings → Subscription."
+        ));
+    }
+    if !code.is_success() {
+        return Err(anyhow!("The Song Finder is not answering just now ({code})."));
+    }
+
+    let page: Page = response
+        .json()
+        .context("the Song Finder sent something unreadable")?;
+    Ok(Available { version: page.version, songs: page.songs })
+}
+
 pub fn pull(app: &tauri::AppHandle) -> Result<Status> {
     use tauri::Emitter;
 

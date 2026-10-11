@@ -60,6 +60,22 @@ export interface SongFinderStatus {
 export const songFinderStatus = () =>
   invoke<SongFinderStatus>("songfinder_status");
 
+/** What the broker is serving, so a copy already held can be compared. */
+export interface SongFinderAvailable {
+  version: string;
+  songs: number;
+}
+
+/**
+ * Asks what the catalogue is now, without downloading it.
+ *
+ * Needed because the catalogue is pulled once and then searched locally
+ * forever: before this, a church that had it kept whatever it first got, and
+ * the bank growing did not reach a single machine that had already pulled.
+ */
+export const songFinderLatest = () =>
+  invoke<SongFinderAvailable>("songfinder_latest");
+
 /** Downloads the catalogue. The one thing here that needs the network. */
 export const songFinderPull = () =>
   invoke<SongFinderStatus>("songfinder_pull");

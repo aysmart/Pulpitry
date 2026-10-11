@@ -6,11 +6,13 @@ import {
   CATALOGUE_OPEN,
   RIGHTS_LABEL,
   onSongFinderPull,
+  songFinderLatest,
   songFinderPull,
   songFinderSearch,
   songFinderStatus,
   type SongFinderHit,
   type SongFinderStatus,
+  type SongFinderAvailable,
 } from "../lib/songfinder";
 import { EmptyState, Panel } from "./Panel";
 
@@ -79,6 +81,13 @@ export function SongFinderPanel({
    * who has gets a search box that works with the network unplugged.
    */
   const [held, setHeld] = useState<SongFinderStatus | null>(null);
+  /**
+   * The catalogue the broker has, when it is not the one held.
+   *
+   * Null while unknown and while they match, so the only time this is set is
+   * the only time there is anything to say.
+   */
+  const [newer, setNewer] = useState<SongFinderAvailable | null>(null);
   const [pulling, setPulling] = useState<{ held: number; of: number } | null>(
     null,
   );
@@ -87,7 +96,25 @@ export function SongFinderPanel({
     if (!CATALOGUE_OPEN || !subscribed) return;
     let watching = true;
     void songFinderStatus()
-      .then((found) => watching && setHeld(found))
+      .then((found) => {
+        if (!watching) return;
+        setHeld(found);
+        /*
+         * Asked only once there is something to compare against.
+         *
+         * A machine with no catalogue is already being offered the download,
+         * and telling it a newer one exists would be the same sentence twice.
+         * A failure is silence: the catalogue on the machine still works, and
+         * an error about a check nobody asked for is noise during a service.
+         */
+        if (!found.ready) return;
+        void songFinderLatest()
+          .then((there) => {
+            if (!watching || !there.version || there.version === found.version) return;
+            setNewer(there);
+          })
+          .catch(() => undefined);
+      })
       .catch(() => watching && setHeld(null));
     const stop = onSongFinderPull((at, of) =>
       watching ? setPulling({ held: at, of }) : undefined,
@@ -103,6 +130,8 @@ export function SongFinderPanel({
     setPulling({ held: 0, of: 0 });
     try {
       setHeld(await songFinderPull());
+      // Whatever was offered has just been taken.
+      setNewer(null);
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -342,6 +371,61 @@ export function SongFinderPanel({
               />
             </form>
           </div>
+
+          {/*
+            A bigger catalogue exists, and this is the only place it is said.
+            
+            The catalogue is pulled once and searched on the machine after
+            that, which is what makes it instant and what makes it work with
+            the network unplugged -- and it is also why nothing was ever told
+            that the bank had grown. A church that pulled ten thousand songs
+            kept ten thousand songs.
+            
+            A line rather than a dialogue, and only when there is something to
+            take: it sits above the results where an operator will see it
+            between services, and says nothing at all the rest of the time.
+          */}
+          {newer && !pulling ? (
+            <div className="flex shrink-0 items-center gap-2 border-b border-pulpitry-line bg-pulpitry-raised px-2.5 py-1.5">
+              <span className="min-w-0 flex-1 text-[11.5px] leading-snug text-pulpitry-muted">
+                {newer.songs > held.songs ? (
+                  <>
+                    {(newer.songs - held.songs).toLocaleString()} more songs are
+                    available — {newer.songs.toLocaleString()} in all.
+                  </>
+                ) : (
+                  <>A newer catalogue is available.</>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => void getTheCatalogue()}
+                className="shrink-0 rounded border border-pulpitry-line px-2 py-1 text-[11.5px] whitespace-nowrap text-pulpitry-text transition-colors hover:border-pulpitry-gold hover:text-pulpitry-gold focus-visible:focus-ring"
+              >
+                Update
+              </button>
+              {/* Dismissed for this session only. The offer is worth making
+                  again next time rather than remembering a no for ever. */}
+              <button
+                type="button"
+                onClick={() => setNewer(null)}
+                aria-label="Not now"
+                title="Not now"
+                className="shrink-0 rounded px-1.5 py-1 text-[11.5px] text-pulpitry-muted transition-colors hover:text-pulpitry-text focus-visible:focus-ring"
+              >
+                ✕
+              </button>
+            </div>
+          ) : null}
+
+          {/* The same download, reported the same way, whether it is the
+              first or a later one. */}
+          {pulling ? (
+            <p className="shrink-0 border-b border-pulpitry-line px-2.5 py-1.5 text-[11.5px] text-pulpitry-muted tabular-nums">
+              Updating the catalogue — {pulling.held.toLocaleString()}
+              {pulling.of > 0 ? ` of ${pulling.of.toLocaleString()}` : ""} songs
+            </p>
+          ) : null}
 
           {error ? (
             <p className="px-3 py-2 text-[12px] leading-relaxed text-pulpitry-gold">

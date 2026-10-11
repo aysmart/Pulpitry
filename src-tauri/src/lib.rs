@@ -461,6 +461,17 @@ fn songfinder_status(app: AppHandle) -> songfinder::Status {
 /// Blocking on a worker thread and reported as it goes: fourteen megabytes on
 /// church wifi is a minute or two, and a button that does nothing visible for
 /// two minutes is a button somebody presses again.
+/// What the broker is serving, so a machine that already pulled can be told
+/// there is more. Not cached: it is asked when the panel opens and the answer
+/// is a day old by the next service.
+#[tauri::command]
+async fn songfinder_latest() -> CommandResult<songfinder::Available> {
+    tauri::async_runtime::spawn_blocking(songfinder::latest)
+        .await
+        .map_err(|err| err.to_string())?
+        .map_err(|err| err.to_string())
+}
+
 #[tauri::command]
 async fn songfinder_pull(app: AppHandle) -> CommandResult<songfinder::Status> {
     tauri::async_runtime::spawn_blocking(move || songfinder::pull(&app))
@@ -2650,6 +2661,7 @@ pub fn run() {
             songfinder_get,
             songfinder_status,
             songfinder_pull,
+            songfinder_latest,
             songfinder_add,
             get_live,
             set_live,
