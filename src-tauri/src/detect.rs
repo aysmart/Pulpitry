@@ -477,6 +477,48 @@ impl Detector {
                 continue;
             };
 
+            /*
+             * A chapter match may be stale by the time it is read.
+             *
+             * The whole rolling transcript is parsed, so "john chapter
+             * three" is still in it minutes after it was said, and the
+             * words between it and the verse stop the number scan -- which
+             * means a verse called later arrives here looking like the
+             * chapter all over again. Asking whether a verse was named
+             * *after* the book is what separates the announcement from the
+             * reading.
+             */
+            let called = spoken::find_verse_only(&text, &books)
+                .filter(|&verse| reference.verse != Some(verse));
+            if let Some(verse_number) = called {
+                if let Some(found) = self
+                    .library
+                    .chapter(translation, reference.book_number, reference.chapter)?
+                    .into_iter()
+                    .find(|candidate| candidate.verse == verse_number)
+                {
+                    let key = format!("{}:{}:{}", reference.book, reference.chapter, verse_number);
+                    if self.was_recently_spoken(&key) {
+                        return Ok(());
+                    }
+                    *self.pending_chapter.lock() = None;
+                    let _ = self.app.emit(
+                        EVENT_SPOKEN,
+                        SpokenDetection {
+                            verse: found,
+                            // Named, so it goes to air.
+                            whole_chapter: false,
+                            phrase: format!(
+                                "{} {}:{}",
+                                reference.book, reference.chapter, verse_number
+                            ),
+                            at: epoch_millis(),
+                        },
+                    );
+                    return Ok(());
+                }
+            }
+
             let whole_chapter = reference.verse.is_none();
             {
                 /*

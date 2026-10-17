@@ -148,51 +148,56 @@ fn readings_for(numbers: &[i64], had_chapter_word: bool, had_verse_word: bool) -
 ///
 /// The most recent one is what matters: a speaker who says "we saw this in
 /// Romans, but turn to James chapter one" means James.
-/// A verse named on its own, with no book: "verse sixteen".
+/// A verse called out after a book was last named: "verse sixteen".
 ///
-/// # Why this is separate, and why it insists on the word
+/// # Why the position matters
 ///
-/// A preacher announces a chapter and then works through it a verse at a
-/// time, and after the announcement the book is never said again. Without
-/// this, everything after "John chapter three" is invisible to the
-/// detector, which is why a chapter announcement used to be the last thing
-/// that moved the screen.
+/// The detector is handed the whole rolling transcript, not the newest
+/// line, so "john chapter three" is still in it minutes later. A reader
+/// that refused any text containing a book name would therefore refuse
+/// every verse a preacher ever calls, which is exactly how this failed the
+/// first time: the chapter was staged and the verse never arrived.
 ///
-/// The word "verse" is required rather than inferred from a bare number.
-/// A sermon is full of numbers -- years, ages, counts, "three things this
-/// morning" -- and a reader that took any of them would move the screen
-/// constantly and be switched off within one service. Insisting on the
-/// word is the difference between a feature and a nuisance.
+/// So this looks only *after* the last book mentioned. A verse named there
+/// is being read inside the passage already announced; one named before it
+/// belongs to a reference `find_reference` has already read.
 ///
-/// Returns nothing where a book is named, because that is a whole
-/// reference and `find_reference` is the one that should read it.
+/// The word "verse" is required rather than inferred from a bare number. A
+/// sermon is full of numbers -- years, ages, "three things this morning" --
+/// and a reader that took any of them would move the screen constantly and
+/// be switched off within one service.
 pub fn find_verse_only(text: &str, books: &[String]) -> Option<i64> {
     let tokens = tokenise(text);
     if tokens.is_empty() {
         return None;
     }
 
-    // A book anywhere in the line means this is a reference, not a verse
-    // being called out inside one already announced.
+    // Where the last book named ends, or the start where none was named --
+    // the window may have scrolled past the announcement entirely.
+    let mut after_book = 0usize;
     for start in 0..tokens.len() {
-        if match_book(&tokens, start, books).is_some() {
-            return None;
+        if let Some((_, _, after)) = match_book(&tokens, start, books) {
+            after_book = after;
         }
     }
 
-    for (index, token) in tokens.iter().enumerate() {
-        if token != "verse" && token != "verses" {
-            continue;
-        }
-        let numbers = read_numbers(&tokens[index + 1..]);
-        if let Some(first) = numbers.first() {
-            // A verse number, not a year. Nothing has more than 176.
-            if *first >= 1 && *first <= 176 {
-                return Some(*first);
+    // The last one wins: a preacher working down a chapter says several,
+    // and the screen should be on the one just called.
+    let mut found = None;
+    let mut index = after_book;
+    while index < tokens.len() {
+        if tokens[index] == "verse" || tokens[index] == "verses" {
+            let numbers = read_numbers(&tokens[index + 1..]);
+            if let Some(first) = numbers.first() {
+                // A verse number, not a year. Nothing has more than 176.
+                if *first >= 1 && *first <= 176 {
+                    found = Some(*first);
+                }
             }
         }
+        index += 1;
     }
-    None
+    found
 }
 
 /// Words to lowercase tokens, with "3:16" split into its parts.
@@ -395,11 +400,32 @@ mod tests {
     }
 
     #[test]
-    fn a_whole_reference_is_left_to_the_reference_reader() {
-        // Naming a book means this is a reference, and find_reference is
-        // the one that should read it -- not this, from half of it.
-        assert_eq!(find_verse_only("John chapter three verse sixteen", &books()), None);
-        assert_eq!(find_verse_only("turn to psalms verse two", &books()), None);
+    fn a_verse_is_read_from_the_rolling_transcript() {
+        /*
+         * The case that failed in a service. The detector is handed the
+         * whole transcript, so the book is still in it long after it was
+         * said, and the ordinary words between the chapter and the verse
+         * stop find_reference's number scan -- so the verse arrived
+         * looking like the chapter and was staged instead of aired.
+         */
+        let window = "turn with me to john chapter three and we will see what it says \
+                      about the love of god verse sixteen";
+        assert_eq!(find_verse_only(window, &books()), Some(16));
+    }
+
+    #[test]
+    fn the_verse_just_called_wins() {
+        // A preacher works down a chapter. The screen belongs on the one
+        // just named, not the first of the morning.
+        let window = "john chapter three verse sixteen and then verse seventeen";
+        assert_eq!(find_verse_only(window, &books()), Some(17));
+    }
+
+    #[test]
+    fn a_verse_named_before_the_book_is_not_the_one_being_read() {
+        // "verse two" here belongs to whatever was being read before the
+        // preacher turned to John, which find_reference has already read.
+        assert_eq!(find_verse_only("verse two then turn to john chapter three", &books()), None);
     }
 
     #[test]
