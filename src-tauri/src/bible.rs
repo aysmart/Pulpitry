@@ -891,7 +891,20 @@ impl Library {
         verse: Option<i64>,
     ) -> Result<Option<Reference>> {
         let connection = self.connection.lock();
-        let found: Option<(i64, i64)> = connection
+        /*
+         * Read as nullable, because MAX() always answers.
+         *
+         * This is an aggregate with no GROUP BY, so SQLite returns exactly
+         * one row whether or not anything matched -- and when nothing did,
+         * every column in it is NULL. `optional()` therefore never gives
+         * None, and reading book_number as i64 fails with "Invalid column
+         * type Null". That error travelled all the way out of
+         * examine_spoken, so a chapter the translation does not have did
+         * not resolve to "no such chapter": it stopped detection for that
+         * whole utterance, and the next verse the preacher called went
+         * nowhere.
+         */
+        let found: Option<(Option<i64>, Option<i64>)> = connection
             .query_row(
                 "SELECT book_number, MAX(verse) FROM verses
                  WHERE translation = ?1 AND book = ?2 AND chapter = ?3",
@@ -900,7 +913,7 @@ impl Library {
             )
             .optional()?;
 
-        let Some((book_number, last_verse)) = found else { return Ok(None) };
+        let Some((Some(book_number), Some(last_verse))) = found else { return Ok(None) };
         if verse.is_some_and(|verse| verse < 1 || verse > last_verse) {
             return Ok(None);
         }
@@ -1557,5 +1570,50 @@ mod tests {
     #[test]
     fn fts_query_keeps_apostrophes() {
         assert_eq!(fts_query("god's").as_deref(), Some("\"god's\""));
+    }
+}
+
+#[cfg(test)]
+mod locate_tests {
+    use super::*;
+
+    fn library() -> Library {
+        let library = Library::in_memory().expect("library");
+        library
+            .seed(
+                "KJV",
+                &[
+                    (43, "John", 3, 16, "For God so loved the world."),
+                    (43, "John", 3, 17, "For God sent not his Son to condemn."),
+                ],
+            )
+            .expect("seed");
+        library
+    }
+
+    #[test]
+    fn a_chapter_that_is_not_there_is_not_found_rather_than_an_error() {
+        /*
+         * MAX() answers even when nothing matched, with every column NULL,
+         * so this used to fail with "Invalid column type Null" instead of
+         * returning None. The error travelled out of examine_spoken and
+         * stopped detection for the whole utterance -- so a chapter the
+         * translation does not have took the next verse down with it.
+         */
+        let library = library();
+        assert!(library.locate("KJV", "John", 99, None).expect("no error").is_none());
+        assert!(library.locate("KJV", "Habakkuk", 1, None).expect("no error").is_none());
+        assert!(library.locate("KJV", "John", 3, Some(99)).expect("no error").is_none());
+    }
+
+    #[test]
+    fn a_chapter_that_is_there_still_resolves() {
+        let library = library();
+        let found = library.locate("KJV", "John", 3, Some(16)).unwrap().expect("John 3:16");
+        assert_eq!((found.book_number, found.chapter, found.verse), (43, 3, Some(16)));
+        // And a chapter named without a verse stays without one, which is
+        // what tells the screen to stage rather than air it.
+        let chapter = library.locate("KJV", "John", 3, None).unwrap().expect("John 3");
+        assert_eq!(chapter.verse, None);
     }
 }
