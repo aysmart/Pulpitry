@@ -300,15 +300,35 @@ export default function App() {
    * rather than the object -- the list is rebuilt on every event.
    */
   const autoLive = settings?.verseDisplay === "auto";
-  const announced = references[0]?.verse;
+  const announcement = references[0];
+  const announced = announcement?.verse;
   const shownId = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!autoLive || !announced) return;
+    if (!autoLive || !announced || !announcement) return;
     if (shownId.current === announced.id) return;
     shownId.current = announced.id;
+
+    /*
+     * A chapter named without a verse goes to Preview, never to air.
+     *
+     * "Turn with me to John chapter three" is a promise, and a preacher
+     * mentions a chapter in passing all the time -- on the way to somewhere
+     * else, as a cross-reference, as the place they were last week. Sending
+     * verse 1 of it to the screen each time is how the display drifts away
+     * from what is actually being read.
+     *
+     * So it is staged instead: the operator sees where the preacher is
+     * going, and the detector keeps listening. When the verse is called --
+     * "verse sixteen", with no book, which is how anybody reads a chapter
+     * aloud -- it arrives as a named reference and that one does go to air.
+     */
+    if (announcement.wholeChapter) {
+      previewVerse(announced);
+      return;
+    }
     showVerse(announced);
-  }, [autoLive, announced, showVerse]);
+  }, [autoLive, announced, announcement, showVerse, previewVerse]);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [library, setLibrary] = useState<LibraryStatus>({
     ready: false,

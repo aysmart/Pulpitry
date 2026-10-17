@@ -148,7 +148,55 @@ fn readings_for(numbers: &[i64], had_chapter_word: bool, had_verse_word: bool) -
 ///
 /// The most recent one is what matters: a speaker who says "we saw this in
 /// Romans, but turn to James chapter one" means James.
-pub fn find_reference(text: &str, books: &[String]) -> Option<SpokenReference> {
+/// A verse named on its own, with no book: "verse sixteen".
+///
+/// # Why this is separate, and why it insists on the word
+///
+/// A preacher announces a chapter and then works through it a verse at a
+/// time, and after the announcement the book is never said again. Without
+/// this, everything after "John chapter three" is invisible to the
+/// detector, which is why a chapter announcement used to be the last thing
+/// that moved the screen.
+///
+/// The word "verse" is required rather than inferred from a bare number.
+/// A sermon is full of numbers -- years, ages, counts, "three things this
+/// morning" -- and a reader that took any of them would move the screen
+/// constantly and be switched off within one service. Insisting on the
+/// word is the difference between a feature and a nuisance.
+///
+/// Returns nothing where a book is named, because that is a whole
+/// reference and `find_reference` is the one that should read it.
+pub fn find_verse_only(text: &str, books: &[String]) -> Option<i64> {
+    let tokens = tokenise(text);
+    if tokens.is_empty() {
+        return None;
+    }
+
+    // A book anywhere in the line means this is a reference, not a verse
+    // being called out inside one already announced.
+    for start in 0..tokens.len() {
+        if match_book(&tokens, start, books).is_some() {
+            return None;
+        }
+    }
+
+    for (index, token) in tokens.iter().enumerate() {
+        if token != "verse" && token != "verses" {
+            continue;
+        }
+        let numbers = read_numbers(&tokens[index + 1..]);
+        if let Some(first) = numbers.first() {
+            // A verse number, not a year. Nothing has more than 176.
+            if *first >= 1 && *first <= 176 {
+                return Some(*first);
+            }
+        }
+    }
+    None
+}
+
+/// Words to lowercase tokens, with "3:16" split into its parts.
+fn tokenise(text: &str) -> Vec<String> {
     let raw: Vec<String> = text
         .split_whitespace()
         .map(|word| {
@@ -160,9 +208,7 @@ pub fn find_reference(text: &str, books: &[String]) -> Option<SpokenReference> {
         .filter(|word| !word.is_empty())
         .collect();
 
-    // Digits may arrive already punctuated as "3:16".
-    let tokens: Vec<String> = raw
-        .iter()
+    raw.iter()
         .flat_map(|word| {
             if word.contains(':') {
                 word.split(':').map(str::to_string).collect::<Vec<_>>()
@@ -171,7 +217,12 @@ pub fn find_reference(text: &str, books: &[String]) -> Option<SpokenReference> {
             }
         })
         .filter(|word| !word.is_empty())
-        .collect();
+        .collect()
+}
+
+pub fn find_reference(text: &str, books: &[String]) -> Option<SpokenReference> {
+    // Digits may arrive already punctuated as "3:16".
+    let tokens = tokenise(text);
 
     for start in (0..tokens.len()).rev() {
         let Some((book, begin, after)) = match_book(&tokens, start, books) else { continue };
@@ -321,6 +372,45 @@ mod tests {
         let found = find(text).expect("should find a reference");
         let first = found.readings[0];
         (found.book, first.chapter, first.verse)
+    }
+
+    #[test]
+    fn a_verse_called_on_its_own_is_read() {
+        // How anybody reads a chapter aloud: the book once, then numbers.
+        assert_eq!(find_verse_only("verse sixteen", &books()), Some(16));
+        assert_eq!(find_verse_only("look at verse 16 with me", &books()), Some(16));
+        assert_eq!(find_verse_only("verses one to four", &books()), Some(1));
+    }
+
+    #[test]
+    fn a_bare_number_is_not_a_verse() {
+        /*
+         * A sermon is full of numbers. Taking any of them would move the
+         * screen constantly and the feature would be switched off inside
+         * one service, so the word has to be said.
+         */
+        assert_eq!(find_verse_only("three things this morning", &books()), None);
+        assert_eq!(find_verse_only("in nineteen eighty four", &books()), None);
+        assert_eq!(find_verse_only("sixteen", &books()), None);
+    }
+
+    #[test]
+    fn a_whole_reference_is_left_to_the_reference_reader() {
+        // Naming a book means this is a reference, and find_reference is
+        // the one that should read it -- not this, from half of it.
+        assert_eq!(find_verse_only("John chapter three verse sixteen", &books()), None);
+        assert_eq!(find_verse_only("turn to psalms verse two", &books()), None);
+    }
+
+    #[test]
+    fn a_number_too_large_to_be_a_verse_is_refused() {
+        // Nothing has more than 176, so this is a year or a count. Written
+        // as digits because that is how a recogniser writes a year, and
+        // because spelling it out reads as "two" and stops there.
+        assert_eq!(find_verse_only("verse 2005", &books()), None);
+        assert_eq!(find_verse_only("verse 500", &books()), None);
+        // And the largest real one still passes.
+        assert_eq!(find_verse_only("verse 176", &books()), Some(176));
     }
 
     #[test]

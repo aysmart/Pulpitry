@@ -145,6 +145,26 @@ pub struct SpokenDetection {
     pub at: u64,
 }
 
+/// A chapter the speaker announced, waiting for the verse they will read.
+///
+/// "Turn with me to John chapter three" is a promise, not a destination. The
+/// verse arrives seconds later and names no book, so without something
+/// holding the chapter it is heard as nothing at all.
+struct PendingChapter {
+    translation: String,
+    book_number: i64,
+    book: String,
+    chapter: i64,
+    at: Instant,
+}
+
+/// How long a chapter waits for its verse.
+///
+/// Long enough for a preacher to read the chapter heading, say why they
+/// chose it and ask everyone to stand; short enough that a verse number
+/// mentioned in a different passage half an hour later does not land in it.
+const CHAPTER_WAITS: Duration = Duration::from_secs(300);
+
 pub struct Detector {
     app: AppHandle,
     library: Arc<Library>,
@@ -152,6 +172,8 @@ pub struct Detector {
     semantic: Arc<Semantic>,
     follower: Arc<crate::follow::Follower>,
     translation: Mutex<String>,
+    /// The chapter announced without a verse, if one is still waiting.
+    pending_chapter: Mutex<Option<PendingChapter>>,
     transcript: Mutex<Transcript>,
     last_interim: Mutex<Option<Instant>>,
     /*
@@ -189,6 +211,7 @@ impl Detector {
             semantic,
             follower,
             translation: Mutex::new(translation),
+            pending_chapter: Mutex::new(None),
             transcript: Mutex::new(Transcript::default()),
             last_interim: Mutex::new(None),
             commands: Mutex::new(None),
@@ -420,7 +443,14 @@ impl Detector {
             .into_iter()
             .map(|book| book.name)
             .collect();
-        let Some(spoken) = spoken::find_reference(&text, &books) else { return Ok(()) };
+        let Some(spoken) = spoken::find_reference(&text, &books) else {
+            /*
+             * No book named. If a chapter is still waiting for its verse,
+             * this may be the verse: "verse sixteen", with the book said a
+             * minute ago and never again.
+             */
+            return self.complete_pending_chapter(&text, &books, translation);
+        };
 
         // Readings come out best-guess first; the first that actually exists
         // wins. This is what turns "psalm one nineteen" into Psalm 119.
@@ -447,17 +477,91 @@ impl Detector {
                 continue;
             };
 
+            let whole_chapter = reference.verse.is_none();
+            {
+                /*
+                 * A chapter announced starts waiting; a verse named ends
+                 * the wait. Replacing rather than keeping a list: a
+                 * preacher who announces a second chapter has left the
+                 * first, and a verse called after that belongs to the new
+                 * one.
+                 */
+                let mut pending = self.pending_chapter.lock();
+                *pending = whole_chapter.then(|| PendingChapter {
+                    translation: translation.to_string(),
+                    book_number: reference.book_number,
+                    book: reference.book.clone(),
+                    chapter: reference.chapter,
+                    at: Instant::now(),
+                });
+            }
+
             let _ = self.app.emit(
                 EVENT_SPOKEN,
                 SpokenDetection {
                     verse: found,
-                    whole_chapter: reference.verse.is_none(),
+                    whole_chapter,
                     phrase: spoken.phrase.clone(),
                     at: epoch_millis(),
                 },
             );
             return Ok(());
         }
+        Ok(())
+    }
+
+    /// Reads a verse called out inside a chapter already announced.
+    ///
+    /// This is the second half of how a preacher actually speaks: the book
+    /// and chapter once, then verse numbers for the next twenty minutes.
+    /// Without it the announcement is the last thing the screen hears.
+    fn complete_pending_chapter(
+        &self,
+        text: &str,
+        books: &[String],
+        translation: &str,
+    ) -> Result<()> {
+        let Some(verse_number) = spoken::find_verse_only(text, books) else { return Ok(()) };
+
+        let (book_number, book, chapter) = {
+            let mut pending = self.pending_chapter.lock();
+            let Some(waiting) = pending.as_ref() else { return Ok(()) };
+
+            // A chapter from another translation, or from long enough ago
+            // that the service has moved on, is not what this verse means.
+            if waiting.translation != translation || waiting.at.elapsed() > CHAPTER_WAITS {
+                *pending = None;
+                return Ok(());
+            }
+            (waiting.book_number, waiting.book.clone(), waiting.chapter)
+        };
+
+        let key = format!("{book}:{chapter}:{verse_number}");
+        if self.was_recently_spoken(&key) {
+            return Ok(());
+        }
+
+        let Some(found) = self
+            .library
+            .chapter(translation, book_number, chapter)?
+            .into_iter()
+            .find(|candidate| candidate.verse == verse_number)
+        else {
+            // The chapter has no such verse, so this was a number about
+            // something else. The chapter keeps waiting.
+            return Ok(());
+        };
+
+        let _ = self.app.emit(
+            EVENT_SPOKEN,
+            SpokenDetection {
+                verse: found,
+                // Named, so it goes to air like any other spoken reference.
+                whole_chapter: false,
+                phrase: format!("{book} {chapter}:{verse_number}"),
+                at: epoch_millis(),
+            },
+        );
         Ok(())
     }
 
